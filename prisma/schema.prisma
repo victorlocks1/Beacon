@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  studies      Study[]
+}
+
+model Study {
+  id        String      @id @default(cuid())
+  ownerId   String
+  owner     User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title     String
+  status    StudyStatus @default(draft)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  prototype Prototype?
+  blocks    Block[]
+  sessions  Session[]
+}
+
+enum StudyStatus {
+  draft
+  live
+  closed
+}
+
+model Prototype {
+  id           String          @id @default(cuid())
+  studyId      String          @unique
+  study        Study           @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  source       PrototypeSource
+  figmaFileKey String?
+  createdAt    DateTime        @default(now())
+  screens      Screen[]
+}
+
+enum PrototypeSource {
+  image
+  figma
+}
+
+model Screen {
+  id               String        @id @default(cuid())
+  prototypeId      String
+  prototype        Prototype     @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  name             String
+  order            Int
+  imageUrl         String
+  width            Float
+  height           Float
+  hotspots         Hotspot[]     @relation("ScreenHotspots")
+  incomingHotspots Hotspot[]     @relation("HotspotTarget")
+  missionStarts    Mission[]     @relation("MissionStartScreen")
+  missionGoals     MissionGoal[]
+  pathSteps        PathStep[]
+  events           Event[]       @relation("EventScreen")
+  targetedByEvents Event[]       @relation("EventTargetScreen")
+}
+
+enum HotspotShape {
+  rect
+  polygon
+}
+
+model Hotspot {
+  id             String       @id @default(cuid())
+  screenId       String
+  screen         Screen       @relation("ScreenHotspots", fields: [screenId], references: [id], onDelete: Cascade)
+  shape          HotspotShape
+  coords         Json
+  targetScreenId String
+  targetScreen   Screen       @relation("HotspotTarget", fields: [targetScreenId], references: [id])
+  events         Event[]
+}
+
+model Block {
+  id      String    @id @default(cuid())
+  studyId String
+  study   Study     @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  type    BlockType
+  order   Int
+  mission Mission?
+}
+
+enum BlockType {
+  mission
+  question
+}
+
+model Mission {
+  id            String          @id @default(cuid())
+  blockId       String          @unique
+  block         Block           @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  task          String
+  description   String?
+  startScreenId String
+  startScreen   Screen          @relation("MissionStartScreen", fields: [startScreenId], references: [id])
+  successType   SuccessType
+  goals         MissionGoal[]
+  paths         MissionPath[]
+  results       MissionResult[]
+  events        Event[]
+}
+
+enum SuccessType {
+  screen
+  path
+}
+
+model MissionGoal {
+  id           String  @id @default(cuid())
+  missionId    String
+  mission      Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  goalScreenId String
+  goalScreen   Screen  @relation(fields: [goalScreenId], references: [id])
+}
+
+model MissionPath {
+  id        String     @id @default(cuid())
+  missionId String
+  mission   Mission    @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  label     String
+  steps     PathStep[]
+}
+
+model PathStep {
+  id            String      @id @default(cuid())
+  missionPathId String
+  missionPath   MissionPath @relation(fields: [missionPathId], references: [id], onDelete: Cascade)
+  screenId      String
+  screen        Screen      @relation(fields: [screenId], references: [id])
+  order         Int
+}
+
+model Session {
+  id         String          @id @default(cuid())
+  studyId    String
+  study      Study           @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  token      String          @unique @default(cuid())
+  startedAt  DateTime        @default(now())
+  finishedAt DateTime?
+  userAgent  String?
+  deviceType String?
+  results    MissionResult[]
+  events     Event[]
+}
+
+enum MissionOutcome {
+  direct
+  indirect
+  unfinished
+  given_up
+}
+
+model MissionResult {
+  id            String         @id @default(cuid())
+  sessionId     String
+  session       Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  missionId     String
+  mission       Mission        @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  outcome       MissionOutcome
+  durationMs    Int
+  misclickCount Int
+  clickCount    Int
+}
+
+enum EventType {
+  click
+  navigate
+  misclick
+  give_up
+  end
+}
+
+model Event {
+  id             String    @id @default(cuid())
+  sessionId      String
+  session        Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  missionId      String
+  mission        Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  screenId       String
+  screen         Screen    @relation("EventScreen", fields: [screenId], references: [id])
+  type           EventType
+  xNorm          Float
+  yNorm          Float
+  hotspotId      String?
+  hotspot        Hotspot?  @relation(fields: [hotspotId], references: [id])
+  targetScreenId String?
+  targetScreen   Screen?   @relation("EventTargetScreen", fields: [targetScreenId], references: [id])
+  timestampMs    BigInt
+}
