@@ -1,6 +1,8 @@
 "use server"
 import { prisma } from "@/lib/db"
 import { signIn } from "@/lib/auth"
+import { AuthError } from "next-auth"
+import { redirect } from "next/navigation"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
@@ -36,9 +38,17 @@ export async function registerAction(_prev: unknown, formData: FormData) {
     },
   })
 
-  await signIn("credentials", {
-    email: parsed.data.email,
-    password: parsed.data.password,
-    redirectTo: "/studies",
-  })
+  try {
+    await signIn("credentials", {
+      email: parsed.data.email,
+      password: parsed.data.password,
+    })
+  } catch (error) {
+    if (error instanceof AuthError) {
+      // Conta criada mas login automático falhou — redireciona pro login
+      redirect("/login")
+    }
+    throw error
+  }
+  redirect("/studies")
 }
