@@ -1,8 +1,5 @@
-"use client"
-import { useActionState } from "react"
 import Link from "next/link"
 import { registerAction } from "./actions"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -13,9 +10,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { SubmitButton } from "@/components/submit-button"
 
-export default function RegisterPage() {
-  const [state, action, pending] = useActionState(registerAction, undefined)
+const errorMessages: Record<string, string> = {
+  taken: "Este email já está em uso.",
+}
+
+export default async function RegisterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const { error } = await searchParams
+  const errorMsg = error
+    ? (errorMessages[error] ?? decodeURIComponent(error))
+    : undefined
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -25,7 +34,7 @@ export default function RegisterPage() {
           <CardDescription>Criar nova conta</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={action} className="space-y-4">
+          <form action={registerAction} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nome</Label>
               <Input id="name" name="name" placeholder="Seu nome" required />
@@ -50,12 +59,10 @@ export default function RegisterPage() {
                 required
               />
             </div>
-            {state?.error && (
-              <p className="text-sm text-red-500">{state.error}</p>
+            {errorMsg && (
+              <p className="text-sm text-red-500">{errorMsg}</p>
             )}
-            <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Criando conta..." : "Criar conta"}
-            </Button>
+            <SubmitButton>Criar conta</SubmitButton>
           </form>
         </CardContent>
         <CardFooter className="justify-center">

@@ -12,7 +12,7 @@ const registerSchema = z.object({
   password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres"),
 })
 
-export async function registerAction(_prev: unknown, formData: FormData) {
+export async function registerAction(formData: FormData) {
   const parsed = registerSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -20,13 +20,14 @@ export async function registerAction(_prev: unknown, formData: FormData) {
   })
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0].message }
+    const msg = encodeURIComponent(parsed.error.issues[0].message)
+    redirect(`/register?error=${msg}`)
   }
 
   const exists = await prisma.user.findUnique({
     where: { email: parsed.data.email },
   })
-  if (exists) return { error: "Este email já está em uso." }
+  if (exists) redirect("/register?error=taken")
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 12)
 
@@ -42,13 +43,12 @@ export async function registerAction(_prev: unknown, formData: FormData) {
     await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
+      redirectTo: "/studies",
     })
   } catch (error) {
     if (error instanceof AuthError) {
-      // Conta criada mas login automático falhou — redireciona pro login
       redirect("/login")
     }
     throw error
   }
-  redirect("/studies")
 }

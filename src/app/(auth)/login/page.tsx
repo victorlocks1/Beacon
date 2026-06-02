@@ -1,8 +1,5 @@
-"use client"
-import { useActionState } from "react"
 import Link from "next/link"
 import { loginAction } from "./actions"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -13,9 +10,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { SubmitButton } from "@/components/submit-button"
 
-export default function LoginPage() {
-  const [state, action, pending] = useActionState(loginAction, undefined)
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
+  const { error } = await searchParams
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -25,7 +27,7 @@ export default function LoginPage() {
           <CardDescription>Acesse sua conta</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={action} className="space-y-4">
+          <form action={loginAction} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -40,12 +42,10 @@ export default function LoginPage() {
               <Label htmlFor="password">Senha</Label>
               <Input id="password" name="password" type="password" required />
             </div>
-            {state?.error && (
-              <p className="text-sm text-red-500">{state.error}</p>
+            {error === "credentials" && (
+              <p className="text-sm text-red-500">Email ou senha incorretos.</p>
             )}
-            <Button type="submit" className="w-full" disabled={pending}>
-              {pending ? "Entrando..." : "Entrar"}
-            </Button>
+            <SubmitButton>Entrar</SubmitButton>
           </form>
         </CardContent>
         <CardFooter className="justify-center">
