@@ -107,103 +107,85 @@ export default async function StudyPage({
 
         {/* ── Protótipo ── */}
         <TabsContent value="prototype">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
             <DeviceTypeSelector
               studyId={study.id}
               current={(study.prototype?.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
             />
           </div>
-          <ScreenUploadForm studyId={study.id} />
-
-          {screens.length > 0 && <div className="mt-6" />}
 
           {screens.length === 0 ? (
-            <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
-              <p className="text-base font-medium">Nenhuma tela ainda</p>
-              <p className="text-sm mt-1">
-                Clique em "Adicionar telas" para fazer upload das imagens
-              </p>
-            </div>
+            /* Sem telas: upload ocupa tudo */
+            <ScreenUploadForm studyId={study.id} />
           ) : (
-            <div className="space-y-2">
-              {screens.map((screen, index) => (
-                <div
-                  key={screen.id}
-                  className="flex items-center gap-3 border rounded-lg p-3"
-                >
-                  {/* Thumbnail */}
-                  <div className="relative w-20 h-14 rounded overflow-hidden bg-muted shrink-0">
-                    <Image
-                      src={screen.imageUrl}
-                      alt={screen.name}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
+            /* Com telas: duas colunas */
+            <div className="grid grid-cols-[1fr_280px] gap-5 items-start">
+              {/* Esquerda: lista de telas */}
+              <div className="space-y-2">
+                {screens.map((screen, index) => (
+                  <div
+                    key={screen.id}
+                    className="flex items-center gap-3 border rounded-lg p-3"
+                  >
+                    {/* Thumbnail */}
+                    <div className="relative w-20 h-14 rounded overflow-hidden bg-muted shrink-0">
+                      <Image
+                        src={screen.imageUrl}
+                        alt={screen.name}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <EditableScreenName
-                      screenId={screen.id}
-                      studyId={study.id}
-                      initialName={screen.name}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {screen.hotspots.length} hotspot(s) · {screen.width}×{screen.height}
-                    </p>
-                  </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <EditableScreenName
+                        screenId={screen.id}
+                        studyId={study.id}
+                        initialName={screen.name}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {screen.hotspots.length} hotspot(s) · {screen.width}×{screen.height}
+                      </p>
+                    </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {/* Reorder */}
-                    <form action={moveScreenAction.bind(null, study.id, screen.id, "up")}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        disabled={index === 0}
-                        type="submit"
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <form action={moveScreenAction.bind(null, study.id, screen.id, "up")}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} type="submit">
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
+                      <form action={moveScreenAction.bind(null, study.id, screen.id, "down")}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === screens.length - 1} type="submit">
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
+
+                      <Separator orientation="vertical" className="h-5 mx-1" />
+
+                      <Link
+                        href={`/studies/${study.id}/screens/${screen.id}/hotspots`}
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
                       >
-                        <ChevronUp className="h-3.5 w-3.5" />
-                      </Button>
-                    </form>
-                    <form action={moveScreenAction.bind(null, study.id, screen.id, "down")}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        disabled={index === screens.length - 1}
-                        type="submit"
-                      >
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      </Button>
-                    </form>
+                        <MousePointerClick className="h-3.5 w-3.5 mr-1.5" />
+                        Hotspots
+                      </Link>
 
-                    <Separator orientation="vertical" className="h-5 mx-1" />
-
-                    <Link
-                      href={`/studies/${study.id}/screens/${screen.id}/hotspots`}
-                      className={buttonVariants({ variant: "outline", size: "sm" })}
-                    >
-                      <MousePointerClick className="h-3.5 w-3.5 mr-1.5" />
-                      Hotspots
-                    </Link>
-
-                    <form
-                      action={deleteScreenAction.bind(null, study.id, screen.id)}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-700"
-                        type="submit"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </form>
+                      <form action={deleteScreenAction.bind(null, study.id, screen.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" type="submit">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* Direita: upload */}
+              <div className="sticky top-4">
+                <ScreenUploadForm studyId={study.id} />
+              </div>
             </div>
           )}
         </TabsContent>
