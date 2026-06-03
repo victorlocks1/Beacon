@@ -8,7 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
-import { deleteScreenAction, reorderScreensAction } from "./actions"
+import { deleteScreenAction, moveScreenAction } from "./actions"
 import {
   ArrowLeft,
   Pencil,
@@ -143,16 +143,7 @@ export default async function StudyPage({
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0">
                     {/* Reorder */}
-                    <form
-                      action={reorderScreensAction.bind(
-                        null,
-                        study.id,
-                        screens
-                          .map((s) => s.id)
-                          .with(index, screens[index - 1]?.id)
-                          .with(index - 1, screen.id)
-                      )}
-                    >
+                    <form action={moveScreenAction.bind(null, study.id, screen.id, "up")}>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -163,16 +154,7 @@ export default async function StudyPage({
                         <ChevronUp className="h-3.5 w-3.5" />
                       </Button>
                     </form>
-                    <form
-                      action={reorderScreensAction.bind(
-                        null,
-                        study.id,
-                        screens
-                          .map((s) => s.id)
-                          .with(index, screens[index + 1]?.id)
-                          .with(index + 1, screen.id)
-                      )}
-                    >
+                    <form action={moveScreenAction.bind(null, study.id, screen.id, "down")}>
                       <Button
                         variant="ghost"
                         size="icon"

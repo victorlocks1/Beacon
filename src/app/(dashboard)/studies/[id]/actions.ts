@@ -106,17 +106,32 @@ export async function deleteScreenAction(studyId: string, screenId: string) {
   revalidatePath(`/studies/${studyId}`)
 }
 
-export async function reorderScreensAction(
+export async function moveScreenAction(
   studyId: string,
-  orderedIds: string[]
+  screenId: string,
+  direction: "up" | "down"
 ) {
-  await getStudyOrThrow(studyId)
+  const { study } = await getStudyOrThrow(studyId)
 
-  await Promise.all(
-    orderedIds.map((id, index) =>
-      prisma.screen.update({ where: { id }, data: { order: index } })
-    )
-  )
+  const screens = await prisma.screen.findMany({
+    where: { prototype: { studyId: study.id } },
+    orderBy: { order: "asc" },
+  })
+
+  const idx = screens.findIndex((s) => s.id === screenId)
+  if (idx === -1) return
+
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1
+  if (swapIdx < 0 || swapIdx >= screens.length) return
+
+  const a = screens[idx]
+  const b = screens[swapIdx]
+
+  await Promise.all([
+    prisma.screen.update({ where: { id: a.id }, data: { order: b.order } }),
+    prisma.screen.update({ where: { id: b.id }, data: { order: a.order } }),
+  ])
+
   revalidatePath(`/studies/${studyId}`)
 }
 
