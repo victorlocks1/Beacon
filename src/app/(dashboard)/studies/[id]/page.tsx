@@ -115,6 +115,8 @@ export default async function StudyPage({
           </div>
           <ScreenUploadForm studyId={study.id} />
 
+          {screens.length > 0 && <div className="mt-6" />}
+
           {screens.length === 0 ? (
             <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
               <p className="text-base font-medium">Nenhuma tela ainda</p>
