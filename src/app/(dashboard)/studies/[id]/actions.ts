@@ -92,10 +92,22 @@ export async function deleteScreenAction(studyId: string, screenId: string) {
 
   const screen = await prisma.screen.findUnique({
     where: { id: screenId, prototype: { studyId: study.id } },
+    include: {
+      missionStarts: { select: { id: true } },
+      missionGoals: { select: { id: true } },
+    },
   })
   if (!screen) return
 
-  // Extract storage path from public URL
+  if (screen.missionStarts.length > 0 || screen.missionGoals.length > 0) {
+    redirect(
+      `/studies/${studyId}?error=${encodeURIComponent("Esta tela está sendo usada em uma missão. Remova a missão antes de excluir.")}`
+    )
+  }
+
+  // Remove hotspots that apontam PARA esta tela antes de deletar
+  await prisma.hotspot.deleteMany({ where: { targetScreenId: screenId } })
+
   const url = new URL(screen.imageUrl)
   const storagePath = url.pathname.split("/object/public/screens/")[1]
   if (storagePath) {

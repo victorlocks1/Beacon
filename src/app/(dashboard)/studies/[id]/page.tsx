@@ -23,10 +23,13 @@ import {
 
 export default async function StudyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ error?: string }>
 }) {
   const { id } = await params
+  const { error } = await searchParams
   const session = await auth()
   if (!session) redirect("/login")
 
@@ -64,6 +67,11 @@ export default async function StudyPage({
 
   return (
     <div className="max-w-5xl mx-auto">
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {decodeURIComponent(error)}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/studies" className={buttonVariants({ variant: "ghost", size: "icon" })}>
@@ -99,13 +107,13 @@ export default async function StudyPage({
 
         {/* ── Protótipo ── */}
         <TabsContent value="prototype">
-          <div className="flex items-center justify-between mb-4 gap-4">
+          <div className="flex items-center justify-between mb-4">
             <DeviceTypeSelector
               studyId={study.id}
               current={(study.prototype?.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
             />
-            <ScreenUploadForm studyId={study.id} />
           </div>
+          <ScreenUploadForm studyId={study.id} />
 
           {screens.length === 0 ? (
             <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
