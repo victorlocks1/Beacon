@@ -9,10 +9,15 @@ export async function createStudyAction(formData: FormData) {
   if (!session) redirect("/login")
 
   const title = (formData.get("title") as string)?.trim()
+  const deviceType = (formData.get("deviceType") as string) ?? "desktop"
   if (!title) return
 
   const study = await prisma.study.create({
-    data: { ownerId: session.user.id, title },
+    data: {
+      ownerId: session.user.id,
+      title,
+      deviceType: deviceType as "desktop" | "tablet" | "mobile",
+    },
   })
 
   revalidatePath("/studies")

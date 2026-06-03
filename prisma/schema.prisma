@@ -17,16 +17,17 @@ model User {
 }
 
 model Study {
-  id        String      @id @default(cuid())
-  ownerId   String
-  owner     User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  title     String
-  status    StudyStatus @default(draft)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  prototype Prototype?
-  blocks    Block[]
-  sessions  Session[]
+  id         String      @id @default(cuid())
+  ownerId    String
+  owner      User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title      String
+  status     StudyStatus @default(draft)
+  deviceType DeviceType  @default(desktop)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  prototype  Prototype?
+  blocks     Block[]
+  sessions   Session[]
 }
 
 enum StudyStatus {
@@ -40,7 +41,6 @@ model Prototype {
   studyId      String          @unique
   study        Study           @relation(fields: [studyId], references: [id], onDelete: Cascade)
   source       PrototypeSource
-  deviceType   DeviceType      @default(desktop)
   figmaFileKey String?
   createdAt    DateTime        @default(now())
   screens      Screen[]

@@ -9,7 +9,6 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
-import { DeviceTypeSelector } from "@/components/prototype/device-type-selector"
 import { deleteScreenAction, moveScreenAction } from "./actions"
 import {
   ArrowLeft,
@@ -19,7 +18,13 @@ import {
   Plus,
   ChevronUp,
   ChevronDown,
+  Smartphone,
+  Tablet,
+  Monitor,
 } from "lucide-react"
+
+const deviceIcon = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
+const deviceLabel = { mobile: "Mobile", tablet: "Tablet", desktop: "Desktop" }
 
 export default async function StudyPage({
   params,
@@ -86,6 +91,16 @@ export default async function StudyPage({
                 ? "Ao vivo"
                 : "Encerrado"}
           </Badge>
+          {(() => {
+            const dt = (study.deviceType ?? "desktop") as "mobile" | "tablet" | "desktop"
+            const Icon = deviceIcon[dt]
+            return (
+              <Badge variant="outline" className="gap-1 font-normal">
+                <Icon className="h-3 w-3" />
+                {deviceLabel[dt]}
+              </Badge>
+            )
+          })()}
         </div>
         {screens.length > 0 && (
           <Link href={`/studies/${study.id}/preview`} className={buttonVariants({ variant: "outline" })}>
@@ -107,13 +122,6 @@ export default async function StudyPage({
 
         {/* ── Protótipo ── */}
         <TabsContent value="prototype">
-          <div className="mb-4">
-            <DeviceTypeSelector
-              studyId={study.id}
-              current={(study.prototype?.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-            />
-          </div>
-
           {screens.length === 0 ? (
             /* Sem telas: upload ocupa tudo */
             <ScreenUploadForm studyId={study.id} />
