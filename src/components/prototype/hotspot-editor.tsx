@@ -30,9 +30,18 @@ interface Screen {
   order: number
 }
 
+type DeviceType = "desktop" | "tablet" | "mobile"
+
+const deviceMaxWidth: Record<DeviceType, string> = {
+  mobile: "390px",
+  tablet: "768px",
+  desktop: "1280px",
+}
+
 interface Props {
   screenId: string
   imageUrl: string
+  deviceType: DeviceType
   otherScreens: Screen[]
   initialHotspots: Array<{
     id: string
@@ -51,6 +60,7 @@ interface Props {
 
 export function HotspotEditor({
   imageUrl,
+  deviceType,
   otherScreens,
   initialHotspots,
   onSave,
@@ -140,14 +150,19 @@ export function HotspotEditor({
     setSaving(false)
   }
 
+  const maxWidth = deviceMaxWidth[deviceType]
+
   return (
     <div className="flex gap-6 h-full">
       {/* Editor de imagem */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 overflow-auto">
         <p className="text-xs text-muted-foreground mb-2">
           Clique e arraste para criar um hotspot
         </p>
-        <div className="relative border rounded-lg overflow-hidden bg-muted">
+        <div
+          className="relative border rounded-lg overflow-hidden bg-muted mx-auto"
+          style={{ maxWidth }}
+        >
           <img
             src={imageUrl}
             alt="Tela"
@@ -263,8 +278,11 @@ export function HotspotEditor({
                       )
                     )
                   }
+                  items={Object.fromEntries(
+                    otherScreens.map((s) => [s.id, `Tela ${s.order + 1}: ${s.name}`])
+                  )}
                 >
-                  <SelectTrigger className="h-7 text-xs">
+                  <SelectTrigger className="h-7 text-xs w-full">
                     <SelectValue placeholder="→ Destino" />
                   </SelectTrigger>
                   <SelectContent>

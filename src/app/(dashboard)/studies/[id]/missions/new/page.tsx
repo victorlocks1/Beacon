@@ -74,8 +74,12 @@ export default async function NewMissionPage({
 
         <div className="space-y-2">
           <Label>Tela inicial *</Label>
-          <Select name="startScreenId" required>
-            <SelectTrigger>
+          <Select
+            name="startScreenId"
+            required
+            items={Object.fromEntries(screens.map((s) => [s.id, `Tela ${s.order + 1}: ${s.name}`]))}
+          >
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione a tela de início" />
             </SelectTrigger>
             <SelectContent>
@@ -90,8 +94,12 @@ export default async function NewMissionPage({
 
         <div className="space-y-2">
           <Label>Tela de sucesso *</Label>
-          <Select name="goalScreenId" required>
-            <SelectTrigger>
+          <Select
+            name="goalScreenId"
+            required
+            items={Object.fromEntries(screens.map((s) => [s.id, `Tela ${s.order + 1}: ${s.name}`]))}
+          >
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione a tela que conta como sucesso" />
             </SelectTrigger>
             <SelectContent>

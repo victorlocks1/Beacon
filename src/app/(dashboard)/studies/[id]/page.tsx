@@ -8,15 +8,15 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
+import { EditableScreenName } from "@/components/prototype/editable-screen-name"
+import { DeviceTypeSelector } from "@/components/prototype/device-type-selector"
 import { deleteScreenAction, moveScreenAction } from "./actions"
 import {
   ArrowLeft,
-  Pencil,
   Trash2,
   MousePointerClick,
   Eye,
   Plus,
-  GripVertical,
   ChevronUp,
   ChevronDown,
 } from "lucide-react"
@@ -99,11 +99,11 @@ export default async function StudyPage({
 
         {/* ── Protótipo ── */}
         <TabsContent value="prototype">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              Faça upload das telas do seu protótipo. Depois edite os hotspots
-              de cada uma.
-            </p>
+          <div className="flex items-center justify-between mb-4 gap-4">
+            <DeviceTypeSelector
+              studyId={study.id}
+              current={(study.prototype?.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+            />
             <ScreenUploadForm studyId={study.id} />
           </div>
 
@@ -133,10 +133,13 @@ export default async function StudyPage({
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{screen.name}</p>
+                    <EditableScreenName
+                      screenId={screen.id}
+                      studyId={study.id}
+                      initialName={screen.name}
+                    />
                     <p className="text-xs text-muted-foreground">
-                      {screen.hotspots.length} hotspot(s) · {screen.width}×
-                      {screen.height}
+                      {screen.hotspots.length} hotspot(s) · {screen.width}×{screen.height}
                     </p>
                   </div>
 

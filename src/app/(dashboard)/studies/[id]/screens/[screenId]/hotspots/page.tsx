@@ -58,6 +58,7 @@ export default async function HotspotsPage({
         <HotspotEditor
           screenId={screenId}
           imageUrl={screen.imageUrl}
+          deviceType={(screen.prototype.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
           otherScreens={otherScreens.map((s) => ({
             id: s.id,
             name: s.name,

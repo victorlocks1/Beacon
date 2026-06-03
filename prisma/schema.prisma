@@ -40,6 +40,7 @@ model Prototype {
   studyId      String          @unique
   study        Study           @relation(fields: [studyId], references: [id], onDelete: Cascade)
   source       PrototypeSource
+  deviceType   DeviceType      @default(desktop)
   figmaFileKey String?
   createdAt    DateTime        @default(now())
   screens      Screen[]
@@ -48,6 +49,12 @@ model Prototype {
 enum PrototypeSource {
   image
   figma
+}
+
+enum DeviceType {
+  desktop
+  tablet
+  mobile
 }
 
 model Screen {

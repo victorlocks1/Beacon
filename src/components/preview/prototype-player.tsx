@@ -22,13 +22,22 @@ interface Mission {
   startScreenId: string
 }
 
+type DeviceType = "desktop" | "tablet" | "mobile"
+
+const deviceMaxWidth: Record<DeviceType, string> = {
+  mobile: "390px",
+  tablet: "768px",
+  desktop: "1280px",
+}
+
 interface Props {
   screens: Screen[]
   mission: Mission | null
   startScreenId?: string
+  deviceType?: DeviceType
 }
 
-export function PrototypePlayer({ screens, mission, startScreenId }: Props) {
+export function PrototypePlayer({ screens, mission, startScreenId, deviceType = "desktop" }: Props) {
   const initialId = startScreenId ?? mission?.startScreenId ?? screens[0]?.id
   const [currentScreenId, setCurrentScreenId] = useState(initialId)
   const [showMission, setShowMission] = useState(true)
@@ -77,7 +86,7 @@ export function PrototypePlayer({ screens, mission, startScreenId }: Props) {
       )}
 
       {/* Tela atual */}
-      <div className="relative">
+      <div className="relative mx-auto" style={{ maxWidth: deviceMaxWidth[deviceType] }}>
         <img
           src={current.imageUrl}
           alt={current.name}

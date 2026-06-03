@@ -55,6 +55,7 @@ export default async function PreviewPage({
       </div>
 
       <PrototypePlayer
+        deviceType={(study.prototype.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
         screens={screens.map((s) => ({
           id: s.id,
           name: s.name,

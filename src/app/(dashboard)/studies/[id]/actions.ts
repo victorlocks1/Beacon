@@ -135,6 +135,32 @@ export async function moveScreenAction(
   revalidatePath(`/studies/${studyId}`)
 }
 
+export async function updateScreenNameAction(
+  studyId: string,
+  screenId: string,
+  name: string
+) {
+  await getStudyOrThrow(studyId)
+  const trimmed = name.trim()
+  if (!trimmed) return
+  await prisma.screen.update({ where: { id: screenId }, data: { name: trimmed } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+export async function updateDeviceTypeAction(studyId: string, formData: FormData) {
+  const { study } = await getStudyOrThrow(studyId)
+  const deviceType = formData.get("deviceType") as "desktop" | "tablet" | "mobile"
+  if (!deviceType || !["desktop", "tablet", "mobile"].includes(deviceType)) return
+
+  if (study.prototype) {
+    await prisma.prototype.update({
+      where: { id: study.prototype.id },
+      data: { deviceType },
+    })
+  }
+  revalidatePath(`/studies/${studyId}`)
+}
+
 export async function createMissionAction(studyId: string, formData: FormData) {
   const { study } = await getStudyOrThrow(studyId)
 
