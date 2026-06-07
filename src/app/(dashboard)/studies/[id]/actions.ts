@@ -26,6 +26,36 @@ export async function updateStudyTitleAction(studyId: string, formData: FormData
   revalidatePath(`/studies/${studyId}`)
 }
 
+export async function publishStudyAction(studyId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+
+  const screenCount = study.prototype?.screens.length ?? 0
+  const missionCount = await prisma.block.count({
+    where: { studyId: study.id, type: "mission" },
+  })
+
+  if (screenCount === 0 || missionCount === 0) {
+    redirect(
+      `/studies/${studyId}?error=${encodeURIComponent("Adicione ao menos uma tela e uma missão antes de publicar.")}`
+    )
+  }
+
+  await prisma.study.update({ where: { id: study.id }, data: { status: "live" } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+export async function closeStudyAction(studyId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+  await prisma.study.update({ where: { id: study.id }, data: { status: "closed" } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+export async function reopenStudyAction(studyId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+  await prisma.study.update({ where: { id: study.id }, data: { status: "live" } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
 export async function uploadScreensAction(studyId: string, formData: FormData) {
   const { study } = await getStudyOrThrow(studyId)
 

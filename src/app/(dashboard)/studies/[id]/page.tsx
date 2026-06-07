@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
+import { PublishBar } from "@/components/study/publish-bar"
 import { deleteScreenAction, moveScreenAction } from "./actions"
 import {
   ArrowLeft,
@@ -108,6 +109,11 @@ export default async function StudyPage({
             Preview
           </Link>
         )}
+        <PublishBar
+          studyId={study.id}
+          status={study.status as "draft" | "live" | "closed"}
+          canPublish={screens.length > 0 && missions.length > 0}
+        />
       </div>
 
       <Tabs defaultValue="prototype">
