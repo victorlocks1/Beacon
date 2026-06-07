@@ -271,3 +271,82 @@ export async function createMissionAction(
 
   redirect(`/studies/${studyId}`)
 }
+
+export async function updateMissionAction(
+  studyId: string,
+  missionId: string,
+  input: CreateMissionInput
+) {
+  const { study } = await getStudyOrThrow(studyId)
+
+  // A missão precisa pertencer a este study
+  const existing = await prisma.mission.findFirst({
+    where: { id: missionId, block: { studyId: study.id } },
+  })
+  if (!existing) return
+
+  const task = input.task?.trim()
+  const description = input.description?.trim() || null
+  const startScreenId = input.startScreenId
+  if (!task || !startScreenId) return
+
+  const ownScreenIds = new Set((study.prototype?.screens ?? []).map((s) => s.id))
+  if (!ownScreenIds.has(startScreenId)) return
+
+  if (input.successType === "screen") {
+    if (!input.goalScreenId || !ownScreenIds.has(input.goalScreenId)) return
+  } else {
+    const validPaths = (input.paths ?? []).filter(
+      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
+    )
+    if (validPaths.length === 0) return
+  }
+
+  await prisma.mission.update({
+    where: { id: missionId },
+    data: { task, description, startScreenId, successType: input.successType },
+  })
+
+  // Substitui critério de sucesso (remove o antigo, recria o novo)
+  await prisma.missionGoal.deleteMany({ where: { missionId } })
+  await prisma.missionPath.deleteMany({ where: { missionId } }) // cascateia PathSteps
+
+  if (input.successType === "screen") {
+    await prisma.missionGoal.create({
+      data: { missionId, goalScreenId: input.goalScreenId! },
+    })
+  } else {
+    const validPaths = (input.paths ?? []).filter(
+      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
+    )
+    for (let i = 0; i < validPaths.length; i++) {
+      const path = validPaths[i]
+      const missionPath = await prisma.missionPath.create({
+        data: { missionId, label: `Caminho ${i + 1}` },
+      })
+      await prisma.pathStep.createMany({
+        data: path.map((screenId, order) => ({
+          missionPathId: missionPath.id,
+          screenId,
+          order,
+        })),
+      })
+    }
+  }
+
+  redirect(`/studies/${studyId}`)
+}
+
+export async function deleteMissionAction(studyId: string, missionId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+
+  const mission = await prisma.mission.findFirst({
+    where: { id: missionId, block: { studyId: study.id } },
+    select: { blockId: true },
+  })
+  if (!mission) return
+
+  // Apaga o bloco → cascateia missão, goals, paths, steps, results e events
+  await prisma.block.delete({ where: { id: mission.blockId } })
+  revalidatePath(`/studies/${studyId}`)
+}

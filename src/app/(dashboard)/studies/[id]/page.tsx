@@ -10,10 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { PublishBar } from "@/components/study/publish-bar"
-import { deleteScreenAction, moveScreenAction } from "./actions"
+import { deleteScreenAction, moveScreenAction, deleteMissionAction } from "./actions"
 import {
   ArrowLeft,
   Trash2,
+  Pencil,
   MousePointerClick,
   Eye,
   Plus,
@@ -251,7 +252,7 @@ export default async function StudyPage({
             <div className="space-y-3">
               {missions.map((mission, index) => (
                 <div key={mission.id} className="border rounded-xl p-4">
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">
                         Missão {index + 1}
@@ -262,6 +263,26 @@ export default async function StudyPage({
                           {mission.description}
                         </p>
                       )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Link
+                        href={`/studies/${study.id}/missions/${mission.id}/edit`}
+                        className={buttonVariants({ variant: "ghost", size: "icon" })}
+                        title="Editar missão"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Link>
+                      <form action={deleteMissionAction.bind(null, study.id, mission.id)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          type="submit"
+                          className="text-muted-foreground hover:text-red-500"
+                          title="Excluir missão"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </form>
                     </div>
                   </div>
                   <Separator className="my-3" />

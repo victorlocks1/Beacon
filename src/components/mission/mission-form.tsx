@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PathRecorder } from "@/components/mission/path-recorder"
-import { createMissionAction } from "@/app/(dashboard)/studies/[id]/actions"
+import { createMissionAction, updateMissionAction } from "@/app/(dashboard)/studies/[id]/actions"
 import { cn } from "@/lib/utils"
 import { Target, Route, Loader2 } from "lucide-react"
 
@@ -32,19 +32,31 @@ interface Screen {
   hotspots: Hotspot[]
 }
 
+export interface MissionInitial {
+  task: string
+  description: string | null
+  successType: SuccessType
+  startScreenId: string
+  goalScreenId: string | null
+  paths: string[][]
+}
+
 interface Props {
   studyId: string
   deviceType: DeviceType
   screens: Screen[]
+  missionId?: string // presente => modo edição
+  initial?: MissionInitial
 }
 
-export function MissionForm({ studyId, deviceType, screens }: Props) {
-  const [task, setTask] = useState("")
-  const [description, setDescription] = useState("")
-  const [successType, setSuccessType] = useState<SuccessType>("screen")
-  const [startScreenId, setStartScreenId] = useState<string>("")
-  const [goalScreenId, setGoalScreenId] = useState<string>("")
-  const [paths, setPaths] = useState<string[][]>([])
+export function MissionForm({ studyId, deviceType, screens, missionId, initial }: Props) {
+  const isEdit = !!missionId
+  const [task, setTask] = useState(initial?.task ?? "")
+  const [description, setDescription] = useState(initial?.description ?? "")
+  const [successType, setSuccessType] = useState<SuccessType>(initial?.successType ?? "screen")
+  const [startScreenId, setStartScreenId] = useState<string>(initial?.startScreenId ?? "")
+  const [goalScreenId, setGoalScreenId] = useState<string>(initial?.goalScreenId ?? "")
+  const [paths, setPaths] = useState<string[][]>(initial?.paths ?? [])
   const [pending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
 
@@ -61,15 +73,19 @@ export function MissionForm({ studyId, deviceType, screens }: Props) {
     if (successType === "path" && paths.length === 0)
       return setErr("Grave ao menos um caminho esperado.")
 
+    const payload = {
+      task,
+      description,
+      startScreenId,
+      successType,
+      goalScreenId: successType === "screen" ? goalScreenId : null,
+      paths: successType === "path" ? paths : undefined,
+    }
+
     startTransition(() =>
-      createMissionAction(studyId, {
-        task,
-        description,
-        startScreenId,
-        successType,
-        goalScreenId: successType === "screen" ? goalScreenId : null,
-        paths: successType === "path" ? paths : undefined,
-      })
+      isEdit
+        ? updateMissionAction(studyId, missionId!, payload)
+        : createMissionAction(studyId, payload)
     )
   }
 
@@ -207,7 +223,7 @@ export function MissionForm({ studyId, deviceType, screens }: Props) {
 
       <Button onClick={submit} disabled={pending} className="w-full">
         {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-        Criar missão
+        {isEdit ? "Salvar alterações" : "Criar missão"}
       </Button>
     </div>
   )
