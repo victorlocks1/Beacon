@@ -67,6 +67,14 @@ export default async function MissionResultsPage({
     orderBy: { session: { startedAt: "asc" } },
   })
 
+  // Numeração estável "Testador N" por ordem de chegada no study
+  const studySessions = await prisma.session.findMany({
+    where: { studyId: id },
+    orderBy: { startedAt: "asc" },
+    select: { id: true },
+  })
+  const testerNumber = new Map(studySessions.map((s, i) => [s.id, i + 1]))
+
   const events = await prisma.event.findMany({
     where: { missionId, session: { studyId: id } },
     orderBy: { timestampMs: "asc" },
@@ -152,7 +160,7 @@ export default async function MissionResultsPage({
     const path = pathFor(r.sessionId)
     return {
       id: r.sessionId,
-      shortToken: r.session.token.slice(0, 8),
+      label: `Testador ${testerNumber.get(r.sessionId) ?? "?"}`,
       outcome: r.outcome,
       bucket: outcomeBucket[r.outcome],
       durationMs: r.durationMs,
@@ -261,9 +269,7 @@ export default async function MissionResultsPage({
                     ))}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium font-mono">
-                      {row.shortToken}
-                    </p>
+                    <p className="text-sm font-medium">{row.label}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatDuration(row.durationMs)} · {row.misclickCount} misclick(s)
                     </p>
