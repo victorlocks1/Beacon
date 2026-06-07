@@ -31,8 +31,28 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "session_not_found" }, { status: 404 })
   }
 
+  // Aceita apenas missões e telas que pertencem ao study DESTA sessão
+  const [validMissions, validScreens] = await Promise.all([
+    prisma.mission.findMany({
+      where: { block: { studyId: session.studyId } },
+      select: { id: true },
+    }),
+    prisma.screen.findMany({
+      where: { prototype: { studyId: session.studyId } },
+      select: { id: true },
+    }),
+  ])
+  const missionIds = new Set(validMissions.map((m) => m.id))
+  const screenIds = new Set(validScreens.map((s) => s.id))
+
   const rows = events
-    .filter((e) => VALID_TYPES.has(e.type) && e.missionId && e.screenId)
+    .filter(
+      (e) =>
+        VALID_TYPES.has(e.type) &&
+        missionIds.has(e.missionId) &&
+        screenIds.has(e.screenId) &&
+        (!e.targetScreenId || screenIds.has(e.targetScreenId))
+    )
     .map((e) => ({
       sessionId: session.id,
       missionId: e.missionId,

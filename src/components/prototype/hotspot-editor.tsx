@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Trash2, Save, Loader2 } from "lucide-react"
+import { deviceMaxWidth, type DeviceType } from "@/lib/device"
 
 interface NormalizedRect {
   x: number
@@ -28,14 +29,6 @@ interface Screen {
   id: string
   name: string
   order: number
-}
-
-type DeviceType = "desktop" | "tablet" | "mobile"
-
-const deviceMaxWidth: Record<DeviceType, string> = {
-  mobile: "390px",
-  tablet: "768px",
-  desktop: "1280px",
 }
 
 interface Props {

@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
+import { deviceMaxWidth, type DeviceType } from "@/lib/device"
 
 interface Hotspot {
   id: string
@@ -20,14 +21,6 @@ interface Mission {
   task: string
   description: string | null
   startScreenId: string
-}
-
-type DeviceType = "desktop" | "tablet" | "mobile"
-
-const deviceMaxWidth: Record<DeviceType, string> = {
-  mobile: "390px",
-  tablet: "768px",
-  desktop: "1280px",
 }
 
 interface Props {

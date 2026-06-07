@@ -19,18 +19,27 @@ export async function saveHotspotsAction(
   const session = await auth()
   if (!session) redirect("/login")
 
-  // Verify ownership
+  // Verifica que a tela pertence a um study DO USUÁRIO LOGADO
   const screen = await prisma.screen.findFirst({
-    where: { id: screenId, prototype: { studyId } },
+    where: {
+      id: screenId,
+      prototype: { study: { id: studyId, ownerId: session.user.id } },
+    },
+    include: {
+      prototype: { include: { screens: { select: { id: true } } } },
+    },
   })
   if (!screen) throw new Error("Tela não encontrada")
+
+  // Só aceita destinos que pertencem ao mesmo protótipo
+  const validScreenIds = new Set(screen.prototype.screens.map((s) => s.id))
 
   // Replace all hotspots for this screen
   await prisma.hotspot.deleteMany({ where: { screenId } })
 
   await Promise.all(
     hotspots
-      .filter((h) => h.targetScreenId)
+      .filter((h) => h.targetScreenId && validScreenIds.has(h.targetScreenId))
       .map((h) =>
         prisma.hotspot.create({
           data: {

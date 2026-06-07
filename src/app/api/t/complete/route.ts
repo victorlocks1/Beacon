@@ -1,27 +1,14 @@
 import { prisma } from "@/lib/db"
+import { reconstructPath, arraysEqual, dedupeConsecutive } from "@/lib/path"
 
 type Outcome = "direct" | "indirect" | "unfinished" | "given_up"
-
-function reconstructPath(
-  navEvents: { targetScreenId: string | null }[]
-): string[] {
-  const ids: string[] = []
-  for (const e of navEvents) {
-    if (!e.targetScreenId) continue
-    if (ids[ids.length - 1] !== e.targetScreenId) ids.push(e.targetScreenId)
-  }
-  return ids
-}
-
-function arraysEqual(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((v, i) => v === b[i])
-}
 
 export async function POST(request: Request) {
   let body: {
     token?: string
     missionId?: string
     signal?: "reached" | "gave_up"
+    path?: string[]
     durationMs?: number
     misclickCount?: number
     clickCount?: number
@@ -33,7 +20,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "invalid_body" }, { status: 400 })
   }
 
-  const { token, missionId, signal, durationMs, misclickCount, clickCount, isLast } = body
+  const { token, missionId, signal, path, durationMs, misclickCount, clickCount, isLast } = body
 
   if (!token || !missionId || (signal !== "reached" && signal !== "gave_up")) {
     return Response.json({ ok: false, error: "missing_fields" }, { status: 400 })
@@ -46,9 +33,13 @@ export async function POST(request: Request) {
 
   const mission = await prisma.mission.findUnique({
     where: { id: missionId },
-    include: { paths: { include: { steps: { orderBy: { order: "asc" } } } } },
+    include: {
+      block: { select: { studyId: true } },
+      paths: { include: { steps: { orderBy: { order: "asc" } } } },
+    },
   })
-  if (!mission) {
+  // A missão precisa pertencer ao MESMO study da sessão
+  if (!mission || mission.block.studyId !== session.studyId) {
     return Response.json({ ok: false, error: "mission_not_found" }, { status: 404 })
   }
 
@@ -59,13 +50,19 @@ export async function POST(request: Request) {
   } else if (mission.successType === "screen") {
     outcome = "direct"
   } else {
-    // path: compara caminho real com os esperados
-    const navEvents = await prisma.event.findMany({
-      where: { sessionId: session.id, missionId, type: "navigate" },
-      orderBy: { timestampMs: "asc" },
-      select: { targetScreenId: true },
-    })
-    const actual = reconstructPath(navEvents)
+    // path: usa o caminho enviado pelo cliente (fonte da verdade); cai para
+    // a reconstrução por eventos só se o cliente não enviar nada.
+    let actual: string[]
+    if (Array.isArray(path) && path.length > 0) {
+      actual = dedupeConsecutive(path)
+    } else {
+      const navEvents = await prisma.event.findMany({
+        where: { sessionId: session.id, missionId, type: "navigate" },
+        orderBy: { timestampMs: "asc" },
+        select: { targetScreenId: true },
+      })
+      actual = reconstructPath(navEvents)
+    }
     const expectedPaths = mission.paths.map((p) => p.steps.map((s) => s.screenId))
     const matches = expectedPaths.some((exp) => arraysEqual(exp, actual))
     outcome = matches ? "direct" : "indirect"

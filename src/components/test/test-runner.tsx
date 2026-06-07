@@ -4,14 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ClipboardList, Flag, GripHorizontal, ChevronUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-type DeviceType = "desktop" | "tablet" | "mobile"
-
-const deviceMaxWidth: Record<DeviceType, number> = {
-  mobile: 390,
-  tablet: 768,
-  desktop: 1280,
-}
+import { deviceMaxWidth, type DeviceType } from "@/lib/device"
+import { dedupeConsecutive } from "@/lib/path"
 
 interface Hotspot {
   id: string
@@ -62,6 +56,8 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
   const [panelCollapsed, setPanelCollapsed] = useState(false)
 
   const bufferRef = useRef<BufferedEvent[]>([])
+  const pendingFlushesRef = useRef<Promise<unknown>[]>([])
+  const pathRef = useRef<string[]>([]) // caminho percorrido na missão atual
   const clickCountRef = useRef(0)
   const misclickCountRef = useRef(0)
   const startTimeRef = useRef(0)
@@ -123,6 +119,8 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
     misclickCountRef.current = 0
     startTimeRef.current = now()
     completedRef.current = false
+    pendingFlushesRef.current = []
+    pathRef.current = [mission.startScreenId]
     setHasClicked(false)
     setPanelCollapsed(false)
     setCurrentScreenId(mission.startScreenId)
@@ -149,7 +147,11 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
       xNorm: 0,
       yNorm: 0,
     })
+    // Garante que todos os eventos (inclusive flushes de navegação em voo)
+    // sejam persistidos antes de finalizar.
     await flush()
+    await Promise.allSettled(pendingFlushesRef.current)
+    pendingFlushesRef.current = []
 
     try {
       await fetch("/api/t/complete", {
@@ -159,6 +161,9 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
           token,
           missionId: mission.id,
           signal,
+          // Caminho percorrido enviado pelo cliente (fonte da verdade para a
+          // classificação direct/indirect — evita corrida de persistência).
+          path: pathRef.current,
           durationMs: Math.round(now() - startTimeRef.current),
           misclickCount: misclickCountRef.current,
           clickCount: clickCountRef.current,
@@ -178,7 +183,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
     }
   }
 
-  function handlePrototypeClick(e: React.MouseEvent<HTMLDivElement>) {
+  async function handlePrototypeClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!imgRef.current || completedRef.current) return
     const rect = imgRef.current.getBoundingClientRect()
     const xNorm = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
@@ -217,15 +222,19 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
         yNorm,
         targetScreenId: hit.targetScreenId,
       })
+      pathRef.current = dedupeConsecutive([
+        ...pathRef.current,
+        hit.targetScreenId,
+      ])
 
       // Chegou na tela-alvo / tela final do caminho?
       if (mission.goalScreenIds.includes(hit.targetScreenId)) {
-        completeMission("reached", hit.targetScreenId)
+        await completeMission("reached", hit.targetScreenId)
         return
       }
 
       setCurrentScreenId(hit.targetScreenId)
-      flush()
+      pendingFlushesRef.current.push(flush())
     } else {
       misclickCountRef.current += 1
       record({ screenId: screen.id, type: "misclick", xNorm, yNorm })

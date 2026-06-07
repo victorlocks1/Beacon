@@ -3,13 +3,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Play, Check, X, Trash2, Flag } from "lucide-react"
-
-type DeviceType = "desktop" | "tablet" | "mobile"
-const deviceMaxWidth: Record<DeviceType, number> = {
-  mobile: 390,
-  tablet: 768,
-  desktop: 1280,
-}
+import { deviceMaxWidth, type DeviceType } from "@/lib/device"
 
 interface Hotspot {
   id: string

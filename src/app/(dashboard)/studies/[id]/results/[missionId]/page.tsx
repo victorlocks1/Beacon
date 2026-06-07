@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
+import { reconstructPath } from "@/lib/path"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 
 const outcomeBucket: Record<string, "direct" | "indirect" | "unfinished"> = {
@@ -102,25 +103,23 @@ export default async function MissionResultsPage({
       points: pointsByScreen.get(s.id)!,
     }))
 
-  // ── Caminho por sessão ──
+  // ── Caminho por sessão (computado uma vez) ──
   const startScreenId = mission.startScreenId
-  const eventsBySession = new Map<string, typeof events>()
+  const navsBySession = new Map<string, { targetScreenId: string | null }[]>()
   for (const e of events) {
-    const arr = eventsBySession.get(e.sessionId) ?? []
-    arr.push(e)
-    eventsBySession.set(e.sessionId, arr)
+    if (e.type !== "navigate") continue
+    const arr = navsBySession.get(e.sessionId) ?? []
+    arr.push({ targetScreenId: e.targetScreenId })
+    navsBySession.set(e.sessionId, arr)
   }
-
+  const pathCache = new Map<string, string[]>()
   function pathFor(sessionId: string): string[] {
-    const evs = eventsBySession.get(sessionId) ?? []
-    const navs = evs.filter((e) => e.type === "navigate" && e.targetScreenId)
-    const ids: string[] = []
-    for (const n of navs) {
-      const tid = n.targetScreenId!
-      if (ids[ids.length - 1] !== tid) ids.push(tid)
-    }
-    if (ids.length === 0) ids.push(startScreenId)
-    return ids
+    const cached = pathCache.get(sessionId)
+    if (cached) return cached
+    const path = reconstructPath(navsBySession.get(sessionId) ?? [])
+    if (path.length === 0) path.push(startScreenId)
+    pathCache.set(sessionId, path)
+    return path
   }
 
   // ── Agrupar caminhos por desfecho ──

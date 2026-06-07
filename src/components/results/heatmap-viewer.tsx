@@ -1,13 +1,7 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
-
-type DeviceType = "desktop" | "tablet" | "mobile"
-const deviceMaxWidth: Record<DeviceType, number> = {
-  mobile: 390,
-  tablet: 768,
-  desktop: 1280,
-}
+import { deviceMaxWidth, type DeviceType } from "@/lib/device"
 
 interface Point {
   x: number

@@ -216,11 +216,17 @@ export async function createMissionAction(
 
   if (!task || !startScreenId) return
 
+  // Todas as telas referenciadas devem pertencer ao protótipo deste study
+  const ownScreenIds = new Set((study.prototype?.screens ?? []).map((s) => s.id))
+  if (!ownScreenIds.has(startScreenId)) return
+
   // Validação por tipo de sucesso
   if (input.successType === "screen") {
-    if (!input.goalScreenId) return
+    if (!input.goalScreenId || !ownScreenIds.has(input.goalScreenId)) return
   } else {
-    const validPaths = (input.paths ?? []).filter((p) => p.length >= 2)
+    const validPaths = (input.paths ?? []).filter(
+      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
+    )
     if (validPaths.length === 0) return
   }
 
@@ -245,7 +251,9 @@ export async function createMissionAction(
       data: { missionId: mission.id, goalScreenId: input.goalScreenId! },
     })
   } else {
-    const validPaths = (input.paths ?? []).filter((p) => p.length >= 2)
+    const validPaths = (input.paths ?? []).filter(
+      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
+    )
     for (let i = 0; i < validPaths.length; i++) {
       const path = validPaths[i]
       const missionPath = await prisma.missionPath.create({
