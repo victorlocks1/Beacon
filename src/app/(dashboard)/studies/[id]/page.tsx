@@ -23,6 +23,8 @@ import {
   Tablet,
   Monitor,
   BarChart3,
+  Target,
+  Route,
 } from "lucide-react"
 
 const deviceIcon = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
@@ -58,6 +60,14 @@ export default async function StudyPage({
             include: {
               startScreen: true,
               goals: { include: { goalScreen: true } },
+              paths: {
+                include: {
+                  steps: {
+                    orderBy: { order: "asc" },
+                    include: { screen: true },
+                  },
+                },
+              },
             },
           },
         },
@@ -255,18 +265,27 @@ export default async function StudyPage({
                     </div>
                   </div>
                   <Separator className="my-3" />
-                  <div className="flex gap-6 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
                     <span>
                       Início:{" "}
                       <span className="text-foreground font-medium">
                         {mission.startScreen.name}
                       </span>
                     </span>
-                    {mission.goals[0] && (
-                      <span>
-                        Sucesso:{" "}
+                    {mission.successType === "screen" ? (
+                      <span className="flex items-center gap-1">
+                        <Target className="h-3 w-3" />
+                        Tela-alvo:{" "}
                         <span className="text-foreground font-medium">
-                          {mission.goals[0].goalScreen.name}
+                          {mission.goals[0]?.goalScreen.name ?? "—"}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Route className="h-3 w-3" />
+                        Caminho exato:{" "}
+                        <span className="text-foreground font-medium">
+                          {mission.paths.length} caminho(s)
                         </span>
                       </span>
                     )}

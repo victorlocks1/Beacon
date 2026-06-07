@@ -125,11 +125,16 @@ export async function deleteScreenAction(studyId: string, screenId: string) {
     include: {
       missionStarts: { select: { id: true } },
       missionGoals: { select: { id: true } },
+      pathSteps: { select: { id: true } },
     },
   })
   if (!screen) return
 
-  if (screen.missionStarts.length > 0 || screen.missionGoals.length > 0) {
+  if (
+    screen.missionStarts.length > 0 ||
+    screen.missionGoals.length > 0 ||
+    screen.pathSteps.length > 0
+  ) {
     redirect(
       `/studies/${studyId}?error=${encodeURIComponent("Esta tela está sendo usada em uma missão. Remova a missão antes de excluir.")}`
     )
@@ -190,15 +195,34 @@ export async function updateScreenNameAction(
 }
 
 
-export async function createMissionAction(studyId: string, formData: FormData) {
+interface CreateMissionInput {
+  task: string
+  description?: string | null
+  startScreenId: string
+  successType: "screen" | "path"
+  goalScreenId?: string | null
+  paths?: string[][] // cada caminho: sequência de screenIds (start..final)
+}
+
+export async function createMissionAction(
+  studyId: string,
+  input: CreateMissionInput
+) {
   const { study } = await getStudyOrThrow(studyId)
 
-  const task = (formData.get("task") as string)?.trim()
-  const description = (formData.get("description") as string)?.trim() || null
-  const startScreenId = formData.get("startScreenId") as string
-  const goalScreenId = formData.get("goalScreenId") as string
+  const task = input.task?.trim()
+  const description = input.description?.trim() || null
+  const startScreenId = input.startScreenId
 
-  if (!task || !startScreenId || !goalScreenId) return
+  if (!task || !startScreenId) return
+
+  // Validação por tipo de sucesso
+  if (input.successType === "screen") {
+    if (!input.goalScreenId) return
+  } else {
+    const validPaths = (input.paths ?? []).filter((p) => p.length >= 2)
+    if (validPaths.length === 0) return
+  }
 
   const maxOrder = await prisma.block.count({ where: { studyId: study.id } })
 
@@ -212,13 +236,30 @@ export async function createMissionAction(studyId: string, formData: FormData) {
       task,
       description,
       startScreenId,
-      successType: "screen",
+      successType: input.successType,
     },
   })
 
-  await prisma.missionGoal.create({
-    data: { missionId: mission.id, goalScreenId },
-  })
+  if (input.successType === "screen") {
+    await prisma.missionGoal.create({
+      data: { missionId: mission.id, goalScreenId: input.goalScreenId! },
+    })
+  } else {
+    const validPaths = (input.paths ?? []).filter((p) => p.length >= 2)
+    for (let i = 0; i < validPaths.length; i++) {
+      const path = validPaths[i]
+      const missionPath = await prisma.missionPath.create({
+        data: { missionId: mission.id, label: `Caminho ${i + 1}` },
+      })
+      await prisma.pathStep.createMany({
+        data: path.map((screenId, order) => ({
+          missionPathId: missionPath.id,
+          screenId,
+          order,
+        })),
+      })
+    }
+  }
 
   redirect(`/studies/${studyId}`)
 }

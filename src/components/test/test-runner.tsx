@@ -137,7 +137,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
   }
 
   async function completeMission(
-    outcome: "direct" | "given_up" | "unfinished",
+    signal: "reached" | "gave_up",
     lastEventScreenId: string
   ) {
     if (completedRef.current) return
@@ -145,7 +145,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
 
     record({
       screenId: lastEventScreenId,
-      type: outcome === "given_up" ? "give_up" : "end",
+      type: signal === "gave_up" ? "give_up" : "end",
       xNorm: 0,
       yNorm: 0,
     })
@@ -158,7 +158,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
         body: JSON.stringify({
           token,
           missionId: mission.id,
-          outcome,
+          signal,
           durationMs: Math.round(now() - startTimeRef.current),
           misclickCount: misclickCountRef.current,
           clickCount: clickCountRef.current,
@@ -218,9 +218,9 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
         targetScreenId: hit.targetScreenId,
       })
 
-      // Chegou na tela-alvo?
+      // Chegou na tela-alvo / tela final do caminho?
       if (mission.goalScreenIds.includes(hit.targetScreenId)) {
-        completeMission("direct", hit.targetScreenId)
+        completeMission("reached", hit.targetScreenId)
         return
       }
 
@@ -304,7 +304,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
         collapsed={panelCollapsed}
         onToggle={() => setPanelCollapsed((c) => !c)}
         canGiveUp={hasClicked}
-        onGiveUp={() => completeMission("given_up", screen.id)}
+        onGiveUp={() => completeMission("gave_up", screen.id)}
       />
     </div>
   )

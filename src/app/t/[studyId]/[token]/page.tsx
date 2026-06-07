@@ -27,7 +27,12 @@ export default async function TestRunPage({
             where: { type: "mission" },
             orderBy: { order: "asc" },
             include: {
-              mission: { include: { goals: true } },
+              mission: {
+                include: {
+                  goals: true,
+                  paths: { include: { steps: { orderBy: { order: "asc" } } } },
+                },
+              },
             },
           },
         },
@@ -47,13 +52,26 @@ export default async function TestRunPage({
   const missions = study.blocks
     .map((b) => b.mission)
     .filter((m): m is NonNullable<typeof m> => m !== null)
-    .map((m) => ({
-      id: m.id,
-      task: m.task,
-      description: m.description,
-      startScreenId: m.startScreenId,
-      goalScreenIds: m.goals.map((g) => g.goalScreenId),
-    }))
+    .map((m) => {
+      // Telas que encerram a missão: alvos (screen) ou telas finais dos caminhos (path)
+      const goalScreenIds =
+        m.successType === "path"
+          ? [
+              ...new Set(
+                m.paths
+                  .map((p) => p.steps[p.steps.length - 1]?.screenId)
+                  .filter((s): s is string => !!s)
+              ),
+            ]
+          : m.goals.map((g) => g.goalScreenId)
+      return {
+        id: m.id,
+        task: m.task,
+        description: m.description,
+        startScreenId: m.startScreenId,
+        goalScreenIds,
+      }
+    })
 
   if (screens.length === 0 || missions.length === 0) {
     return <ThankYou />
