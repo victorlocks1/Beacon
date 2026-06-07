@@ -22,6 +22,7 @@ import {
   Smartphone,
   Tablet,
   Monitor,
+  BarChart3,
 } from "lucide-react"
 
 const deviceIcon = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
@@ -103,6 +104,10 @@ export default async function StudyPage({
             )
           })()}
         </div>
+        <Link href={`/studies/${study.id}/results`} className={buttonVariants({ variant: "outline" })}>
+          <BarChart3 className="h-4 w-4 mr-2" />
+          Resultados
+        </Link>
         {screens.length > 0 && (
           <Link href={`/studies/${study.id}/preview`} className={buttonVariants({ variant: "outline" })}>
             <Eye className="h-4 w-4 mr-2" />
