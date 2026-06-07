@@ -20,12 +20,30 @@ export function PublishBar({ studyId, status, canPublish }: Props) {
   const [pending, startTransition] = useTransition()
   const [copied, setCopied] = useState(false)
 
-  function copyLink() {
+  async function copyLink() {
     const url = `${window.location.origin}/t/${studyId}`
-    navigator.clipboard.writeText(url).then(() => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+      } else {
+        // Fallback para contexto não seguro (ex.: acesso via IP da rede em HTTP),
+        // onde navigator.clipboard não está disponível.
+        const ta = document.createElement("textarea")
+        ta.value = url
+        ta.style.position = "fixed"
+        ta.style.opacity = "0"
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    })
+    } catch {
+      // Último recurso: mostra o link para cópia manual
+      window.prompt("Copie o link do teste:", url)
+    }
   }
 
   if (status === "draft") {
