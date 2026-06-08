@@ -17,6 +17,16 @@ async function getStudyOrThrow(studyId: string) {
   return { study, userId: session.user.id }
 }
 
+// Bloqueia edições enquanto o estudo está "ao vivo" (preserva integridade do relatório).
+function blockIfLive(study: { status: string }, studyId: string, tab?: string) {
+  if (study.status === "live") {
+    const msg = encodeURIComponent(
+      "Encerre o estudo para editá-lo — alterar um teste ao vivo distorce os resultados."
+    )
+    redirect(`/studies/${studyId}?error=${msg}${tab ? `&tab=${tab}` : ""}`)
+  }
+}
+
 export async function updateStudyTitleAction(studyId: string, formData: FormData) {
   const { study } = await getStudyOrThrow(studyId)
   const title = (formData.get("title") as string)?.trim()
@@ -58,6 +68,7 @@ export async function reopenStudyAction(studyId: string) {
 
 export async function uploadScreensAction(studyId: string, formData: FormData) {
   const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId)
 
   type PrototypeWithScreens = NonNullable<typeof study.prototype> & {
     screens: NonNullable<typeof study.prototype>["screens"]
@@ -119,6 +130,7 @@ export async function uploadScreensAction(studyId: string, formData: FormData) {
 
 export async function deleteScreenAction(studyId: string, screenId: string) {
   const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId)
 
   const screen = await prisma.screen.findUnique({
     where: { id: screenId, prototype: { studyId: study.id } },
@@ -159,6 +171,7 @@ export async function moveScreenAction(
   direction: "up" | "down"
 ) {
   const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId)
 
   const screens = await prisma.screen.findMany({
     where: { prototype: { studyId: study.id } },
@@ -187,7 +200,8 @@ export async function updateScreenNameAction(
   screenId: string,
   name: string
 ) {
-  await getStudyOrThrow(studyId)
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId)
   const trimmed = name.trim()
   if (!trimmed) return
   await prisma.screen.update({ where: { id: screenId }, data: { name: trimmed } })
@@ -209,6 +223,7 @@ export async function createMissionAction(
   input: CreateMissionInput
 ) {
   const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
 
   const task = input.task?.trim()
   const description = input.description?.trim() || null
@@ -269,7 +284,7 @@ export async function createMissionAction(
     }
   }
 
-  redirect(`/studies/${studyId}`)
+  redirect(`/studies/${studyId}?tab=missions`)
 }
 
 export async function updateMissionAction(
@@ -278,6 +293,7 @@ export async function updateMissionAction(
   input: CreateMissionInput
 ) {
   const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
 
   // A missão precisa pertencer a este study
   const existing = await prisma.mission.findFirst({
@@ -334,11 +350,12 @@ export async function updateMissionAction(
     }
   }
 
-  redirect(`/studies/${studyId}`)
+  redirect(`/studies/${studyId}?tab=missions`)
 }
 
 export async function deleteMissionAction(studyId: string, missionId: string) {
   const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
 
   const mission = await prisma.mission.findFirst({
     where: { id: missionId, block: { studyId: study.id } },

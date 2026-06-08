@@ -26,10 +26,17 @@ export async function saveHotspotsAction(
       prototype: { study: { id: studyId, ownerId: session.user.id } },
     },
     include: {
-      prototype: { include: { screens: { select: { id: true } } } },
+      prototype: {
+        include: { study: { select: { status: true } }, screens: { select: { id: true } } },
+      },
     },
   })
   if (!screen) throw new Error("Tela não encontrada")
+
+  // Não permite editar hotspots de um estudo ao vivo (preserva o relatório)
+  if (screen.prototype.study.status === "live") {
+    redirect(`/studies/${studyId}?error=${encodeURIComponent("Encerre o estudo para editar os hotspots.")}`)
+  }
 
   // Só aceita destinos que pertencem ao mesmo protótipo
   const validScreenIds = new Set(screen.prototype.screens.map((s) => s.id))

@@ -36,10 +36,10 @@ export default async function StudyPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; tab?: string }>
 }) {
   const { id } = await params
-  const { error } = await searchParams
+  const { error, tab } = await searchParams
   const session = await auth()
   if (!session) redirect("/login")
 
@@ -82,6 +82,10 @@ export default async function StudyPage({
   const missions = study.blocks
     .filter((b) => b.type === "mission" && b.mission)
     .map((b) => b.mission!)
+
+  // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
+  const editable = study.status !== "live"
+  const activeTab = tab === "missions" ? "missions" : "prototype"
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -132,7 +136,15 @@ export default async function StudyPage({
         />
       </div>
 
-      <Tabs defaultValue="prototype">
+      {!editable && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Estudo <strong>ao vivo</strong> — a edição está bloqueada para não
+          distorcer os resultados. Use <strong>Encerrar</strong> para fazer
+          alterações.
+        </div>
+      )}
+
+      <Tabs defaultValue={activeTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="prototype">
             Protótipo ({screens.length} telas)
@@ -148,8 +160,8 @@ export default async function StudyPage({
             /* Sem telas: upload ocupa tudo */
             <ScreenUploadForm studyId={study.id} />
           ) : (
-            /* Com telas: duas colunas */
-            <div className="grid grid-cols-[1fr_280px] gap-5 items-start">
+            /* Com telas: duas colunas (uma só quando bloqueado) */
+            <div className={editable ? "grid grid-cols-[1fr_280px] gap-5 items-start" : ""}>
               {/* Esquerda: lista de telas */}
               <div className="space-y-2">
                 {screens.map((screen, index) => (
@@ -169,17 +181,22 @@ export default async function StudyPage({
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <EditableScreenName
-                        screenId={screen.id}
-                        studyId={study.id}
-                        initialName={screen.name}
-                      />
+                      {editable ? (
+                        <EditableScreenName
+                          screenId={screen.id}
+                          studyId={study.id}
+                          initialName={screen.name}
+                        />
+                      ) : (
+                        <p className="text-sm font-medium truncate">{screen.name}</p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         {screen.hotspots.length} hotspot(s) · {screen.width}×{screen.height}
                       </p>
                     </div>
 
                     {/* Actions */}
+                    {editable && (
                     <div className="flex items-center gap-1 shrink-0">
                       <form action={moveScreenAction.bind(null, study.id, screen.id, "up")}>
                         <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} type="submit">
@@ -208,14 +225,17 @@ export default async function StudyPage({
                         </Button>
                       </form>
                     </div>
+                    )}
                   </div>
                 ))}
               </div>
 
               {/* Direita: upload */}
-              <div className="sticky top-4">
-                <ScreenUploadForm studyId={study.id} />
-              </div>
+              {editable && (
+                <div className="sticky top-4">
+                  <ScreenUploadForm studyId={study.id} />
+                </div>
+              )}
             </div>
           )}
         </TabsContent>
@@ -226,17 +246,17 @@ export default async function StudyPage({
             <p className="text-sm text-muted-foreground">
               Defina o que o testador deve realizar no protótipo.
             </p>
-            {screens.length > 0 ? (
+            {editable && screens.length > 0 ? (
               <Link href={`/studies/${study.id}/missions/new`} className={buttonVariants()}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nova missão
               </Link>
-            ) : (
+            ) : editable ? (
               <Button disabled>
                 <Plus className="h-4 w-4 mr-2" />
                 Nova missão
               </Button>
-            )}
+            ) : null}
           </div>
 
           {missions.length === 0 ? (
@@ -264,26 +284,28 @@ export default async function StudyPage({
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Link
-                        href={`/studies/${study.id}/missions/${mission.id}/edit`}
-                        className={buttonVariants({ variant: "ghost", size: "icon" })}
-                        title="Editar missão"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Link>
-                      <form action={deleteMissionAction.bind(null, study.id, mission.id)}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          type="submit"
-                          className="text-muted-foreground hover:text-red-500"
-                          title="Excluir missão"
+                    {editable && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Link
+                          href={`/studies/${study.id}/missions/${mission.id}/edit`}
+                          className={buttonVariants({ variant: "ghost", size: "icon" })}
+                          title="Editar missão"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </form>
-                    </div>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Link>
+                        <form action={deleteMissionAction.bind(null, study.id, mission.id)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            type="submit"
+                            className="text-muted-foreground hover:text-red-500"
+                            title="Excluir missão"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </form>
+                      </div>
+                    )}
                   </div>
                   <Separator className="my-3" />
                   <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
