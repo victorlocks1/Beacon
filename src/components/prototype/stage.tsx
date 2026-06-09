@@ -6,7 +6,6 @@ import {
   type DeviceType,
   type ScrollMode,
 } from "@/lib/device"
-import { X } from "lucide-react"
 
 export type HotspotAction = "navigate" | "open_overlay" | "close_overlay" | "back"
 export type OverlayPosition = "bottom" | "center"
@@ -192,11 +191,15 @@ export function PrototypeStage({
   }
 
   const baseFrame = frameStyles(baseScreen.scroll, deviceType)
+  const baseScrolls = baseScreen.scroll !== "none"
 
   return (
     <div className="relative mx-auto" style={{ width: deviceMaxWidth[deviceType], maxWidth: "100%" }}>
       {/* Tela base */}
-      <div className="relative bg-white shadow-lg rounded-lg overflow-hidden mx-auto" style={baseFrame.frame}>
+      <div
+        className={`relative bg-white shadow-lg rounded-lg mx-auto ${baseScrolls ? "subtle-scroll" : "overflow-hidden"}`}
+        style={baseFrame.frame}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={baseScreen.imageUrl}
@@ -220,7 +223,7 @@ export function PrototypeStage({
           }}>
             {/* Backdrop (clicar fecha o overlay do topo) */}
             <div
-              className="absolute inset-0 bg-black/40"
+              className="absolute inset-0 bg-black/40 animate-in fade-in duration-200"
               onClick={() => isTop && closeTopOverlay(layer.screenId, null, 0, 0)}
             />
             {/* Conteúdo do overlay */}
@@ -228,18 +231,10 @@ export function PrototypeStage({
               className={
                 "relative z-10 bg-white overflow-hidden shadow-2xl " +
                 (layer.position === "bottom"
-                  ? "w-full rounded-t-2xl"
-                  : "w-[90%] rounded-2xl")
+                  ? "w-full rounded-t-2xl animate-in slide-in-from-bottom duration-300 ease-out"
+                  : "w-[90%] rounded-2xl animate-in fade-in zoom-in-95 duration-200 ease-out")
               }
             >
-              {/* Botão fechar padrão (sempre disponível) */}
-              <button
-                onClick={() => closeTopOverlay(layer.screenId, null, 0, 0)}
-                className="absolute top-2 right-2 z-20 rounded-full bg-black/50 text-white p-1 hover:bg-black/70"
-                aria-label="Fechar"
-              >
-                <X className="h-4 w-4" />
-              </button>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={screen.imageUrl}
