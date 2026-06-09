@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import {
   deviceMaxWidth,
   deviceViewportHeight,
@@ -35,19 +35,18 @@ export interface StageInteraction {
 }
 
 interface OverlayLayer {
+  key: number
   screenId: string
   position: OverlayPosition
+  closing?: boolean
 }
+
+const OVERLAY_EXIT_MS = 240
 
 function frameStyles(scroll: ScrollMode, device: DeviceType) {
   const w = deviceMaxWidth[device]
   const h = deviceViewportHeight[device]
   switch (scroll) {
-    case "vertical":
-      return {
-        frame: { width: w, maxWidth: "100%", height: h, overflowY: "auto", overflowX: "hidden" } as React.CSSProperties,
-        img: { width: "100%", height: "auto", display: "block" } as React.CSSProperties,
-      }
     case "horizontal":
       return {
         frame: { width: w, maxWidth: "100%", height: h, overflowX: "auto", overflowY: "hidden" } as React.CSSProperties,
@@ -58,9 +57,11 @@ function frameStyles(scroll: ScrollMode, device: DeviceType) {
         frame: { width: w, maxWidth: "100%", height: h, overflow: "auto" } as React.CSSProperties,
         img: { width: "auto", height: "auto", maxWidth: "none", display: "block" } as React.CSSProperties,
       }
+    // "none" e "vertical": ajusta à largura e rola na vertical automaticamente
+    // quando a tela for mais alta que o viewport do dispositivo.
     default:
       return {
-        frame: { width: w, maxWidth: "100%" } as React.CSSProperties,
+        frame: { width: w, maxWidth: "100%", maxHeight: h, overflowY: "auto", overflowX: "hidden" } as React.CSSProperties,
         img: { width: "100%", height: "auto", display: "block" } as React.CSSProperties,
       }
   }
@@ -80,6 +81,10 @@ export function PrototypeStage({
   const byId = new Map(screens.map((s) => [s.id, s]))
   const [baseHistory, setBaseHistory] = useState<string[]>([initialScreenId])
   const [overlays, setOverlays] = useState<OverlayLayer[]>([])
+  const overlayKeyRef = useRef(0)
+
+  // Overlays visíveis (ignora os que estão saindo com animação)
+  const liveOverlays = overlays.filter((o) => !o.closing)
 
   const baseId = baseHistory[baseHistory.length - 1]
   const baseScreen = byId.get(baseId) ?? screens[0]
@@ -107,7 +112,7 @@ export function PrototypeStage({
         kind: "misclick",
         fromScreenId: screen.id,
         toScreenId: null,
-        topScreenId: overlays.length ? overlays[overlays.length - 1].screenId : baseId,
+        topScreenId: liveOverlays.length ? liveOverlays[liveOverlays.length - 1].screenId : baseId,
         hotspotId: null,
         xNorm,
         yNorm,
@@ -134,7 +139,8 @@ export function PrototypeStage({
     } else if (h.action === "open_overlay") {
       if (!h.targetScreenId) return
       const pos = h.overlayPosition ?? "bottom"
-      setOverlays((o) => [...o, { screenId: h.targetScreenId!, position: pos }])
+      const key = ++overlayKeyRef.current
+      setOverlays((o) => [...o, { key, screenId: h.targetScreenId!, position: pos }])
       onInteraction?.({
         kind: "open_overlay",
         fromScreenId,
@@ -151,14 +157,18 @@ export function PrototypeStage({
     }
   }
 
-  function revealedAfterOverlayPop(): string {
-    return overlays.length > 1 ? overlays[overlays.length - 2].screenId : baseId
-  }
-
   function closeTopOverlay(fromScreenId: string, hotspotId: string | null, xNorm: number, yNorm: number) {
-    if (overlays.length === 0) return
-    const revealed = revealedAfterOverlayPop()
-    setOverlays((o) => o.slice(0, -1))
+    const live = overlays.filter((o) => !o.closing)
+    if (live.length === 0) return
+    const top = live[live.length - 1]
+    const revealed = live.length > 1 ? live[live.length - 2].screenId : baseId
+
+    // marca como "saindo" para tocar a animação, depois remove de fato
+    setOverlays((o) => o.map((l) => (l.key === top.key ? { ...l, closing: true } : l)))
+    setTimeout(() => {
+      setOverlays((o) => o.filter((l) => l.key !== top.key))
+    }, OVERLAY_EXIT_MS)
+
     onInteraction?.({
       kind: "close_overlay",
       fromScreenId,
@@ -171,7 +181,7 @@ export function PrototypeStage({
   }
 
   function goBack(fromScreenId: string, hotspotId: string, xNorm: number, yNorm: number) {
-    if (overlays.length > 0) {
+    if (liveOverlays.length > 0) {
       closeTopOverlay(fromScreenId, hotspotId, xNorm, yNorm)
       return
     }
@@ -191,13 +201,12 @@ export function PrototypeStage({
   }
 
   const baseFrame = frameStyles(baseScreen.scroll, deviceType)
-  const baseScrolls = baseScreen.scroll !== "none"
 
   return (
     <div className="relative mx-auto" style={{ width: deviceMaxWidth[deviceType], maxWidth: "100%" }}>
       {/* Tela base */}
       <div
-        className={`relative bg-white shadow-lg rounded-lg mx-auto ${baseScrolls ? "subtle-scroll" : "overflow-hidden"}`}
+        className="relative bg-white shadow-lg rounded-lg mx-auto subtle-scroll"
         style={baseFrame.frame}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -212,27 +221,43 @@ export function PrototypeStage({
       </div>
 
       {/* Overlays empilhados */}
-      {overlays.map((layer, i) => {
+      {overlays.map((layer) => {
         const screen = byId.get(layer.screenId)
         if (!screen) return null
-        const isTop = i === overlays.length - 1
+        const lastLive = liveOverlays[liveOverlays.length - 1]
+        const isTop = !layer.closing && lastLive?.key === layer.key
+        const backdropAnim = layer.closing
+          ? "animate-out fade-out duration-200"
+          : "animate-in fade-in duration-200"
+        const contentAnim =
+          layer.position === "bottom"
+            ? layer.closing
+              ? "animate-out slide-out-to-bottom duration-200 ease-in"
+              : "animate-in slide-in-from-bottom duration-300 ease-out"
+            : layer.closing
+              ? "animate-out fade-out zoom-out-95 duration-150 ease-in"
+              : "animate-in fade-in zoom-in-95 duration-200 ease-out"
         return (
-          <div key={i} className="absolute inset-0 z-10 flex" style={{
-            alignItems: layer.position === "bottom" ? "flex-end" : "center",
-            justifyContent: "center",
-          }}>
+          <div
+            key={layer.key}
+            className="absolute inset-0 z-10 flex"
+            style={{
+              alignItems: layer.position === "bottom" ? "flex-end" : "center",
+              justifyContent: "center",
+              pointerEvents: layer.closing ? "none" : "auto",
+            }}
+          >
             {/* Backdrop (clicar fecha o overlay do topo) */}
             <div
-              className="absolute inset-0 bg-black/40 animate-in fade-in duration-200"
+              className={`absolute inset-0 bg-black/40 ${backdropAnim}`}
               onClick={() => isTop && closeTopOverlay(layer.screenId, null, 0, 0)}
             />
             {/* Conteúdo do overlay */}
             <div
               className={
                 "relative z-10 bg-white overflow-hidden shadow-2xl " +
-                (layer.position === "bottom"
-                  ? "w-full rounded-t-2xl animate-in slide-in-from-bottom duration-300 ease-out"
-                  : "w-[90%] rounded-2xl animate-in fade-in zoom-in-95 duration-200 ease-out")
+                (layer.position === "bottom" ? "w-full rounded-t-2xl " : "w-[90%] rounded-2xl ") +
+                contentAnim
               }
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
