@@ -182,15 +182,15 @@ export default async function MissionResultsPage({
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Resultados da missão</p>
-          <h1 className="text-xl font-bold truncate">{mission.task}</h1>
+          <p className="text-label-medium text-on-surface-variant">RESULTADOS DA MISSÃO</p>
+          <h1 className="text-headline-small text-on-surface truncate">{mission.task}</h1>
         </div>
       </div>
 
       {total === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed rounded-xl text-muted-foreground">
-          <p className="text-base font-medium">Ainda sem respostas</p>
-          <p className="text-sm mt-1">
+        <div className="text-center py-24 border border-outline-variant rounded-3xl bg-surface-container-low">
+          <p className="text-title-medium text-on-surface">Ainda sem respostas</p>
+          <p className="text-body-medium text-on-surface-variant mt-1.5">
             Compartilhe o link do teste para começar a coletar dados.
           </p>
         </div>
@@ -206,7 +206,7 @@ export default async function MissionResultsPage({
 
           {/* Heatmap */}
           <section>
-            <h2 className="font-semibold mb-3">Heatmap por tela</h2>
+            <h2 className="text-title-large text-on-surface mb-4">Heatmap por tela</h2>
             {heatmapScreens.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nenhum clique registrado nas telas.
@@ -218,7 +218,7 @@ export default async function MissionResultsPage({
 
           {/* Caminhos */}
           <section>
-            <h2 className="font-semibold mb-3">Caminhos percorridos</h2>
+            <h2 className="text-title-large text-on-surface mb-4">Caminhos percorridos</h2>
             <div className="space-y-2">
               {pathGroups.map((g, i) => (
                 <div key={i} className="border rounded-lg p-3">
@@ -250,7 +250,7 @@ export default async function MissionResultsPage({
 
           {/* Sessões individuais */}
           <section>
-            <h2 className="font-semibold mb-3">Sessões individuais</h2>
+            <h2 className="text-title-large text-on-surface mb-4">Sessões individuais</h2>
             <div className="space-y-2">
               {sessionRows.map((row) => (
                 <div
@@ -289,9 +289,9 @@ export default async function MissionResultsPage({
 
 function Kpi({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border rounded-xl p-4">
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+    <div className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
+      <p className="text-headline-small text-on-surface">{value}</p>
+      <p className="text-body-small text-on-surface-variant mt-1">{label}</p>
     </div>
   )
 }

@@ -90,17 +90,17 @@ export default async function StudyPage({
   return (
     <div className="max-w-5xl mx-auto">
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-6 rounded-2xl border border-error/30 bg-error-container px-5 py-4 text-body-medium text-on-error-container">
           {decodeURIComponent(error)}
         </div>
       )}
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-8">
         <Link href="/studies" className={buttonVariants({ variant: "ghost", size: "icon" })}>
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="flex-1 flex items-center gap-3">
-          <h1 className="text-xl font-bold">{study.title}</h1>
+          <h1 className="text-headline-small text-on-surface">{study.title}</h1>
           <Badge variant={study.status === "live" ? "default" : "secondary"}>
             {study.status === "draft"
               ? "Rascunho"
@@ -137,15 +137,15 @@ export default async function StudyPage({
       </div>
 
       {!editable && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Estudo <strong>ao vivo</strong> — a edição está bloqueada para não
-          distorcer os resultados. Use <strong>Encerrar</strong> para fazer
+        <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container px-5 py-4 text-body-medium text-on-surface-variant">
+          Estudo <strong className="text-on-surface font-medium">ao vivo</strong> — a edição está bloqueada para não
+          distorcer os resultados. Use <strong className="text-on-surface font-medium">Encerrar</strong> para fazer
           alterações.
         </div>
       )}
 
       <Tabs defaultValue={activeTab}>
-        <TabsList className="mb-6">
+        <TabsList className="mb-8">
           <TabsTrigger value="prototype">
             Protótipo ({screens.length} telas)
           </TabsTrigger>
@@ -167,7 +167,7 @@ export default async function StudyPage({
                 {screens.map((screen, index) => (
                   <div
                     key={screen.id}
-                    className="flex items-center gap-3 border rounded-lg p-3"
+                    className="flex items-center gap-4 border border-outline-variant rounded-2xl p-4 bg-surface-container-low"
                   >
                     {/* Thumbnail */}
                     <div className="relative w-20 h-14 rounded overflow-hidden bg-muted shrink-0">
@@ -260,9 +260,9 @@ export default async function StudyPage({
           </div>
 
           {missions.length === 0 ? (
-            <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
-              <p className="text-base font-medium">Nenhuma missão ainda</p>
-              <p className="text-sm mt-1">
+            <div className="text-center py-20 border border-outline-variant rounded-3xl bg-surface-container-low">
+              <p className="text-title-medium text-on-surface">Nenhuma missão ainda</p>
+              <p className="text-body-medium text-on-surface-variant mt-1.5">
                 {screens.length === 0
                   ? "Adicione telas ao protótipo primeiro"
                   : "Clique em \"Nova missão\" para criar a primeira tarefa"}
@@ -271,13 +271,13 @@ export default async function StudyPage({
           ) : (
             <div className="space-y-3">
               {missions.map((mission, index) => (
-                <div key={mission.id} className="border rounded-xl p-4">
+                <div key={mission.id} className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Missão {index + 1}
+                      <p className="text-label-medium text-on-surface-variant mb-1">
+                        MISSÃO {index + 1}
                       </p>
-                      <h3 className="font-semibold">{mission.task}</h3>
+                      <h3 className="text-title-medium text-on-surface">{mission.task}</h3>
                       {mission.description && (
                         <p className="text-sm text-muted-foreground mt-1">
                           {mission.description}

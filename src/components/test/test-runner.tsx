@@ -1,7 +1,6 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { ClipboardList, Flag, GripHorizontal, ChevronUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { type DeviceType } from "@/lib/device"
@@ -219,24 +218,22 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
   // ─────────── Intro ───────────
   if (phase === "intro") {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-        <Card className="w-full max-w-md">
-          <CardContent className="py-8 px-6 space-y-5">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <ClipboardList className="h-4 w-4" />
-              Tarefa {missionIndex + 1} de {missions.length}
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-xl font-bold">{mission.task}</h1>
-              {mission.description && (
-                <p className="text-sm text-muted-foreground">{mission.description}</p>
-              )}
-            </div>
-            <Button onClick={startMission} className="w-full" size="lg">
-              Começar
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
+        <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-10 space-y-6">
+          <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
+            <ClipboardList className="h-4 w-4" />
+            Tarefa {missionIndex + 1} de {missions.length}
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-headline-small text-on-surface">{mission.task}</h1>
+            {mission.description && (
+              <p className="text-body-medium text-on-surface-variant">{mission.description}</p>
+            )}
+          </div>
+          <Button onClick={startMission} className="w-full h-12" size="lg">
+            Começar
+          </Button>
+        </div>
       </div>
     )
   }
@@ -244,22 +241,20 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
   // ─────────── Thanks ───────────
   if (phase === "thanks") {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-        <Card className="w-full max-w-md">
-          <CardContent className="py-12 text-center space-y-2">
-            <h1 className="text-xl font-bold">Obrigado! 🎉</h1>
-            <p className="text-sm text-muted-foreground">
-              Você concluiu o teste. Pode fechar esta aba.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
+        <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
+          <h1 className="text-headline-small text-on-surface">Obrigado! 🎉</h1>
+          <p className="text-body-medium text-on-surface-variant">
+            Você concluiu o teste. Pode fechar esta aba.
+          </p>
+        </div>
       </div>
     )
   }
 
   // ─────────── Running ───────────
   return (
-    <div className="min-h-screen bg-neutral-100 flex flex-col items-center py-6 px-4">
+    <div className="min-h-screen bg-surface-container flex flex-col items-center py-8 px-4">
       <PrototypeStage
         key={mission.id}
         screens={screens}

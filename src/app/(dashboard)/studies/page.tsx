@@ -33,28 +33,32 @@ export default async function StudiesPage() {
   })
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold">Meus Studies</h1>
+    <div className="max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-10">
+        <h1 className="text-headline-large text-on-surface">Meus studies</h1>
         <CreateStudyDialog />
       </div>
 
       {studies.length === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed rounded-xl text-muted-foreground">
-          <p className="text-lg font-medium">Nenhum study ainda</p>
-          <p className="text-sm mt-1">Clique em "Novo study" para começar</p>
+        <div className="text-center py-24 border border-outline-variant rounded-3xl bg-surface-container-low">
+          <p className="text-title-medium text-on-surface">Nenhum study ainda</p>
+          <p className="text-body-medium text-on-surface-variant mt-1.5">
+            Clique em "Novo study" para começar
+          </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {studies.map((study) => (
             <div
               key={study.id}
-              className="border rounded-xl p-5 flex flex-col gap-3 hover:shadow-sm transition-shadow"
+              className="rounded-3xl bg-surface-container-low border border-outline-variant p-6 flex flex-col gap-4 transition-shadow hover:elevation-2"
             >
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-semibold truncate">{study.title}</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <h2 className="text-title-large text-on-surface truncate">
+                    {study.title}
+                  </h2>
+                  <p className="text-body-small text-on-surface-variant mt-1">
                     {study.prototype?._count.screens ?? 0} tela(s) ·{" "}
                     {study.blocks.length} missão(ões)
                   </p>
@@ -64,24 +68,21 @@ export default async function StudiesPage() {
                 </Badge>
               </div>
 
-              <div className="flex items-center justify-between mt-auto pt-2 border-t">
+              <div className="flex items-center justify-between mt-auto pt-4 border-t border-outline-variant">
                 <Link
                   href={`/studies/${study.id}`}
-                  className={cn(
-                    buttonVariants({ variant: "ghost", size: "sm" }),
-                    "gap-1"
-                  )}
+                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
                 >
-                  Abrir <ArrowRight className="h-3.5 w-3.5" />
+                  Abrir <ArrowRight className="h-4 w-4" />
                 </Link>
                 <form action={deleteStudyAction.bind(null, study.id)}>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                    size="icon-sm"
+                    className="text-on-surface-variant hover:text-error"
                     type="submit"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </form>
               </div>

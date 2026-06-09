@@ -56,7 +56,7 @@ export default async function EditMissionPage({
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-xl font-bold">Editar missão</h1>
+        <h1 className="text-headline-small text-on-surface">Editar missão</h1>
       </div>
 
       <MissionForm

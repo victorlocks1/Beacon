@@ -62,7 +62,7 @@ export default async function ResultsOverviewPage({
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-8">
         <Link
           href={`/studies/${id}`}
           className={buttonVariants({ variant: "ghost", size: "icon" })}
@@ -70,8 +70,8 @@ export default async function ResultsOverviewPage({
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-xl font-bold">Resultados</h1>
-          <p className="text-xs text-muted-foreground">{study.title}</p>
+          <h1 className="text-headline-small text-on-surface">Resultados</h1>
+          <p className="text-body-medium text-on-surface-variant mt-0.5">{study.title}</p>
         </div>
         <Badge variant="secondary" className="gap-1.5">
           <Users className="h-3.5 w-3.5" />
@@ -84,31 +84,31 @@ export default async function ResultsOverviewPage({
           Nenhuma missão neste study.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {missions.map((mission, index) => {
             const s = statsFor(mission.id)
             return (
               <Link
                 key={mission.id}
                 href={`/studies/${id}/results/${mission.id}`}
-                className="block border rounded-xl p-4 hover:shadow-sm transition-shadow"
+                className="block border border-outline-variant rounded-2xl p-6 bg-surface-container-low transition-shadow hover:elevation-2"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground mb-0.5">
-                      Missão {index + 1}
+                    <p className="text-label-medium text-on-surface-variant mb-1">
+                      MISSÃO {index + 1}
                     </p>
-                    <h2 className="font-semibold truncate">{mission.task}</h2>
+                    <h2 className="text-title-medium text-on-surface truncate">{mission.task}</h2>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+                  <ArrowRight className="h-4 w-4 text-on-surface-variant shrink-0 mt-1" />
                 </div>
 
                 {s.total === 0 ? (
-                  <p className="text-sm text-muted-foreground mt-3">
+                  <p className="text-body-medium text-on-surface-variant mt-4">
                     Ainda sem respostas.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-4 gap-3 mt-4">
+                  <div className="grid grid-cols-4 gap-3 mt-6">
                     <Stat label="Respostas" value={String(s.total)} />
                     <Stat label="Sucesso" value={formatPct(s.successRate)} />
                     <Stat label="Misclick" value={formatPct(s.misclickRate)} />
@@ -127,8 +127,8 @@ export default async function ResultsOverviewPage({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-lg font-semibold">{value}</p>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-title-large text-on-surface">{value}</p>
+      <p className="text-body-small text-on-surface-variant mt-0.5">{label}</p>
     </div>
   )
 }

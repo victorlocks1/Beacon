@@ -41,7 +41,7 @@ export default async function NewMissionPage({
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-xl font-bold">Nova missão</h1>
+        <h1 className="text-headline-small text-on-surface">Nova missão</h1>
       </div>
 
       <MissionForm

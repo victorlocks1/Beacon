@@ -68,10 +68,10 @@ export default async function HotspotsPage({
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-label-medium text-on-surface-variant">
             {screen.prototype.study.title}
           </p>
-          <h1 className="font-semibold">{screen.name}</h1>
+          <h1 className="text-title-large text-on-surface">{screen.name}</h1>
         </div>
       </div>
 

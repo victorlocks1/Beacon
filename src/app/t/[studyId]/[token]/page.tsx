@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { TestRunner } from "@/components/test/test-runner"
-import { Card, CardContent } from "@/components/ui/card"
 
 export default async function TestRunPage({
   params,
@@ -107,15 +106,13 @@ export default async function TestRunPage({
 
 function ThankYou() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/30">
-      <Card className="w-full max-w-md">
-        <CardContent className="py-12 text-center space-y-2">
-          <h1 className="text-xl font-bold">Obrigado! 🎉</h1>
-          <p className="text-sm text-muted-foreground">
-            Você concluiu o teste. Pode fechar esta aba.
-          </p>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
+      <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
+        <h1 className="text-headline-small text-on-surface">Obrigado! 🎉</h1>
+        <p className="text-body-medium text-on-surface-variant">
+          Você concluiu o teste. Pode fechar esta aba.
+        </p>
+      </div>
     </div>
   )
 }
