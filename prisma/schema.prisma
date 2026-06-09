@@ -57,6 +57,13 @@ enum DeviceType {
   mobile
 }
 
+enum ScrollMode {
+  none
+  vertical
+  horizontal
+  both
+}
+
 model Screen {
   id               String        @id @default(cuid())
   prototypeId      String
@@ -66,6 +73,7 @@ model Screen {
   imageUrl         String
   width            Float
   height           Float
+  scroll           ScrollMode    @default(none)
   hotspots         Hotspot[]     @relation("ScreenHotspots")
   incomingHotspots Hotspot[]     @relation("HotspotTarget")
   missionStarts    Mission[]     @relation("MissionStartScreen")
@@ -80,15 +88,29 @@ enum HotspotShape {
   polygon
 }
 
+enum HotspotAction {
+  navigate
+  open_overlay
+  close_overlay
+  back
+}
+
+enum OverlayPosition {
+  bottom
+  center
+}
+
 model Hotspot {
-  id             String       @id @default(cuid())
-  screenId       String
-  screen         Screen       @relation("ScreenHotspots", fields: [screenId], references: [id], onDelete: Cascade)
-  shape          HotspotShape
-  coords         Json
-  targetScreenId String
-  targetScreen   Screen       @relation("HotspotTarget", fields: [targetScreenId], references: [id])
-  events         Event[]
+  id              String           @id @default(cuid())
+  screenId        String
+  screen          Screen           @relation("ScreenHotspots", fields: [screenId], references: [id], onDelete: Cascade)
+  shape           HotspotShape
+  coords          Json
+  action          HotspotAction    @default(navigate)
+  overlayPosition OverlayPosition?
+  targetScreenId  String?
+  targetScreen    Screen?          @relation("HotspotTarget", fields: [targetScreenId], references: [id])
+  events          Event[]
 }
 
 model Block {

@@ -3,23 +3,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Play, Check, X, Trash2, Flag } from "lucide-react"
-import { deviceMaxWidth, type DeviceType } from "@/lib/device"
+import { type DeviceType } from "@/lib/device"
+import { dedupeConsecutive } from "@/lib/path"
+import { PrototypeStage, type StageScreen } from "@/components/prototype/stage"
 
-interface Hotspot {
-  id: string
-  coords: { x: number; y: number; w: number; h: number }
-  targetScreenId: string
-}
-interface Screen {
-  id: string
-  name: string
-  order: number
-  imageUrl: string
-  hotspots: Hotspot[]
-}
+type RecorderScreen = StageScreen & { order: number }
 
 interface Props {
-  screens: Screen[]
+  screens: RecorderScreen[]
   startScreenId: string | null
   deviceType: DeviceType
   paths: string[][]
@@ -36,17 +27,9 @@ export function PathRecorder({
   const [recording, setRecording] = useState<string[] | null>(null)
   const screenById = new Map(screens.map((s) => [s.id, s]))
 
-  const currentScreenId = recording?.[recording.length - 1] ?? null
-  const currentScreen = currentScreenId ? screenById.get(currentScreenId) : null
-
   function startRecording() {
     if (!startScreenId) return
     setRecording([startScreenId])
-  }
-
-  function handleHotspotClick(targetScreenId: string) {
-    if (!recording) return
-    setRecording([...recording, targetScreenId])
   }
 
   function finalize() {
@@ -128,43 +111,18 @@ export function PathRecorder({
             ))}
           </div>
 
-          {/* Tela atual navegável */}
-          {currentScreen && (
-            <div
-              className="relative mx-auto border rounded-lg overflow-hidden bg-muted"
-              style={{ maxWidth: deviceMaxWidth[deviceType] }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={currentScreen.imageUrl}
-                alt={currentScreen.name}
-                className="w-full h-auto block pointer-events-none select-none"
-                draggable={false}
-              />
-              <svg className="absolute inset-0 w-full h-full">
-                {currentScreen.hotspots.map((h) => (
-                  <rect
-                    key={h.id}
-                    x={`${h.coords.x * 100}%`}
-                    y={`${h.coords.y * 100}%`}
-                    width={`${h.coords.w * 100}%`}
-                    height={`${h.coords.h * 100}%`}
-                    fill="rgba(59,130,246,0.18)"
-                    stroke="#3b82f6"
-                    strokeWidth={1.5}
-                    style={{ cursor: "pointer" }}
-                    onClick={() => handleHotspotClick(h.targetScreenId)}
-                  />
-                ))}
-              </svg>
-            </div>
-          )}
-
-          {currentScreen && currentScreen.hotspots.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center">
-              Esta tela não tem hotspots. Finalize o caminho ou cancele.
-            </p>
-          )}
+          {/* Protótipo navegável (mesmo motor do teste) */}
+          <PrototypeStage
+            key={startScreenId}
+            screens={screens}
+            deviceType={deviceType}
+            initialScreenId={startScreenId}
+            onInteraction={(ev) =>
+              setRecording((r) =>
+                r ? dedupeConsecutive([...r, ev.topScreenId]) : r
+              )
+            }
+          />
 
           <div className="flex items-center gap-2">
             <Button

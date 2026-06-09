@@ -67,9 +67,12 @@ export default async function EditMissionPage({
           name: s.name,
           order: s.order,
           imageUrl: s.imageUrl,
+          scroll: s.scroll as "none" | "vertical" | "horizontal" | "both",
           hotspots: s.hotspots.map((h) => ({
             id: h.id,
             coords: h.coords as { x: number; y: number; w: number; h: number },
+            action: h.action as "navigate" | "open_overlay" | "close_overlay" | "back",
+            overlayPosition: h.overlayPosition as "bottom" | "center" | null,
             targetScreenId: h.targetScreenId,
           })),
         }))}

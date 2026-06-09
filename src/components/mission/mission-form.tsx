@@ -22,13 +22,16 @@ type SuccessType = "screen" | "path"
 interface Hotspot {
   id: string
   coords: { x: number; y: number; w: number; h: number }
-  targetScreenId: string
+  action: "navigate" | "open_overlay" | "close_overlay" | "back"
+  overlayPosition: "bottom" | "center" | null
+  targetScreenId: string | null
 }
 interface Screen {
   id: string
   name: string
   order: number
   imageUrl: string
+  scroll: "none" | "vertical" | "horizontal" | "both"
   hotspots: Hotspot[]
 }
 

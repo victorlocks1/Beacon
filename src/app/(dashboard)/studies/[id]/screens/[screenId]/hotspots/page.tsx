@@ -5,7 +5,8 @@ import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { HotspotEditor } from "@/components/prototype/hotspot-editor"
-import { saveHotspotsAction } from "./actions"
+import { saveHotspotsAction, updateScreenScrollAction } from "./actions"
+import type { ScrollMode } from "@/lib/device"
 
 export default async function HotspotsPage({
   params,
@@ -38,6 +39,11 @@ export default async function HotspotsPage({
     await saveHotspotsAction(studyId, screenId, hotspots)
   }
 
+  async function changeScroll(scroll: ScrollMode) {
+    "use server"
+    await updateScreenScrollAction(studyId, screenId, scroll)
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
@@ -59,6 +65,7 @@ export default async function HotspotsPage({
           screenId={screenId}
           imageUrl={screen.imageUrl}
           deviceType={(screen.prototype.study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+          initialScroll={(screen.scroll ?? "none") as ScrollMode}
           otherScreens={otherScreens.map((s) => ({
             id: s.id,
             name: s.name,
@@ -67,9 +74,12 @@ export default async function HotspotsPage({
           initialHotspots={screen.hotspots.map((h) => ({
             id: h.id,
             coords: h.coords,
+            action: h.action as "navigate" | "open_overlay" | "close_overlay" | "back",
+            overlayPosition: h.overlayPosition as "bottom" | "center" | null,
             targetScreenId: h.targetScreenId,
           }))}
           onSave={save}
+          onScrollChange={changeScroll}
         />
       </div>
     </div>

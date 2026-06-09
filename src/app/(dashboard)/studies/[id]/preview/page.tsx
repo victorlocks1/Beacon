@@ -59,11 +59,13 @@ export default async function PreviewPage({
         screens={screens.map((s) => ({
           id: s.id,
           name: s.name,
-          order: s.order,
           imageUrl: s.imageUrl,
+          scroll: s.scroll,
           hotspots: s.hotspots.map((h) => ({
             id: h.id,
             coords: h.coords as { x: number; y: number; w: number; h: number },
+            action: h.action,
+            overlayPosition: h.overlayPosition,
             targetScreenId: h.targetScreenId,
           })),
         }))}

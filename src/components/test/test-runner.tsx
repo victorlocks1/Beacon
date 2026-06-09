@@ -4,23 +4,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ClipboardList, Flag, GripHorizontal, ChevronUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { deviceMaxWidth, type DeviceType } from "@/lib/device"
+import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
+import { PrototypeStage, type StageScreen, type StageInteraction } from "@/components/prototype/stage"
 
-interface Hotspot {
-  id: string
-  coords: { x: number; y: number; w: number; h: number }
-  targetScreenId: string
-}
-interface Screen {
-  id: string
-  name: string
-  order: number
-  imageUrl: string
-  width: number
-  height: number
-  hotspots: Hotspot[]
-}
 interface Mission {
   id: string
   task: string
@@ -31,7 +18,7 @@ interface Mission {
 interface Props {
   token: string
   deviceType: DeviceType
-  screens: Screen[]
+  screens: StageScreen[]
   missions: Mission[]
 }
 
@@ -51,21 +38,19 @@ type Phase = "intro" | "running" | "thanks"
 export function TestRunner({ token, deviceType, screens, missions }: Props) {
   const [phase, setPhase] = useState<Phase>("intro")
   const [missionIndex, setMissionIndex] = useState(0)
-  const [currentScreenId, setCurrentScreenId] = useState(missions[0].startScreenId)
   const [hasClicked, setHasClicked] = useState(false)
   const [panelCollapsed, setPanelCollapsed] = useState(false)
 
   const bufferRef = useRef<BufferedEvent[]>([])
   const pendingFlushesRef = useRef<Promise<unknown>[]>([])
   const pathRef = useRef<string[]>([]) // caminho percorrido na missão atual
+  const topRef = useRef<string>("") // tela visível no topo (base ou overlay)
   const clickCountRef = useRef(0)
   const misclickCountRef = useRef(0)
   const startTimeRef = useRef(0)
-  const imgRef = useRef<HTMLImageElement>(null)
   const completedRef = useRef(false)
 
   const mission = missions[missionIndex]
-  const screen = screens.find((s) => s.id === currentScreenId) ?? screens[0]
   const isLastMission = missionIndex === missions.length - 1
 
   const now = () =>
@@ -121,9 +106,9 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
     completedRef.current = false
     pendingFlushesRef.current = []
     pathRef.current = [mission.startScreenId]
+    topRef.current = mission.startScreenId
     setHasClicked(false)
     setPanelCollapsed(false)
-    setCurrentScreenId(mission.startScreenId)
     record({
       screenId: mission.startScreenId,
       type: "navigate",
@@ -183,11 +168,8 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
     }
   }
 
-  async function handlePrototypeClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (!imgRef.current || completedRef.current) return
-    const rect = imgRef.current.getBoundingClientRect()
-    const xNorm = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
-    const yNorm = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+  async function handleInteraction(ev: StageInteraction) {
+    if (completedRef.current) return
 
     clickCountRef.current += 1
     if (!hasClicked) {
@@ -195,49 +177,42 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
       setPanelCollapsed(true)
     }
 
-    // Hit-test (último hotspot desenhado fica por cima)
-    const hit = [...screen.hotspots]
-      .reverse()
-      .find(
-        (h) =>
-          xNorm >= h.coords.x &&
-          xNorm <= h.coords.x + h.coords.w &&
-          yNorm >= h.coords.y &&
-          yNorm <= h.coords.y + h.coords.h
-      )
+    if (ev.kind === "misclick") {
+      misclickCountRef.current += 1
+      record({ screenId: ev.fromScreenId, type: "misclick", xNorm: ev.xNorm, yNorm: ev.yNorm })
+      return
+    }
 
-    if (hit) {
+    // Clique em hotspot: registra o ponto (heatmap) quando há coordenadas reais
+    if (ev.hotspotId) {
       record({
-        screenId: screen.id,
+        screenId: ev.fromScreenId,
         type: "click",
-        xNorm,
-        yNorm,
-        hotspotId: hit.id,
-        targetScreenId: hit.targetScreenId,
+        xNorm: ev.xNorm,
+        yNorm: ev.yNorm,
+        hotspotId: ev.hotspotId,
+        targetScreenId: ev.toScreenId,
       })
+    }
+
+    // Mudou a tela visível? registra navegação + atualiza caminho
+    if (ev.topScreenId !== topRef.current) {
+      topRef.current = ev.topScreenId
       record({
-        screenId: screen.id,
+        screenId: ev.topScreenId,
         type: "navigate",
-        xNorm,
-        yNorm,
-        targetScreenId: hit.targetScreenId,
+        xNorm: ev.xNorm,
+        yNorm: ev.yNorm,
+        targetScreenId: ev.topScreenId,
       })
-      pathRef.current = dedupeConsecutive([
-        ...pathRef.current,
-        hit.targetScreenId,
-      ])
+      pathRef.current = dedupeConsecutive([...pathRef.current, ev.topScreenId])
 
       // Chegou na tela-alvo / tela final do caminho?
-      if (mission.goalScreenIds.includes(hit.targetScreenId)) {
-        await completeMission("reached", hit.targetScreenId)
+      if (mission.goalScreenIds.includes(ev.topScreenId)) {
+        await completeMission("reached", ev.topScreenId)
         return
       }
-
-      setCurrentScreenId(hit.targetScreenId)
       pendingFlushesRef.current.push(flush())
-    } else {
-      misclickCountRef.current += 1
-      record({ screenId: screen.id, type: "misclick", xNorm, yNorm })
     }
   }
 
@@ -285,25 +260,13 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
   // ─────────── Running ───────────
   return (
     <div className="min-h-screen bg-neutral-100 flex flex-col items-center py-6 px-4">
-      <div
-        className="relative w-full"
-        style={{ maxWidth: deviceMaxWidth[deviceType] }}
-      >
-        {/* Tela do protótipo */}
-        <div
-          className="relative w-full cursor-pointer select-none shadow-lg rounded-lg overflow-hidden bg-white"
-          onClick={handlePrototypeClick}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            ref={imgRef}
-            src={screen.imageUrl}
-            alt=""
-            className="w-full h-auto block pointer-events-none"
-            draggable={false}
-          />
-        </div>
-      </div>
+      <PrototypeStage
+        key={mission.id}
+        screens={screens}
+        deviceType={deviceType}
+        initialScreenId={mission.startScreenId}
+        onInteraction={handleInteraction}
+      />
 
       <InstructionPanel
         task={mission.task}
@@ -313,7 +276,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
         collapsed={panelCollapsed}
         onToggle={() => setPanelCollapsed((c) => !c)}
         canGiveUp={hasClicked}
-        onGiveUp={() => completeMission("gave_up", screen.id)}
+        onGiveUp={() => completeMission("gave_up", topRef.current)}
       />
     </div>
   )
