@@ -64,40 +64,40 @@
   --radius-3xl: 28px;
 }
 
-/* ───────── Material 3 — Light scheme (baseline, seed #6750A4) ───────── */
+/* ───────── Material 3 — Light scheme (seed neutro/preto) ───────── */
 :root {
-  --md-primary: #6750a4;
+  --md-primary: #1c1b1f;
   --md-on-primary: #ffffff;
-  --md-primary-container: #eaddff;
-  --md-on-primary-container: #21005d;
-  --md-secondary: #625b71;
+  --md-primary-container: #e3e2e6;
+  --md-on-primary-container: #1c1b1f;
+  --md-secondary: #5d5e62;
   --md-on-secondary: #ffffff;
-  --md-secondary-container: #e8def8;
-  --md-on-secondary-container: #1d192b;
-  --md-tertiary: #7d5260;
+  --md-secondary-container: #e3e2e6;
+  --md-on-secondary-container: #1a1c1e;
+  --md-tertiary: #5d5e62;
   --md-on-tertiary: #ffffff;
-  --md-tertiary-container: #ffd8e4;
-  --md-on-tertiary-container: #31111d;
+  --md-tertiary-container: #e3e2e6;
+  --md-on-tertiary-container: #1a1c1e;
   --md-error: #b3261e;
   --md-on-error: #ffffff;
   --md-error-container: #f9dedc;
   --md-on-error-container: #410e0b;
-  --md-surface: #fef7ff;
-  --md-on-surface: #1d1b20;
-  --md-surface-variant: #e7e0ec;
-  --md-on-surface-variant: #49454f;
+  --md-surface: #fcfcfc;
+  --md-on-surface: #1c1b1f;
+  --md-surface-variant: #e3e2e6;
+  --md-on-surface-variant: #46464a;
   --md-surface-container-lowest: #ffffff;
-  --md-surface-container-low: #f7f2fa;
-  --md-surface-container: #f3edf7;
-  --md-surface-container-high: #ece6f0;
-  --md-surface-container-highest: #e6e0e9;
-  --md-surface-dim: #ded8e1;
-  --md-surface-bright: #fef7ff;
-  --md-outline: #79747e;
-  --md-outline-variant: #cac4d0;
-  --md-inverse-surface: #322f35;
-  --md-inverse-on-surface: #f5eff7;
-  --md-inverse-primary: #d0bcff;
+  --md-surface-container-low: #f6f5f8;
+  --md-surface-container: #f1f0f3;
+  --md-surface-container-high: #ebeaee;
+  --md-surface-container-highest: #e5e4e8;
+  --md-surface-dim: #dcdbdf;
+  --md-surface-bright: #fcfcfc;
+  --md-outline: #76777a;
+  --md-outline-variant: #c6c6ca;
+  --md-inverse-surface: #2f3033;
+  --md-inverse-on-surface: #f1f0f3;
+  --md-inverse-primary: #c6c6ca;
   --md-scrim: #000000;
 
   /* shadcn aliases → M3 */
@@ -136,40 +136,40 @@
   --sidebar-ring: var(--md-primary);
 }
 
-/* ───────── Material 3 — Dark scheme ───────── */
+/* ───────── Material 3 — Dark scheme (neutro/preto) ───────── */
 .dark {
-  --md-primary: #d0bcff;
-  --md-on-primary: #381e72;
-  --md-primary-container: #4f378b;
-  --md-on-primary-container: #eaddff;
-  --md-secondary: #ccc2dc;
-  --md-on-secondary: #332d41;
-  --md-secondary-container: #4a4458;
-  --md-on-secondary-container: #e8def8;
-  --md-tertiary: #efb8c8;
-  --md-on-tertiary: #492532;
-  --md-tertiary-container: #633b48;
-  --md-on-tertiary-container: #ffd8e4;
+  --md-primary: #e5e4e8;
+  --md-on-primary: #2f3033;
+  --md-primary-container: #454649;
+  --md-on-primary-container: #e5e4e8;
+  --md-secondary: #c6c6ca;
+  --md-on-secondary: #2f3033;
+  --md-secondary-container: #454649;
+  --md-on-secondary-container: #e3e2e6;
+  --md-tertiary: #c6c6ca;
+  --md-on-tertiary: #2f3033;
+  --md-tertiary-container: #454649;
+  --md-on-tertiary-container: #e3e2e6;
   --md-error: #f2b8b5;
   --md-on-error: #601410;
   --md-error-container: #8c1d18;
   --md-on-error-container: #f9dedc;
-  --md-surface: #141218;
-  --md-on-surface: #e6e0e9;
-  --md-surface-variant: #49454f;
-  --md-on-surface-variant: #cac4d0;
-  --md-surface-container-lowest: #0f0d13;
-  --md-surface-container-low: #1d1b20;
-  --md-surface-container: #211f26;
-  --md-surface-container-high: #2b2930;
-  --md-surface-container-highest: #36343b;
-  --md-surface-dim: #141218;
-  --md-surface-bright: #3b383e;
-  --md-outline: #938f99;
-  --md-outline-variant: #49454f;
-  --md-inverse-surface: #e6e0e9;
-  --md-inverse-on-surface: #322f35;
-  --md-inverse-primary: #6750a4;
+  --md-surface: #131316;
+  --md-on-surface: #e5e4e8;
+  --md-surface-variant: #46464a;
+  --md-on-surface-variant: #c6c6ca;
+  --md-surface-container-lowest: #0e0e11;
+  --md-surface-container-low: #1c1b1f;
+  --md-surface-container: #201f23;
+  --md-surface-container-high: #2a292d;
+  --md-surface-container-highest: #353438;
+  --md-surface-dim: #131316;
+  --md-surface-bright: #39383c;
+  --md-outline: #90909a;
+  --md-outline-variant: #46464a;
+  --md-inverse-surface: #e5e4e8;
+  --md-inverse-on-surface: #2f3033;
+  --md-inverse-primary: #1c1b1f;
   --md-scrim: #000000;
 }
 
