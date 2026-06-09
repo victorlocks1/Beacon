@@ -1,15 +1,6 @@
 import Link from "next/link"
 import { registerAction } from "./actions"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { M3TextField } from "@/components/ui/m3-text-field"
 import { SubmitButton } from "@/components/submit-button"
 
 const errorMessages: Record<string, string> = {
@@ -27,53 +18,49 @@ export default async function RegisterPage({
     : undefined
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Beacon</CardTitle>
-          <CardDescription>Criar nova conta</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={registerAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome</Label>
-              <Input id="name" name="name" placeholder="Seu nome" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="voce@exemplo.com"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Mínimo 8 caracteres"
-                required
-              />
-            </div>
-            {errorMsg && (
-              <p className="text-sm text-red-500">{errorMsg}</p>
-            )}
-            <SubmitButton>Criar conta</SubmitButton>
-          </form>
-        </CardContent>
-        <CardFooter className="justify-center">
-          <p className="text-sm text-muted-foreground">
-            Já tem conta?{" "}
-            <Link href="/login" className="underline">
-              Entrar
-            </Link>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
+      <div className="w-full max-w-sm rounded-[28px] bg-surface-container-low elevation-2 p-8">
+        <div className="text-center mb-8">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-on-primary text-2xl font-medium">
+            B
+          </div>
+          <h1 className="text-headline-small text-on-surface">Beacon</h1>
+          <p className="text-body-medium text-on-surface-variant mt-1">
+            Criar nova conta
           </p>
-        </CardFooter>
-      </Card>
+        </div>
+
+        <form action={registerAction} className="space-y-5">
+          <M3TextField label="Nome" name="name" autoComplete="name" labelBg="bg-surface-container-low" required />
+          <M3TextField
+            label="Email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            labelBg="bg-surface-container-low"
+            required
+          />
+          <M3TextField
+            label="Senha"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            labelBg="bg-surface-container-low"
+            required
+          />
+          {errorMsg && (
+            <p className="text-body-small text-error px-1">{errorMsg}</p>
+          )}
+          <SubmitButton className="w-full">Criar conta</SubmitButton>
+        </form>
+
+        <p className="text-body-medium text-on-surface-variant text-center mt-6">
+          Já tem conta?{" "}
+          <Link href="/login" className="text-primary font-medium hover:underline">
+            Entrar
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }

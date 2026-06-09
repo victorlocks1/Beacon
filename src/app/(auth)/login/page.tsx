@@ -1,15 +1,6 @@
 import Link from "next/link"
 import { loginAction } from "./actions"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { M3TextField } from "@/components/ui/m3-text-field"
 import { SubmitButton } from "@/components/submit-button"
 
 export default async function LoginPage({
@@ -20,43 +11,50 @@ export default async function LoginPage({
   const { error } = await searchParams
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Beacon</CardTitle>
-          <CardDescription>Acesse sua conta</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form action={loginAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="voce@exemplo.com"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input id="password" name="password" type="password" required />
-            </div>
-            {error === "credentials" && (
-              <p className="text-sm text-red-500">Email ou senha incorretos.</p>
-            )}
-            <SubmitButton>Entrar</SubmitButton>
-          </form>
-        </CardContent>
-        <CardFooter className="justify-center">
-          <p className="text-sm text-muted-foreground">
-            Não tem conta?{" "}
-            <Link href="/register" className="underline">
-              Criar conta
-            </Link>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
+      <div className="w-full max-w-sm rounded-[28px] bg-surface-container-low elevation-2 p-8">
+        <div className="text-center mb-8">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-on-primary text-2xl font-medium">
+            B
+          </div>
+          <h1 className="text-headline-small text-on-surface">Beacon</h1>
+          <p className="text-body-medium text-on-surface-variant mt-1">
+            Acesse sua conta
           </p>
-        </CardFooter>
-      </Card>
+        </div>
+
+        <form action={loginAction} className="space-y-5">
+          <M3TextField
+            label="Email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            labelBg="bg-surface-container-low"
+            required
+          />
+          <M3TextField
+            label="Senha"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            labelBg="bg-surface-container-low"
+            required
+          />
+          {error === "credentials" && (
+            <p className="text-body-small text-error px-1">
+              Email ou senha incorretos.
+            </p>
+          )}
+          <SubmitButton className="w-full">Entrar</SubmitButton>
+        </form>
+
+        <p className="text-body-medium text-on-surface-variant text-center mt-6">
+          Não tem conta?{" "}
+          <Link href="/register" className="text-primary font-medium hover:underline">
+            Criar conta
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }
