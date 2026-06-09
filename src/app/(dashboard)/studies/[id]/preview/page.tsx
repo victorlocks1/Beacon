@@ -22,7 +22,7 @@ export default async function PreviewPage({
         include: {
           screens: {
             orderBy: { order: "asc" },
-            include: { hotspots: true },
+            include: { hotspots: true, scrollRegions: true },
           },
         },
       },
@@ -67,6 +67,12 @@ export default async function PreviewPage({
             action: h.action,
             overlayPosition: h.overlayPosition,
             targetScreenId: h.targetScreenId,
+          })),
+          scrollRegions: s.scrollRegions.map((r) => ({
+            id: r.id,
+            coords: r.coords as { x: number; y: number; w: number; h: number },
+            axis: r.axis as "horizontal" | "vertical" | "both",
+            imageUrl: r.imageUrl,
           })),
         }))}
         mission={

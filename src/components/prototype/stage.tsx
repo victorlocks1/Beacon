@@ -17,12 +17,19 @@ export interface StageHotspot {
   overlayPosition: OverlayPosition | null
   targetScreenId: string | null
 }
+export interface StageScrollRegion {
+  id: string
+  coords: { x: number; y: number; w: number; h: number }
+  axis: "horizontal" | "vertical" | "both"
+  imageUrl: string
+}
 export interface StageScreen {
   id: string
   name: string
   imageUrl: string
   scroll: ScrollMode
   hotspots: StageHotspot[]
+  scrollRegions?: StageScrollRegion[]
 }
 export interface StageInteraction {
   kind: HotspotAction | "misclick"
@@ -209,15 +216,18 @@ export function PrototypeStage({
         className="relative bg-white shadow-lg rounded-lg mx-auto subtle-scroll"
         style={baseFrame.frame}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={baseScreen.imageUrl}
-          alt=""
-          style={baseFrame.img}
-          className="select-none cursor-pointer"
-          draggable={false}
-          onClick={(e) => handleImageClick(baseScreen, e)}
-        />
+        <div className="relative" style={{ width: "100%" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={baseScreen.imageUrl}
+            alt=""
+            style={baseFrame.img}
+            className="select-none cursor-pointer"
+            draggable={false}
+            onClick={(e) => handleImageClick(baseScreen, e)}
+          />
+          <RegionLayer regions={baseScreen.scrollRegions} />
+        </div>
       </div>
 
       {/* Overlays empilhados */}
@@ -269,10 +279,46 @@ export function PrototypeStage({
                 draggable={false}
                 onClick={(e) => handleImageClick(screen, e)}
               />
+              <RegionLayer regions={screen.scrollRegions} />
             </div>
           </div>
         )
       })}
     </div>
+  )
+}
+
+function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
+  if (!regions?.length) return null
+  return (
+    <>
+      {regions.map((r) => {
+        const horiz = r.axis === "horizontal" || r.axis === "both"
+        const vert = r.axis === "vertical" || r.axis === "both"
+        const imgStyle: React.CSSProperties =
+          r.axis === "horizontal"
+            ? { height: "100%", width: "auto", maxWidth: "none", display: "block" }
+            : r.axis === "vertical"
+              ? { width: "100%", height: "auto", display: "block" }
+              : { width: "auto", height: "auto", maxWidth: "none", display: "block" }
+        return (
+          <div
+            key={r.id}
+            className="absolute subtle-scroll bg-white"
+            style={{
+              left: `${r.coords.x * 100}%`,
+              top: `${r.coords.y * 100}%`,
+              width: `${r.coords.w * 100}%`,
+              height: `${r.coords.h * 100}%`,
+              overflowX: horiz ? "auto" : "hidden",
+              overflowY: vert ? "auto" : "hidden",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={r.imageUrl} alt="" draggable={false} className="select-none" style={imgStyle} />
+          </div>
+        )
+      })}
+    </>
   )
 }

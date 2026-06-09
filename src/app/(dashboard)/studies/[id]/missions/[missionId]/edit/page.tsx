@@ -19,7 +19,9 @@ export default async function EditMissionPage({
     where: { id: studyId, ownerId: session.user.id },
     include: {
       prototype: {
-        include: { screens: { orderBy: { order: "asc" }, include: { hotspots: true } } },
+        include: {
+          screens: { orderBy: { order: "asc" }, include: { hotspots: true, scrollRegions: true } },
+        },
       },
     },
   })
@@ -74,6 +76,12 @@ export default async function EditMissionPage({
             action: h.action as "navigate" | "open_overlay" | "close_overlay" | "back",
             overlayPosition: h.overlayPosition as "bottom" | "center" | null,
             targetScreenId: h.targetScreenId,
+          })),
+          scrollRegions: s.scrollRegions.map((r) => ({
+            id: r.id,
+            coords: r.coords as { x: number; y: number; w: number; h: number },
+            axis: r.axis as "horizontal" | "vertical" | "both",
+            imageUrl: r.imageUrl,
           })),
         }))}
       />

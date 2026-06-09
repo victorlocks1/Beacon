@@ -64,17 +64,34 @@ enum ScrollMode {
   both
 }
 
+enum ScrollAxis {
+  horizontal
+  vertical
+  both
+}
+
+model ScrollRegion {
+  id        String     @id @default(cuid())
+  screenId  String
+  screen    Screen     @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  coords    Json // {x,y,w,h} normalizado sobre a tela base
+  axis      ScrollAxis @default(horizontal)
+  imageUrl  String // tira larga/alta com o conteúdo completo da faixa
+  createdAt DateTime   @default(now())
+}
+
 model Screen {
-  id               String        @id @default(cuid())
+  id               String         @id @default(cuid())
   prototypeId      String
-  prototype        Prototype     @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
+  prototype        Prototype      @relation(fields: [prototypeId], references: [id], onDelete: Cascade)
   name             String
   order            Int
   imageUrl         String
   width            Float
   height           Float
-  scroll           ScrollMode    @default(none)
-  hotspots         Hotspot[]     @relation("ScreenHotspots")
+  scroll           ScrollMode     @default(none)
+  scrollRegions    ScrollRegion[]
+  hotspots         Hotspot[]      @relation("ScreenHotspots")
   incomingHotspots Hotspot[]     @relation("HotspotTarget")
   missionStarts    Mission[]     @relation("MissionStartScreen")
   missionGoals     MissionGoal[]

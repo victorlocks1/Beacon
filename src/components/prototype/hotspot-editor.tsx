@@ -8,11 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Trash2, Save, Loader2 } from "lucide-react"
+import { Trash2, Save, Loader2, Upload, Check } from "lucide-react"
 import { deviceMaxWidth, type DeviceType, type ScrollMode } from "@/lib/device"
+import { cn } from "@/lib/utils"
 
 type ActionType = "navigate" | "open_overlay" | "close_overlay" | "back"
 type OverlayPos = "bottom" | "center"
+type Axis = "horizontal" | "vertical" | "both"
+type Mode = "hotspots" | "regions"
 
 interface NormalizedRect {
   x: number
@@ -20,7 +23,6 @@ interface NormalizedRect {
   w: number
   h: number
 }
-
 interface LocalHotspot {
   localId: string
   dbId?: string
@@ -29,7 +31,13 @@ interface LocalHotspot {
   overlayPosition: OverlayPos | null
   targetScreenId: string | null
 }
-
+interface LocalRegion {
+  localId: string
+  dbId?: string
+  coords: NormalizedRect
+  axis: Axis
+  imageUrl: string | null
+}
 interface Screen {
   id: string
   name: string
@@ -43,12 +51,16 @@ const actionLabels: Record<ActionType, string> = {
   back: "Voltar",
 }
 const needsTarget = (a: ActionType) => a === "navigate" || a === "open_overlay"
-
+const axisLabels: Record<Axis, string> = {
+  horizontal: "Horizontal",
+  vertical: "Vertical",
+  both: "Ambos",
+}
 const scrollLabels: Record<ScrollMode, string> = {
-  none: "Sem scroll",
-  vertical: "Scroll vertical",
-  horizontal: "Scroll horizontal",
-  both: "Scroll ambos",
+  none: "Vertical (automático)",
+  vertical: "Vertical (automático)",
+  horizontal: "Tela inteira: horizontal",
+  both: "Tela inteira: ambos",
 }
 
 interface Props {
@@ -64,6 +76,7 @@ interface Props {
     overlayPosition: OverlayPos | null
     targetScreenId: string | null
   }>
+  initialRegions: Array<{ id: string; coords: unknown; axis: Axis; imageUrl: string }>
   onSave: (
     hotspots: Array<{
       id?: string
@@ -74,6 +87,10 @@ interface Props {
       shape: "rect"
     }>
   ) => Promise<void>
+  onSaveRegions: (
+    regions: Array<{ coords: NormalizedRect; axis: Axis; imageUrl: string }>
+  ) => Promise<void>
+  onUploadStrip: (formData: FormData) => Promise<string>
   onScrollChange: (scroll: ScrollMode) => Promise<void>
 }
 
@@ -83,12 +100,16 @@ export function HotspotEditor({
   initialScroll,
   otherScreens,
   initialHotspots,
+  initialRegions,
   onSave,
+  onSaveRegions,
+  onUploadStrip,
   onScrollChange,
 }: Props) {
+  const [mode, setMode] = useState<Mode>("hotspots")
   const [hotspots, setHotspots] = useState<LocalHotspot[]>(
     initialHotspots.map((h, i) => ({
-      localId: `existing-${i}`,
+      localId: `h-${i}`,
       dbId: h.id,
       coords: h.coords as NormalizedRect,
       action: h.action,
@@ -96,26 +117,30 @@ export function HotspotEditor({
       targetScreenId: h.targetScreenId,
     }))
   )
+  const [regions, setRegions] = useState<LocalRegion[]>(
+    initialRegions.map((r, i) => ({
+      localId: `r-${i}`,
+      dbId: r.id,
+      coords: r.coords as NormalizedRect,
+      axis: r.axis,
+      imageUrl: r.imageUrl,
+    }))
+  )
   const [scroll, setScroll] = useState<ScrollMode>(initialScroll)
-  const [drawing, setDrawing] = useState<{
-    startX: number
-    startY: number
-    currentX: number
-    currentY: number
-  } | null>(null)
+  const [drawing, setDrawing] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [, startScrollTransition] = useTransition()
   const svgRef = useRef<SVGSVGElement>(null)
 
-  function isComplete(h: LocalHotspot) {
-    return needsTarget(h.action) ? !!h.targetScreenId : true
-  }
+  const isComplete = (h: LocalHotspot) => (needsTarget(h.action) ? !!h.targetScreenId : true)
 
-  function patch(localId: string, partial: Partial<LocalHotspot>) {
-    setHotspots((prev) =>
-      prev.map((h) => (h.localId === localId ? { ...h, ...partial } : h))
-    )
+  function patchHotspot(localId: string, partial: Partial<LocalHotspot>) {
+    setHotspots((prev) => prev.map((h) => (h.localId === localId ? { ...h, ...partial } : h)))
+  }
+  function patchRegion(localId: string, partial: Partial<LocalRegion>) {
+    setRegions((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...partial } : r)))
   }
 
   function getRelativePos(e: React.MouseEvent) {
@@ -125,7 +150,6 @@ export function HotspotEditor({
       y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
     }
   }
-
   function handleMouseDown(e: React.MouseEvent<SVGSVGElement>) {
     if ((e.target as SVGElement).tagName === "rect") return
     e.preventDefault()
@@ -146,17 +170,13 @@ export function HotspotEditor({
     const minY = Math.min(drawing.startY, y)
     const maxY = Math.max(drawing.startY, y)
     if (maxX - minX > 0.02 && maxY - minY > 0.02) {
+      const coords = { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
       const localId = `new-${Date.now()}`
-      setHotspots((prev) => [
-        ...prev,
-        {
-          localId,
-          coords: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
-          action: "navigate",
-          overlayPosition: null,
-          targetScreenId: null,
-        },
-      ])
+      if (mode === "hotspots") {
+        setHotspots((p) => [...p, { localId, coords, action: "navigate", overlayPosition: null, targetScreenId: null }])
+      } else {
+        setRegions((p) => [...p, { localId, coords, axis: "horizontal", imageUrl: null }])
+      }
       setSelected(localId)
     }
     setDrawing(null)
@@ -183,7 +203,24 @@ export function HotspotEditor({
         shape: "rect" as const,
       }))
     )
+    await onSaveRegions(
+      regions
+        .filter((r) => r.imageUrl)
+        .map((r) => ({ coords: r.coords, axis: r.axis, imageUrl: r.imageUrl! }))
+    )
     setSaving(false)
+  }
+
+  async function handleStripUpload(localId: string, file: File) {
+    setUploadingId(localId)
+    try {
+      const fd = new FormData()
+      fd.set("file", file)
+      const url = await onUploadStrip(fd)
+      patchRegion(localId, { imageUrl: url })
+    } finally {
+      setUploadingId(null)
+    }
   }
 
   function changeScroll(v: ScrollMode) {
@@ -192,9 +229,7 @@ export function HotspotEditor({
   }
 
   const maxWidth = deviceMaxWidth[deviceType]
-  const targetItems = Object.fromEntries(
-    otherScreens.map((s) => [s.id, `Tela ${s.order + 1}: ${s.name}`])
-  )
+  const targetItems = Object.fromEntries(otherScreens.map((s) => [s.id, `Tela ${s.order + 1}: ${s.name}`]))
 
   return (
     <div className="flex gap-6 h-full">
@@ -202,37 +237,29 @@ export function HotspotEditor({
       <div className="flex-1 min-w-0 overflow-auto">
         <div className="flex items-center justify-between mb-2 gap-2">
           <p className="text-xs text-muted-foreground">
-            Clique e arraste para criar um hotspot
+            {mode === "hotspots"
+              ? "Clique e arraste para criar um hotspot"
+              : "Clique e arraste sobre a faixa que deve rolar"}
           </p>
-          {/* Scroll desta tela */}
           <Select
             value={scroll}
             onValueChange={(v) => changeScroll((v as ScrollMode) ?? "none")}
             items={scrollLabels}
           >
-            <SelectTrigger className="h-7 text-xs w-44">
+            <SelectTrigger className="h-7 text-xs w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(scrollLabels) as ScrollMode[]).map((m) => (
-                <SelectItem key={m} value={m}>
-                  {scrollLabels[m]}
-                </SelectItem>
-              ))}
+              <SelectItem value="none">Vertical (automático)</SelectItem>
+              <SelectItem value="horizontal">Tela inteira: horizontal</SelectItem>
+              <SelectItem value="both">Tela inteira: ambos</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <div
-          className="relative border rounded-lg overflow-hidden bg-muted mx-auto"
-          style={{ maxWidth }}
-        >
+
+        <div className="relative border rounded-lg overflow-hidden bg-muted mx-auto" style={{ maxWidth }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt="Tela"
-            className="w-full h-auto block pointer-events-none"
-            draggable={false}
-          />
+          <img src={imageUrl} alt="Tela" className="w-full h-auto block pointer-events-none" draggable={false} />
           <svg
             ref={svgRef}
             className="absolute inset-0 w-full h-full"
@@ -241,39 +268,55 @@ export function HotspotEditor({
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
           >
-            {hotspots.map((hotspot) => {
-              const complete = isComplete(hotspot)
+            {/* Hotspots (azul) */}
+            {hotspots.map((h) => {
+              const complete = isComplete(h)
               return (
                 <rect
-                  key={hotspot.localId}
-                  x={`${hotspot.coords.x * 100}%`}
-                  y={`${hotspot.coords.y * 100}%`}
-                  width={`${hotspot.coords.w * 100}%`}
-                  height={`${hotspot.coords.h * 100}%`}
-                  fill={
-                    selected === hotspot.localId
-                      ? "rgba(59,130,246,0.3)"
-                      : "rgba(59,130,246,0.15)"
-                  }
+                  key={h.localId}
+                  x={`${h.coords.x * 100}%`}
+                  y={`${h.coords.y * 100}%`}
+                  width={`${h.coords.w * 100}%`}
+                  height={`${h.coords.h * 100}%`}
+                  fill={selected === h.localId ? "rgba(59,130,246,0.3)" : "rgba(59,130,246,0.15)"}
                   stroke={complete ? "#3b82f6" : "#ef4444"}
-                  strokeWidth={selected === hotspot.localId ? 2.5 : 1.5}
+                  strokeWidth={selected === h.localId ? 2.5 : 1.5}
                   strokeDasharray={complete ? undefined : "6 3"}
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", pointerEvents: mode === "hotspots" ? "auto" : "none", opacity: mode === "hotspots" ? 1 : 0.4 }}
                   onClick={(e) => {
                     e.stopPropagation()
-                    setSelected(hotspot.localId)
+                    setSelected(h.localId)
                   }}
                 />
               )
             })}
+            {/* Regiões (verde) */}
+            {regions.map((r) => (
+              <rect
+                key={r.localId}
+                x={`${r.coords.x * 100}%`}
+                y={`${r.coords.y * 100}%`}
+                width={`${r.coords.w * 100}%`}
+                height={`${r.coords.h * 100}%`}
+                fill={selected === r.localId ? "rgba(16,185,129,0.3)" : "rgba(16,185,129,0.15)"}
+                stroke={r.imageUrl ? "#10b981" : "#ef4444"}
+                strokeWidth={selected === r.localId ? 2.5 : 1.5}
+                strokeDasharray={r.imageUrl ? undefined : "6 3"}
+                style={{ cursor: "pointer", pointerEvents: mode === "regions" ? "auto" : "none", opacity: mode === "regions" ? 1 : 0.4 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelected(r.localId)
+                }}
+              />
+            ))}
             {drawingRect && drawingRect.w > 0.005 && (
               <rect
                 x={`${drawingRect.x * 100}%`}
                 y={`${drawingRect.y * 100}%`}
                 width={`${drawingRect.w * 100}%`}
                 height={`${drawingRect.h * 100}%`}
-                fill="rgba(59,130,246,0.15)"
-                stroke="#3b82f6"
+                fill={mode === "hotspots" ? "rgba(59,130,246,0.15)" : "rgba(16,185,129,0.15)"}
+                stroke={mode === "hotspots" ? "#3b82f6" : "#10b981"}
                 strokeWidth={1.5}
                 strokeDasharray="6 3"
                 style={{ pointerEvents: "none" }}
@@ -285,112 +328,154 @@ export function HotspotEditor({
 
       {/* Painel lateral */}
       <div className="w-72 flex flex-col gap-3 shrink-0">
-        <div className="flex items-center justify-between">
-          <h3 className="font-medium text-sm">Hotspots ({hotspots.length})</h3>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-            ) : (
-              <Save className="h-3.5 w-3.5 mr-1" />
-            )}
-            Salvar
-          </Button>
+        {/* Toggle de modo */}
+        <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-lg">
+          {(["hotspots", "regions"] as Mode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => {
+                setMode(m)
+                setSelected(null)
+              }}
+              className={cn(
+                "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                mode === m ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {m === "hotspots" ? `Hotspots (${hotspots.length})` : `Regiões (${regions.length})`}
+            </button>
+          ))}
         </div>
 
-        {hotspots.length === 0 ? (
+        <Button size="sm" onClick={handleSave} disabled={saving} className="w-full">
+          {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+          Salvar
+        </Button>
+
+        {/* Lista do modo ativo */}
+        {mode === "hotspots" ? (
+          hotspots.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">
+              Nenhum hotspot ainda.<br />Clique e arraste na imagem.
+            </p>
+          ) : (
+            <div className="space-y-2 overflow-y-auto flex-1">
+              {hotspots.map((h, index) => (
+                <div
+                  key={h.localId}
+                  className={cn(
+                    "border rounded-lg p-2.5 space-y-2 cursor-pointer transition-colors",
+                    selected === h.localId ? "border-blue-400 bg-blue-50" : "hover:bg-muted/50"
+                  )}
+                  onClick={() => setSelected(h.localId)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">Hotspot {index + 1}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setHotspots((p) => p.filter((x) => x.localId !== h.localId))
+                      }}
+                      className="text-red-400 hover:text-red-600"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <Select value={h.action} onValueChange={(v) => patchHotspot(h.localId, { action: (v as ActionType) ?? "navigate" })} items={actionLabels}>
+                    <SelectTrigger className="h-7 text-xs w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(actionLabels) as ActionType[]).map((a) => (
+                        <SelectItem key={a} value={a}>{actionLabels[a]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {needsTarget(h.action) && (
+                    <Select value={h.targetScreenId ?? ""} onValueChange={(val) => patchHotspot(h.localId, { targetScreenId: (val as string) || null })} items={targetItems}>
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="→ Destino" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {otherScreens.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>Tela {s.order + 1}: {s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {h.action === "open_overlay" && (
+                    <Select value={h.overlayPosition ?? "bottom"} onValueChange={(v) => patchHotspot(h.localId, { overlayPosition: (v as OverlayPos) ?? "bottom" })} items={{ bottom: "Bottom sheet", center: "Modal central" }}>
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bottom">Bottom sheet</SelectItem>
+                        <SelectItem value="center">Modal central</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        ) : regions.length === 0 ? (
           <p className="text-xs text-muted-foreground py-4 text-center">
-            Nenhum hotspot ainda.
-            <br />
-            Clique e arraste na imagem.
+            Nenhuma região ainda.<br />Desenhe sobre a faixa que rola e suba a imagem completa dela.
           </p>
         ) : (
           <div className="space-y-2 overflow-y-auto flex-1">
-            {hotspots.map((hotspot, index) => (
+            {regions.map((r, index) => (
               <div
-                key={hotspot.localId}
-                className={`border rounded-lg p-2.5 space-y-2 cursor-pointer transition-colors ${
-                  selected === hotspot.localId
-                    ? "border-blue-400 bg-blue-50"
-                    : "hover:bg-muted/50"
-                }`}
-                onClick={() => setSelected(hotspot.localId)}
+                key={r.localId}
+                className={cn(
+                  "border rounded-lg p-2.5 space-y-2 cursor-pointer transition-colors",
+                  selected === r.localId ? "border-emerald-400 bg-emerald-50" : "hover:bg-muted/50"
+                )}
+                onClick={() => setSelected(r.localId)}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Hotspot {index + 1}</span>
+                  <span className="text-xs font-medium">Região {index + 1}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setHotspots((prev) =>
-                        prev.filter((h) => h.localId !== hotspot.localId)
-                      )
-                      if (selected === hotspot.localId) setSelected(null)
+                      setRegions((p) => p.filter((x) => x.localId !== r.localId))
                     }}
                     className="text-red-400 hover:text-red-600"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
-
-                {/* Tipo de ação */}
-                <Select
-                  value={hotspot.action}
-                  onValueChange={(v) =>
-                    patch(hotspot.localId, { action: (v as ActionType) ?? "navigate" })
-                  }
-                  items={actionLabels}
-                >
+                <Select value={r.axis} onValueChange={(v) => patchRegion(r.localId, { axis: (v as Axis) ?? "horizontal" })} items={axisLabels}>
                   <SelectTrigger className="h-7 text-xs w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(actionLabels) as ActionType[]).map((a) => (
-                      <SelectItem key={a} value={a}>
-                        {actionLabels[a]}
-                      </SelectItem>
+                    {(Object.keys(axisLabels) as Axis[]).map((a) => (
+                      <SelectItem key={a} value={a}>{axisLabels[a]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-
-                {/* Destino (navegar / abrir overlay) */}
-                {needsTarget(hotspot.action) && (
-                  <Select
-                    value={hotspot.targetScreenId ?? ""}
-                    onValueChange={(val) =>
-                      patch(hotspot.localId, { targetScreenId: (val as string) || null })
-                    }
-                    items={targetItems}
-                  >
-                    <SelectTrigger className="h-7 text-xs w-full">
-                      <SelectValue placeholder="→ Destino" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {otherScreens.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          Tela {s.order + 1}: {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                {/* Posição do overlay */}
-                {hotspot.action === "open_overlay" && (
-                  <Select
-                    value={hotspot.overlayPosition ?? "bottom"}
-                    onValueChange={(v) =>
-                      patch(hotspot.localId, { overlayPosition: (v as OverlayPos) ?? "bottom" })
-                    }
-                    items={{ bottom: "Bottom sheet", center: "Modal central" }}
-                  >
-                    <SelectTrigger className="h-7 text-xs w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="bottom">Bottom sheet</SelectItem>
-                      <SelectItem value="center">Modal central</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <label className="flex items-center gap-2 text-xs cursor-pointer rounded-md border border-dashed px-2 py-1.5 hover:bg-muted/50" onClick={(e) => e.stopPropagation()}>
+                  {uploadingId === r.localId ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : r.imageUrl ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                  <span className={r.imageUrl ? "text-emerald-700" : "text-muted-foreground"}>
+                    {r.imageUrl ? "Tira enviada — trocar" : "Subir tira completa"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) handleStripUpload(r.localId, f)
+                    }}
+                  />
+                </label>
               </div>
             ))}
           </div>

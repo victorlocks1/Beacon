@@ -5,7 +5,12 @@ import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { HotspotEditor } from "@/components/prototype/hotspot-editor"
-import { saveHotspotsAction, updateScreenScrollAction } from "./actions"
+import {
+  saveHotspotsAction,
+  updateScreenScrollAction,
+  saveScrollRegionsAction,
+  uploadScrollStripAction,
+} from "./actions"
 import type { ScrollMode } from "@/lib/device"
 
 export default async function HotspotsPage({
@@ -21,6 +26,7 @@ export default async function HotspotsPage({
     where: { id: screenId, prototype: { studyId } },
     include: {
       hotspots: true,
+      scrollRegions: true,
       prototype: {
         include: {
           screens: { orderBy: { order: "asc" } },
@@ -37,6 +43,16 @@ export default async function HotspotsPage({
   async function save(hotspots: Parameters<typeof saveHotspotsAction>[2]) {
     "use server"
     await saveHotspotsAction(studyId, screenId, hotspots)
+  }
+
+  async function saveRegions(regions: Parameters<typeof saveScrollRegionsAction>[2]) {
+    "use server"
+    await saveScrollRegionsAction(studyId, screenId, regions)
+  }
+
+  async function uploadStrip(formData: FormData) {
+    "use server"
+    return uploadScrollStripAction(studyId, screenId, formData)
   }
 
   async function changeScroll(scroll: ScrollMode) {
@@ -78,7 +94,15 @@ export default async function HotspotsPage({
             overlayPosition: h.overlayPosition as "bottom" | "center" | null,
             targetScreenId: h.targetScreenId,
           }))}
+          initialRegions={screen.scrollRegions.map((r) => ({
+            id: r.id,
+            coords: r.coords,
+            axis: r.axis as "horizontal" | "vertical" | "both",
+            imageUrl: r.imageUrl,
+          }))}
           onSave={save}
+          onSaveRegions={saveRegions}
+          onUploadStrip={uploadStrip}
           onScrollChange={changeScroll}
         />
       </div>

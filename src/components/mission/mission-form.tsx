@@ -33,6 +33,12 @@ interface Screen {
   imageUrl: string
   scroll: "none" | "vertical" | "horizontal" | "both"
   hotspots: Hotspot[]
+  scrollRegions?: {
+    id: string
+    coords: { x: number; y: number; w: number; h: number }
+    axis: "horizontal" | "vertical" | "both"
+    imageUrl: string
+  }[]
 }
 
 export interface MissionInitial {

@@ -1,6 +1,7 @@
 "use server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { supabase } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -76,6 +77,71 @@ export async function saveHotspotsAction(
 
   revalidatePath(`/studies/${studyId}`)
   revalidatePath(`/studies/${studyId}/screens/${screenId}/hotspots`)
+}
+
+async function assertOwnerEditable(studyId: string, screenId: string) {
+  const session = await auth()
+  if (!session) redirect("/login")
+  const screen = await prisma.screen.findFirst({
+    where: { id: screenId, prototype: { study: { id: studyId, ownerId: session.user.id } } },
+    include: { prototype: { include: { study: { select: { status: true } } } } },
+  })
+  if (!screen) throw new Error("Tela não encontrada")
+  if (screen.prototype.study.status === "live") {
+    redirect(`/studies/${studyId}?error=${encodeURIComponent("Encerre o estudo para editar.")}`)
+  }
+  return screen
+}
+
+/** Faz upload da tira (conteúdo completo) de uma região de scroll. Retorna a URL pública. */
+export async function uploadScrollStripAction(
+  studyId: string,
+  screenId: string,
+  formData: FormData
+): Promise<string> {
+  await assertOwnerEditable(studyId, screenId)
+  const file = formData.get("file") as File
+  if (!file) throw new Error("Arquivo ausente")
+
+  const ext = file.name.split(".").pop() ?? "png"
+  const storagePath = `${studyId}/strips/${screenId}-${Date.now()}.${ext}`
+  const buffer = Buffer.from(await file.arrayBuffer())
+
+  const { error } = await supabase.storage
+    .from("screens")
+    .upload(storagePath, buffer, { contentType: file.type, upsert: false })
+  if (error) throw new Error(`Upload falhou: ${error.message}`)
+
+  const { data } = supabase.storage.from("screens").getPublicUrl(storagePath)
+  return data.publicUrl
+}
+
+interface ScrollRegionInput {
+  coords: { x: number; y: number; w: number; h: number }
+  axis: "horizontal" | "vertical" | "both"
+  imageUrl: string
+}
+
+export async function saveScrollRegionsAction(
+  studyId: string,
+  screenId: string,
+  regions: ScrollRegionInput[]
+) {
+  await assertOwnerEditable(studyId, screenId)
+
+  await prisma.scrollRegion.deleteMany({ where: { screenId } })
+  await Promise.all(
+    regions
+      .filter((r) => r.imageUrl)
+      .map((r) =>
+        prisma.scrollRegion.create({
+          data: { screenId, coords: r.coords, axis: r.axis, imageUrl: r.imageUrl },
+        })
+      )
+  )
+
+  revalidatePath(`/studies/${studyId}/screens/${screenId}/hotspots`)
+  revalidatePath(`/studies/${studyId}`)
 }
 
 export async function updateScreenScrollAction(
