@@ -23,6 +23,7 @@ model Study {
   title      String
   status     StudyStatus @default(draft)
   deviceType DeviceType  @default(desktop)
+  language   Language    @default(pt)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   prototype  Prototype?
@@ -57,6 +58,11 @@ enum DeviceType {
   mobile
 }
 
+enum Language {
+  pt
+  es
+}
+
 enum ScrollMode {
   none
   vertical
@@ -70,13 +76,19 @@ enum ScrollAxis {
   both
 }
 
+enum RegionKind {
+  scroll // faixa rolável (precisa de uma tira com o conteúdo completo)
+  fixed // faixa fixa (topo/rodapé) reaproveitando a própria tela
+}
+
 model ScrollRegion {
   id        String     @id @default(cuid())
   screenId  String
   screen    Screen     @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  kind      RegionKind @default(scroll)
   coords    Json // {x,y,w,h} normalizado sobre a tela base
   axis      ScrollAxis @default(horizontal)
-  imageUrl  String // tira larga/alta com o conteúdo completo da faixa
+  imageUrl  String? // tira (só para kind=scroll); fixed reaproveita a imagem da tela
   createdAt DateTime   @default(now())
 }
 

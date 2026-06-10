@@ -117,9 +117,10 @@ export async function uploadScrollStripAction(
 }
 
 interface ScrollRegionInput {
+  kind: "scroll" | "fixed"
   coords: { x: number; y: number; w: number; h: number }
   axis: "horizontal" | "vertical" | "both"
-  imageUrl: string
+  imageUrl: string | null
 }
 
 export async function saveScrollRegionsAction(
@@ -132,10 +133,17 @@ export async function saveScrollRegionsAction(
   await prisma.scrollRegion.deleteMany({ where: { screenId } })
   await Promise.all(
     regions
-      .filter((r) => r.imageUrl)
+      // scroll precisa de uma tira; fixed reaproveita a imagem da tela
+      .filter((r) => r.kind === "fixed" || r.imageUrl)
       .map((r) =>
         prisma.scrollRegion.create({
-          data: { screenId, coords: r.coords, axis: r.axis, imageUrl: r.imageUrl },
+          data: {
+            screenId,
+            kind: r.kind,
+            coords: r.coords,
+            axis: r.axis,
+            imageUrl: r.kind === "fixed" ? null : r.imageUrl,
+          },
         })
       )
   )

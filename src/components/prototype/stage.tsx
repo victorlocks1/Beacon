@@ -19,14 +19,17 @@ export interface StageHotspot {
 }
 export interface StageScrollRegion {
   id: string
+  kind: "scroll" | "fixed"
   coords: { x: number; y: number; w: number; h: number }
   axis: "horizontal" | "vertical" | "both"
-  imageUrl: string
+  imageUrl: string | null
 }
 export interface StageScreen {
   id: string
   name: string
   imageUrl: string
+  width: number
+  height: number
   scroll: ScrollMode
   hotspots: StageHotspot[]
   scrollRegions?: StageScrollRegion[]
@@ -114,6 +117,34 @@ export function PrototypeStage({
     const yNorm = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
     const hit = hitTest(screen, xNorm, yNorm)
 
+    if (!hit) {
+      onInteraction?.({
+        kind: "misclick",
+        fromScreenId: screen.id,
+        toScreenId: null,
+        topScreenId: liveOverlays.length ? liveOverlays[liveOverlays.length - 1].screenId : baseId,
+        hotspotId: null,
+        xNorm,
+        yNorm,
+      })
+      return
+    }
+    dispatch(hit, screen.id, xNorm, yNorm)
+  }
+
+  // Clique numa faixa fixa: mapeia a posição local da tira de volta para as
+  // coordenadas normalizadas da tela base (a faixa é um recorte horizontal dela).
+  function handleFixedClick(
+    screen: StageScreen,
+    region: StageScrollRegion,
+    e: React.MouseEvent<HTMLDivElement>
+  ) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const sx = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+    const sy = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+    const xNorm = region.coords.x + sx * region.coords.w
+    const yNorm = region.coords.y + sy * region.coords.h
+    const hit = hitTest(screen, xNorm, yNorm)
     if (!hit) {
       onInteraction?.({
         kind: "misclick",
@@ -230,6 +261,31 @@ export function PrototypeStage({
         </div>
       </div>
 
+      {/* Faixas fixas (barras de topo/rodapé que não rolam com a tela) */}
+      {baseScreen.scrollRegions
+        ?.filter((r) => r.kind === "fixed")
+        .map((r) => {
+          const pinTop = r.coords.y + r.coords.h / 2 < 0.5
+          // recorte vertical da própria imagem da tela, exibido à largura total
+          const denom = 1 - r.coords.h
+          const posY = denom > 0 ? (r.coords.y / denom) * 100 : 0
+          return (
+            <div
+              key={r.id}
+              className="absolute left-0 right-0 z-[5] cursor-pointer select-none"
+              style={{
+                [pinTop ? "top" : "bottom"]: 0,
+                aspectRatio: `${baseScreen.width} / ${r.coords.h * baseScreen.height}`,
+                backgroundImage: `url(${baseScreen.imageUrl})`,
+                backgroundSize: "100% auto",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: `0% ${posY}%`,
+              }}
+              onClick={(e) => handleFixedClick(baseScreen, r, e)}
+            />
+          )
+        })}
+
       {/* Overlays empilhados */}
       {overlays.map((layer) => {
         const screen = byId.get(layer.screenId)
@@ -289,10 +345,11 @@ export function PrototypeStage({
 }
 
 function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
-  if (!regions?.length) return null
+  const scrollRegions = regions?.filter((r) => r.kind === "scroll" && r.imageUrl)
+  if (!scrollRegions?.length) return null
   return (
     <>
-      {regions.map((r) => {
+      {scrollRegions.map((r) => {
         const horiz = r.axis === "horizontal" || r.axis === "both"
         const vert = r.axis === "vertical" || r.axis === "both"
         const imgStyle: React.CSSProperties =
@@ -304,7 +361,7 @@ function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
         return (
           <div
             key={r.id}
-            className="absolute subtle-scroll bg-white"
+            className="absolute invisible-scroll bg-white"
             style={{
               left: `${r.coords.x * 100}%`,
               top: `${r.coords.y * 100}%`,
@@ -315,7 +372,7 @@ function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={r.imageUrl} alt="" draggable={false} className="select-none" style={imgStyle} />
+            <img src={r.imageUrl ?? ""} alt="" draggable={false} className="select-none" style={imgStyle} />
           </div>
         )
       })}

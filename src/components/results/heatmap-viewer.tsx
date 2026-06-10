@@ -2,6 +2,13 @@
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { deviceMaxWidth, type DeviceType } from "@/lib/device"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface Point {
   x: number
@@ -117,17 +124,24 @@ export function HeatmapViewer({
       {/* Controles */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Seletor de tela */}
-        <select
+        <Select
           value={selectedId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          className="h-8 rounded-lg border bg-transparent px-2.5 text-sm outline-none"
+          onValueChange={(v) => setSelectedId((v as string) ?? selectedId)}
+          items={Object.fromEntries(
+            screens.map((s) => [s.id, `Tela ${s.order + 1}: ${s.name}`])
+          )}
         >
-          {screens.map((s) => (
-            <option key={s.id} value={s.id}>
-              Tela {s.order + 1}: {s.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-10 rounded-lg min-w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {screens.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                Tela {s.order + 1}: {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {/* Toggle de modo */}
         <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-lg">

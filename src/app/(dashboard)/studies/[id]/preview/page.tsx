@@ -60,6 +60,8 @@ export default async function PreviewPage({
           id: s.id,
           name: s.name,
           imageUrl: s.imageUrl,
+          width: s.width,
+          height: s.height,
           scroll: s.scroll,
           hotspots: s.hotspots.map((h) => ({
             id: h.id,
@@ -70,6 +72,7 @@ export default async function PreviewPage({
           })),
           scrollRegions: s.scrollRegions.map((r) => ({
             id: r.id,
+            kind: r.kind as "scroll" | "fixed",
             coords: r.coords as { x: number; y: number; w: number; h: number },
             axis: r.axis as "horizontal" | "vertical" | "both",
             imageUrl: r.imageUrl,

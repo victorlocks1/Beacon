@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 type ActionType = "navigate" | "open_overlay" | "close_overlay" | "back"
 type OverlayPos = "bottom" | "center"
 type Axis = "horizontal" | "vertical" | "both"
+type RegionKind = "scroll" | "fixed"
 type Mode = "hotspots" | "regions"
 
 interface NormalizedRect {
@@ -34,6 +35,7 @@ interface LocalHotspot {
 interface LocalRegion {
   localId: string
   dbId?: string
+  kind: RegionKind
   coords: NormalizedRect
   axis: Axis
   imageUrl: string | null
@@ -56,6 +58,10 @@ const axisLabels: Record<Axis, string> = {
   vertical: "Vertical",
   both: "Ambos",
 }
+const kindLabels: Record<RegionKind, string> = {
+  scroll: "Rolável (tira)",
+  fixed: "Fixa (topo/rodapé)",
+}
 const scrollLabels: Record<ScrollMode, string> = {
   none: "Vertical (automático)",
   vertical: "Vertical (automático)",
@@ -76,7 +82,7 @@ interface Props {
     overlayPosition: OverlayPos | null
     targetScreenId: string | null
   }>
-  initialRegions: Array<{ id: string; coords: unknown; axis: Axis; imageUrl: string }>
+  initialRegions: Array<{ id: string; kind: RegionKind; coords: unknown; axis: Axis; imageUrl: string | null }>
   onSave: (
     hotspots: Array<{
       id?: string
@@ -88,7 +94,7 @@ interface Props {
     }>
   ) => Promise<void>
   onSaveRegions: (
-    regions: Array<{ coords: NormalizedRect; axis: Axis; imageUrl: string }>
+    regions: Array<{ kind: RegionKind; coords: NormalizedRect; axis: Axis; imageUrl: string | null }>
   ) => Promise<void>
   onUploadStrip: (formData: FormData) => Promise<string>
   onScrollChange: (scroll: ScrollMode) => Promise<void>
@@ -121,6 +127,7 @@ export function HotspotEditor({
     initialRegions.map((r, i) => ({
       localId: `r-${i}`,
       dbId: r.id,
+      kind: r.kind,
       coords: r.coords as NormalizedRect,
       axis: r.axis,
       imageUrl: r.imageUrl,
@@ -175,7 +182,7 @@ export function HotspotEditor({
       if (mode === "hotspots") {
         setHotspots((p) => [...p, { localId, coords, action: "navigate", overlayPosition: null, targetScreenId: null }])
       } else {
-        setRegions((p) => [...p, { localId, coords, axis: "horizontal", imageUrl: null }])
+        setRegions((p) => [...p, { localId, kind: "scroll", coords, axis: "horizontal", imageUrl: null }])
       }
       setSelected(localId)
     }
@@ -205,8 +212,13 @@ export function HotspotEditor({
     )
     await onSaveRegions(
       regions
-        .filter((r) => r.imageUrl)
-        .map((r) => ({ coords: r.coords, axis: r.axis, imageUrl: r.imageUrl! }))
+        .filter((r) => r.kind === "fixed" || r.imageUrl)
+        .map((r) => ({
+          kind: r.kind,
+          coords: r.coords,
+          axis: r.axis,
+          imageUrl: r.kind === "fixed" ? null : r.imageUrl,
+        }))
     )
     setSaving(false)
   }
@@ -239,7 +251,7 @@ export function HotspotEditor({
           <p className="text-xs text-muted-foreground">
             {mode === "hotspots"
               ? "Clique e arraste para criar um hotspot"
-              : "Clique e arraste sobre a faixa que deve rolar"}
+              : "Clique e arraste sobre uma faixa (rolável ou fixa)"}
           </p>
           <Select
             value={scroll}
@@ -299,9 +311,9 @@ export function HotspotEditor({
                 width={`${r.coords.w * 100}%`}
                 height={`${r.coords.h * 100}%`}
                 fill={selected === r.localId ? "rgba(16,185,129,0.3)" : "rgba(16,185,129,0.15)"}
-                stroke={r.imageUrl ? "#10b981" : "#ef4444"}
+                stroke={r.kind === "fixed" || r.imageUrl ? "#10b981" : "#ef4444"}
                 strokeWidth={selected === r.localId ? 2.5 : 1.5}
-                strokeDasharray={r.imageUrl ? undefined : "6 3"}
+                strokeDasharray={r.kind === "fixed" || r.imageUrl ? undefined : "6 3"}
                 style={{ cursor: "pointer", pointerEvents: mode === "regions" ? "auto" : "none", opacity: mode === "regions" ? 1 : 0.4 }}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -420,7 +432,7 @@ export function HotspotEditor({
           )
         ) : regions.length === 0 ? (
           <p className="text-xs text-muted-foreground py-4 text-center">
-            Nenhuma região ainda.<br />Desenhe sobre a faixa que rola e suba a imagem completa dela.
+            Nenhuma faixa ainda.<br />Desenhe sobre uma faixa e escolha se ela rola ou fica fixa.
           </p>
         ) : (
           <div className="space-y-2 overflow-y-auto flex-1">
@@ -445,37 +457,55 @@ export function HotspotEditor({
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
-                <Select value={r.axis} onValueChange={(v) => patchRegion(r.localId, { axis: (v as Axis) ?? "horizontal" })} items={axisLabels}>
+                <Select value={r.kind} onValueChange={(v) => patchRegion(r.localId, { kind: (v as RegionKind) ?? "scroll" })} items={kindLabels}>
                   <SelectTrigger className="h-7 text-xs w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(axisLabels) as Axis[]).map((a) => (
-                      <SelectItem key={a} value={a}>{axisLabels[a]}</SelectItem>
+                    {(Object.keys(kindLabels) as RegionKind[]).map((k) => (
+                      <SelectItem key={k} value={k}>{kindLabels[k]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <label className="flex items-center gap-2 text-xs cursor-pointer rounded-md border border-dashed px-2 py-1.5 hover:bg-muted/50" onClick={(e) => e.stopPropagation()}>
-                  {uploadingId === r.localId ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : r.imageUrl ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-600" />
-                  ) : (
-                    <Upload className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                  <span className={r.imageUrl ? "text-emerald-700" : "text-muted-foreground"}>
-                    {r.imageUrl ? "Tira enviada — trocar" : "Subir tira completa"}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) handleStripUpload(r.localId, f)
-                    }}
-                  />
-                </label>
+                {r.kind === "fixed" ? (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Esta faixa fica fixa (não rola) e reaproveita a própria tela. Ideal para barras de navegação no topo ou rodapé.
+                  </p>
+                ) : (
+                  <>
+                    <Select value={r.axis} onValueChange={(v) => patchRegion(r.localId, { axis: (v as Axis) ?? "horizontal" })} items={axisLabels}>
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(axisLabels) as Axis[]).map((a) => (
+                          <SelectItem key={a} value={a}>{axisLabels[a]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer rounded-md border border-dashed px-2 py-1.5 hover:bg-muted/50" onClick={(e) => e.stopPropagation()}>
+                      {uploadingId === r.localId ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : r.imageUrl ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                      <span className={r.imageUrl ? "text-emerald-700" : "text-muted-foreground"}>
+                        {r.imageUrl ? "Tira enviada — trocar" : "Subir tira completa"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (f) handleStripUpload(r.localId, f)
+                        }}
+                      />
+                    </label>
+                  </>
+                )}
               </div>
             ))}
           </div>

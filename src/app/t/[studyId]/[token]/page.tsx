@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { TestRunner } from "@/components/test/test-runner"
+import { tt, type Lang } from "@/lib/i18n"
 
 export default async function TestRunPage({
   params,
@@ -41,9 +42,11 @@ export default async function TestRunPage({
 
   if (!testSession || testSession.studyId !== studyId) notFound()
 
+  const lang = (testSession.study.language ?? "pt") as Lang
+
   // Sessão já finalizada → agradecimento
   if (testSession.finishedAt) {
-    return <ThankYou />
+    return <ThankYou lang={lang} />
   }
 
   const study = testSession.study
@@ -73,17 +76,20 @@ export default async function TestRunPage({
     })
 
   if (screens.length === 0 || missions.length === 0) {
-    return <ThankYou />
+    return <ThankYou lang={lang} />
   }
 
   return (
     <TestRunner
       token={token}
+      lang={lang}
       deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
       screens={screens.map((s) => ({
         id: s.id,
         name: s.name,
         imageUrl: s.imageUrl,
+        width: s.width,
+        height: s.height,
         scroll: s.scroll,
         hotspots: s.hotspots.map((h) => ({
           id: h.id,
@@ -94,6 +100,7 @@ export default async function TestRunPage({
         })),
         scrollRegions: s.scrollRegions.map((r) => ({
           id: r.id,
+          kind: r.kind as "scroll" | "fixed",
           coords: r.coords as { x: number; y: number; w: number; h: number },
           axis: r.axis as "horizontal" | "vertical" | "both",
           imageUrl: r.imageUrl,
@@ -104,14 +111,13 @@ export default async function TestRunPage({
   )
 }
 
-function ThankYou() {
+function ThankYou({ lang }: { lang: Lang }) {
+  const s = tt(lang)
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
       <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
-        <h1 className="text-headline-small text-on-surface">Obrigado! 🎉</h1>
-        <p className="text-body-medium text-on-surface-variant">
-          Você concluiu o teste. Pode fechar esta aba.
-        </p>
+        <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
+        <p className="text-body-medium text-on-surface-variant">{s.thanksBody}</p>
       </div>
     </div>
   )

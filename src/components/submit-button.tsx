@@ -1,8 +1,9 @@
 "use client"
 import { useFormStatus } from "react-dom"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+// Botão de submit NATIVO (garante Enter + clique submetendo o form).
 export function SubmitButton({
   children,
   className,
@@ -12,8 +13,12 @@ export function SubmitButton({
 }) {
   const { pending } = useFormStatus()
   return (
-    <Button type="submit" className={cn("w-full", className)} disabled={pending}>
+    <button
+      type="submit"
+      disabled={pending}
+      className={cn(buttonVariants(), "w-full", className)}
+    >
       {pending ? "Aguarde..." : children}
-    </Button>
+    </button>
   )
 }

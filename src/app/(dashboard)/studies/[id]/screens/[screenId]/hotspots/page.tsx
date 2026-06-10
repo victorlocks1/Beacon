@@ -96,6 +96,7 @@ export default async function HotspotsPage({
           }))}
           initialRegions={screen.scrollRegions.map((r) => ({
             id: r.id,
+            kind: r.kind as "scroll" | "fixed",
             coords: r.coords,
             axis: r.axis as "horizontal" | "vertical" | "both",
             imageUrl: r.imageUrl,

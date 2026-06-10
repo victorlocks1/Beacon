@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 
 // Material 3 — botões (Filled, Filled tonal, Outlined, Text) com state layers.
 const buttonVariants = cva(
-  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-full border border-transparent text-sm font-medium leading-5 tracking-[0.1px] whitespace-nowrap transition-[background-color,box-shadow,color] outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[18px]",
+  "group/button relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-full border border-transparent text-sm font-medium leading-5 tracking-[0.1px] whitespace-nowrap transition-[background-color,box-shadow,color] outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[18px]",
   {
     variants: {
       variant: {

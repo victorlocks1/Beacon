@@ -69,12 +69,6 @@ export default async function StudiesPage() {
               </div>
 
               <div className="flex items-center justify-between mt-auto pt-4 border-t border-outline-variant">
-                <Link
-                  href={`/studies/${study.id}`}
-                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
-                >
-                  Abrir <ArrowRight className="h-4 w-4" />
-                </Link>
                 <form action={deleteStudyAction.bind(null, study.id)}>
                   <Button
                     variant="ghost"
@@ -85,6 +79,12 @@ export default async function StudiesPage() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </form>
+                <Link
+                  href={`/studies/${study.id}`}
+                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}
+                >
+                  Abrir <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
             </div>
           ))}

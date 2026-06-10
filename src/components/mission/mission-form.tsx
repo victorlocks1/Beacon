@@ -1,7 +1,7 @@
 "use client"
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { M3TextField } from "@/components/ui/m3-text-field"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -31,13 +31,16 @@ interface Screen {
   name: string
   order: number
   imageUrl: string
+  width: number
+  height: number
   scroll: "none" | "vertical" | "horizontal" | "both"
   hotspots: Hotspot[]
   scrollRegions?: {
     id: string
+    kind: "scroll" | "fixed"
     coords: { x: number; y: number; w: number; h: number }
     axis: "horizontal" | "vertical" | "both"
-    imageUrl: string
+    imageUrl: string | null
   }[]
 }
 
@@ -99,112 +102,51 @@ export function MissionForm({ studyId, deviceType, screens, missionId, initial }
   }
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <Label htmlFor="task">Tarefa *</Label>
-        <Input
-          id="task"
-          value={task}
-          onChange={(e) => setTask(e.target.value)}
-          placeholder="Ex: Adicione um item ao carrinho"
-        />
-        <p className="text-xs text-muted-foreground">
-          Descreva o objetivo sem dar dicas sobre onde clicar.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="description">Cenário (opcional)</Label>
-        <Textarea
-          id="description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Ex: Você quer comprar um tênis azul. Como faria isso neste app?"
-          rows={3}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Tela inicial *</Label>
-        <Select
-          value={startScreenId}
-          onValueChange={(v) => setStartScreenId((v as string) ?? "")}
-          items={screenItems}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Selecione a tela de início" />
-          </SelectTrigger>
-          <SelectContent>
-            {screens.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                Tela {s.order + 1}: {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Critério de sucesso */}
-      <div className="space-y-2">
-        <Label>Critério de sucesso *</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setSuccessType("screen")}
-            className={cn(
-              "flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-colors",
-              successType === "screen"
-                ? "border-primary bg-primary/5"
-                : "border-muted hover:border-muted-foreground/40"
-            )}
-          >
-            <Target
-              className={cn(
-                "h-5 w-5",
-                successType === "screen" ? "text-primary" : "text-muted-foreground"
-              )}
-            />
-            <span className="text-sm font-medium">Tela-alvo</span>
-            <span className="text-xs text-muted-foreground">
-              Sucesso ao chegar numa tela, por qualquer caminho.
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSuccessType("path")}
-            className={cn(
-              "flex flex-col items-start gap-1 rounded-xl border-2 p-3 text-left transition-colors",
-              successType === "path"
-                ? "border-primary bg-primary/5"
-                : "border-muted hover:border-muted-foreground/40"
-            )}
-          >
-            <Route
-              className={cn(
-                "h-5 w-5",
-                successType === "path" ? "text-primary" : "text-muted-foreground"
-              )}
-            />
-            <span className="text-sm font-medium">Caminho exato</span>
-            <span className="text-xs text-muted-foreground">
-              Grava o caminho esperado; classifica direto/indireto.
-            </span>
-          </button>
+    <div className="space-y-10">
+      {/* ── Sobre a tarefa ── */}
+      <section className="space-y-5">
+        <div>
+          <h2 className="text-title-medium text-on-surface">A tarefa</h2>
+          <p className="text-body-small text-on-surface-variant mt-0.5">
+            O que o testador deve realizar — sem dizer onde clicar.
+          </p>
         </div>
-      </div>
 
-      {/* Configuração por tipo */}
-      {successType === "screen" ? (
+        <div className="space-y-1.5">
+          <M3TextField
+            label="Tarefa"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            required
+          />
+          <p className="text-body-small text-on-surface-variant px-1">
+            Ex.: “Adicione um item ao carrinho”.
+          </p>
+        </div>
+
         <div className="space-y-2">
-          <Label>Tela de sucesso *</Label>
+          <Label htmlFor="description" className="text-title-small text-on-surface">
+            Cenário <span className="text-on-surface-variant font-normal">(opcional)</span>
+          </Label>
+          <Textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ex.: Você quer comprar um tênis azul. Como faria isso neste app?"
+            rows={3}
+            className="rounded-lg border-outline bg-transparent text-base focus-visible:border-primary min-h-28"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-title-small text-on-surface">Tela inicial</Label>
           <Select
-            value={goalScreenId}
-            onValueChange={(v) => setGoalScreenId((v as string) ?? "")}
+            value={startScreenId}
+            onValueChange={(v) => setStartScreenId((v as string) ?? "")}
             items={screenItems}
           >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecione a tela que conta como sucesso" />
+            <SelectTrigger className="w-full h-14 rounded-lg">
+              <SelectValue placeholder="Selecione a tela de início" />
             </SelectTrigger>
             <SelectContent>
               {screens.map((s) => (
@@ -215,22 +157,83 @@ export function MissionForm({ studyId, deviceType, screens, missionId, initial }
             </SelectContent>
           </Select>
         </div>
-      ) : (
-        <div className="space-y-2">
-          <Label>Caminho(s) esperado(s) *</Label>
-          <PathRecorder
-            screens={screens}
-            startScreenId={startScreenId || null}
-            deviceType={deviceType}
-            paths={paths}
-            onChange={setPaths}
-          />
+      </section>
+
+      {/* ── Critério de sucesso ── */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-title-medium text-on-surface">Critério de sucesso</h2>
+          <p className="text-body-small text-on-surface-variant mt-0.5">
+            Como saber que o testador concluiu a tarefa.
+          </p>
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            { key: "screen" as const, icon: Target, title: "Tela-alvo", desc: "Sucesso ao chegar numa tela, por qualquer caminho." },
+            { key: "path" as const, icon: Route, title: "Caminho exato", desc: "Grava o caminho esperado; classifica direto/indireto." },
+          ]).map((opt) => {
+            const Icon = opt.icon
+            const active = successType === opt.key
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setSuccessType(opt.key)}
+                className={cn(
+                  "flex flex-col items-start gap-2 rounded-2xl border-2 p-5 text-left transition-colors",
+                  active
+                    ? "border-primary bg-primary/[0.04]"
+                    : "border-outline-variant hover:border-on-surface-variant/50"
+                )}
+              >
+                <Icon className={cn("h-6 w-6", active ? "text-primary" : "text-on-surface-variant")} />
+                <span className="text-title-small text-on-surface">{opt.title}</span>
+                <span className="text-body-small text-on-surface-variant">{opt.desc}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {successType === "screen" ? (
+          <div className="space-y-2 pt-1">
+            <Label className="text-title-small text-on-surface">Tela de sucesso</Label>
+            <Select
+              value={goalScreenId}
+              onValueChange={(v) => setGoalScreenId((v as string) ?? "")}
+              items={screenItems}
+            >
+              <SelectTrigger className="w-full h-14 rounded-lg">
+                <SelectValue placeholder="Selecione a tela que conta como sucesso" />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {screens.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    Tela {s.order + 1}: {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="space-y-2 pt-1">
+            <Label className="text-title-small text-on-surface">Caminho(s) esperado(s)</Label>
+            <PathRecorder
+              screens={screens}
+              startScreenId={startScreenId || null}
+              deviceType={deviceType}
+              paths={paths}
+              onChange={setPaths}
+            />
+          </div>
+        )}
+      </section>
+
+      {err && (
+        <p className="text-body-small text-error px-1">{err}</p>
       )}
 
-      {err && <p className="text-sm text-red-500">{err}</p>}
-
-      <Button onClick={submit} disabled={pending} className="w-full">
+      <Button onClick={submit} disabled={pending} className="w-full h-12">
         {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
         {isEdit ? "Salvar alterações" : "Criar missão"}
       </Button>

@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
+import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { PublishBar } from "@/components/study/publish-bar"
 import { deleteScreenAction, moveScreenAction, deleteMissionAction } from "./actions"
 import {
@@ -99,25 +100,8 @@ export default async function StudyPage({
         <Link href="/studies" className={buttonVariants({ variant: "ghost", size: "icon" })}>
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div className="flex-1 flex items-center gap-3">
-          <h1 className="text-headline-small text-on-surface">{study.title}</h1>
-          <Badge variant={study.status === "live" ? "default" : "secondary"}>
-            {study.status === "draft"
-              ? "Rascunho"
-              : study.status === "live"
-                ? "Ao vivo"
-                : "Encerrado"}
-          </Badge>
-          {(() => {
-            const dt = (study.deviceType ?? "desktop") as "mobile" | "tablet" | "desktop"
-            const Icon = deviceIcon[dt]
-            return (
-              <Badge variant="outline" className="gap-1 font-normal">
-                <Icon className="h-3 w-3" />
-                {deviceLabel[dt]}
-              </Badge>
-            )
-          })()}
+        <div className="flex-1 min-w-0">
+          <EditableStudyTitle studyId={study.id} initialTitle={study.title} />
         </div>
         <Link href={`/studies/${study.id}/results`} className={buttonVariants({ variant: "outline" })}>
           <BarChart3 className="h-4 w-4 mr-2" />
@@ -145,17 +129,37 @@ export default async function StudyPage({
       )}
 
       <Tabs defaultValue={activeTab}>
-        <TabsList className="mb-8">
-          <TabsTrigger value="prototype">
-            Protótipo ({screens.length} telas)
-          </TabsTrigger>
-          <TabsTrigger value="missions">
-            Missões ({missions.length})
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-3 mb-8">
+          <TabsList>
+            <TabsTrigger value="prototype">Protótipo</TabsTrigger>
+            <TabsTrigger value="missions">Missões</TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            <Badge variant={study.status === "live" ? "default" : "secondary"}>
+              {study.status === "draft"
+                ? "Rascunho"
+                : study.status === "live"
+                  ? "Ao vivo"
+                  : "Encerrado"}
+            </Badge>
+            {(() => {
+              const dt = (study.deviceType ?? "desktop") as "mobile" | "tablet" | "desktop"
+              const Icon = deviceIcon[dt]
+              return (
+                <Badge variant="outline" className="gap-1 font-normal">
+                  <Icon className="h-3 w-3" />
+                  {deviceLabel[dt]}
+                </Badge>
+              )
+            })()}
+          </div>
+        </div>
 
         {/* ── Protótipo ── */}
         <TabsContent value="prototype">
+          <h2 className="text-title-medium text-on-surface mb-4">
+            {screens.length} {screens.length === 1 ? "tela" : "telas"}
+          </h2>
           {screens.length === 0 ? (
             /* Sem telas: upload ocupa tudo */
             <ScreenUploadForm studyId={study.id} />
@@ -242,6 +246,9 @@ export default async function StudyPage({
 
         {/* ── Missões ── */}
         <TabsContent value="missions">
+          <h2 className="text-title-medium text-on-surface mb-4">
+            {missions.length} {missions.length === 1 ? "missão" : "missões"}
+          </h2>
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
               Defina o que o testador deve realizar no protótipo.

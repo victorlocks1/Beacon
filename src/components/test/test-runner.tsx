@@ -1,11 +1,12 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ClipboardList, Flag, GripHorizontal, ChevronUp, ChevronDown } from "lucide-react"
+import { ClipboardList, Flag, ChevronUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
 import { PrototypeStage, type StageScreen, type StageInteraction } from "@/components/prototype/stage"
+import { tt, type Lang } from "@/lib/i18n"
 
 interface Mission {
   id: string
@@ -16,6 +17,7 @@ interface Mission {
 }
 interface Props {
   token: string
+  lang: Lang
   deviceType: DeviceType
   screens: StageScreen[]
   missions: Mission[]
@@ -34,7 +36,8 @@ interface BufferedEvent {
 
 type Phase = "intro" | "running" | "thanks"
 
-export function TestRunner({ token, deviceType, screens, missions }: Props) {
+export function TestRunner({ token, lang, deviceType, screens, missions }: Props) {
+  const s = tt(lang)
   const [phase, setPhase] = useState<Phase>("intro")
   const [missionIndex, setMissionIndex] = useState(0)
   const [hasClicked, setHasClicked] = useState(false)
@@ -107,7 +110,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
     pathRef.current = [mission.startScreenId]
     topRef.current = mission.startScreenId
     setHasClicked(false)
-    setPanelCollapsed(false)
+    setPanelCollapsed(false) // começa expandida: o testador lê a tarefa antes de agir
     record({
       screenId: mission.startScreenId,
       type: "navigate",
@@ -171,10 +174,9 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
     if (completedRef.current) return
 
     clickCountRef.current += 1
-    if (!hasClicked) {
-      setHasClicked(true)
-      setPanelCollapsed(true)
-    }
+    if (!hasClicked) setHasClicked(true)
+    // Ao interagir com o protótipo, a missão recolhe (a tela é a prioridade)
+    setPanelCollapsed(true)
 
     if (ev.kind === "misclick") {
       misclickCountRef.current += 1
@@ -222,7 +224,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
         <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-10 space-y-6">
           <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
             <ClipboardList className="h-4 w-4" />
-            Tarefa {missionIndex + 1} de {missions.length}
+            {s.taskOf(missionIndex + 1, missions.length)}
           </div>
           <div className="space-y-2">
             <h1 className="text-headline-small text-on-surface">{mission.task}</h1>
@@ -231,7 +233,7 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
             )}
           </div>
           <Button onClick={startMission} className="w-full h-12" size="lg">
-            Começar
+            {s.start}
           </Button>
         </div>
       </div>
@@ -243,10 +245,8 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
         <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
-          <h1 className="text-headline-small text-on-surface">Obrigado! 🎉</h1>
-          <p className="text-body-medium text-on-surface-variant">
-            Você concluiu o teste. Pode fechar esta aba.
-          </p>
+          <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
+          <p className="text-body-medium text-on-surface-variant">{s.thanksBody}</p>
         </div>
       </div>
     )
@@ -254,161 +254,109 @@ export function TestRunner({ token, deviceType, screens, missions }: Props) {
 
   // ─────────── Running ───────────
   return (
-    <div className="min-h-screen bg-surface-container flex flex-col items-center py-8 px-4">
-      <PrototypeStage
-        key={mission.id}
-        screens={screens}
-        deviceType={deviceType}
-        initialScreenId={mission.startScreenId}
-        onInteraction={handleInteraction}
-      />
+    <div className="min-h-screen bg-surface-container flex flex-col md:flex-row md:items-start gap-6 p-4 md:p-6">
+      {/* Esquerda: missão (sempre presente; só encolhe pra cima) */}
+      <aside className="w-full md:w-80 shrink-0 md:sticky md:top-6">
+        <MissionCard
+          label={s.taskOf(missionIndex + 1, missions.length)}
+          task={mission.task}
+          description={mission.description}
+          giveUpLabel={s.giveUp}
+          viewLabel={s.viewMission}
+          collapsed={panelCollapsed}
+          canGiveUp={hasClicked}
+          onGiveUp={() => completeMission("gave_up", topRef.current)}
+          onToggle={() => setPanelCollapsed((c) => !c)}
+        />
+      </aside>
 
-      <InstructionPanel
-        task={mission.task}
-        description={mission.description}
-        missionIndex={missionIndex}
-        missionCount={missions.length}
-        collapsed={panelCollapsed}
-        onToggle={() => setPanelCollapsed((c) => !c)}
-        canGiveUp={hasClicked}
-        onGiveUp={() => completeMission("gave_up", topRef.current)}
-      />
+      {/* Direita: protótipo */}
+      <div className="flex-1 flex justify-center w-full">
+        <PrototypeStage
+          key={mission.id}
+          screens={screens}
+          deviceType={deviceType}
+          initialScreenId={mission.startScreenId}
+          onInteraction={handleInteraction}
+        />
+      </div>
     </div>
   )
 }
 
-// ════════════ Painel de instruções ════════════
-function InstructionPanel({
+// ════════════ Card da missão (coluna esquerda) ════════════
+function MissionCard({
+  label,
   task,
   description,
-  missionIndex,
-  missionCount,
+  giveUpLabel,
+  viewLabel,
   collapsed,
-  onToggle,
   canGiveUp,
   onGiveUp,
+  onToggle,
 }: {
+  label: string
   task: string
   description: string | null
-  missionIndex: number
-  missionCount: number
+  giveUpLabel: string
+  viewLabel: string
   collapsed: boolean
-  onToggle: () => void
   canGiveUp: boolean
   onGiveUp: () => void
+  onToggle: () => void
 }) {
-  const [pos, setPos] = useState({ x: 0, y: 0 })
-  const draggingRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null)
-
-  function onPointerDown(e: React.PointerEvent) {
-    draggingRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      baseX: pos.x,
-      baseY: pos.y,
-    }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-  }
-  function onPointerMove(e: React.PointerEvent) {
-    if (!draggingRef.current) return
-    setPos({
-      x: draggingRef.current.baseX + (e.clientX - draggingRef.current.startX),
-      y: draggingRef.current.baseY + (e.clientY - draggingRef.current.startY),
-    })
-  }
-  function onPointerUp(e: React.PointerEvent) {
-    draggingRef.current = null
-    ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
-  }
-
   return (
-    <>
-      {/* ─── Desktop: card flutuante arrastável ─── */}
-      <div
-        className="hidden md:block fixed top-4 right-4 z-50 w-72"
-        style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
-      >
-        <div className="bg-white rounded-xl border shadow-xl overflow-hidden">
-          <div
-            className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/60 cursor-grab active:cursor-grabbing touch-none"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-          >
-            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <GripHorizontal className="h-3.5 w-3.5" />
-              Tarefa {missionIndex + 1}/{missionCount}
-            </span>
-            <button
-              onClick={onToggle}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              {collapsed ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronUp className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-          {!collapsed && (
-            <div className="p-3 space-y-3">
-              <div>
-                <p className="font-semibold text-sm">{task}</p>
-                {description && (
-                  <p className="text-xs text-muted-foreground mt-1">{description}</p>
-                )}
-              </div>
-              {canGiveUp && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-muted-foreground"
-                  onClick={onGiveUp}
-                >
-                  <Flag className="h-3.5 w-3.5 mr-1.5" />
-                  Não consegui / Encerrar tarefa
-                </Button>
-              )}
-            </div>
+    <div className="rounded-3xl bg-surface-container-low border border-outline-variant p-6">
+      {/* Cabeçalho (sempre visível) */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-label-large text-on-surface-variant">
+          <ClipboardList className="h-4 w-4" />
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={cn(
+            "shrink-0 flex items-center gap-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high",
+            collapsed ? "px-3 py-1.5 text-title-small text-primary" : "p-1.5"
           )}
-        </div>
+          title={collapsed ? viewLabel : "Ocultar"}
+        >
+          {collapsed ? (
+            <>
+              <ChevronDown className="h-4 w-4" />
+              {viewLabel}
+            </>
+          ) : (
+            <ChevronUp className="h-5 w-5" />
+          )}
+        </button>
       </div>
 
-      {/* ─── Mobile: barra inferior ─── */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t shadow-[0_-2px_10px_rgba(0,0,0,0.06)]">
-        <div className="flex items-center justify-between px-4 py-2">
-          <span className="text-xs font-medium text-muted-foreground">
-            Tarefa {missionIndex + 1}/{missionCount}
-          </span>
-          <button
-            onClick={onToggle}
-            className="text-xs text-primary font-medium"
-          >
-            {collapsed ? "Mostrar instruções" : "Ocultar"}
-          </button>
-        </div>
-        {!collapsed && (
-          <div className="px-4 pb-4 space-y-3">
-            <div>
-              <p className="font-semibold text-sm">{task}</p>
-              {description && (
-                <p className="text-xs text-muted-foreground mt-1">{description}</p>
-              )}
-            </div>
-            {canGiveUp && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-muted-foreground"
-                onClick={onGiveUp}
-              >
-                <Flag className="h-3.5 w-3.5 mr-1.5" />
-                Não consegui / Encerrar tarefa
-              </Button>
+      {/* Corpo (encolhe pra cima) */}
+      {!collapsed && (
+        <>
+          <div className="space-y-2 mt-4">
+            <h2 className="text-title-large text-on-surface">{task}</h2>
+            {description && (
+              <p className="text-body-medium text-on-surface-variant">{description}</p>
             )}
           </div>
-        )}
-      </div>
-    </>
+
+          {canGiveUp && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-2 mt-4 text-on-surface-variant"
+              onClick={onGiveUp}
+            >
+              <Flag className="h-3.5 w-3.5 mr-1.5" />
+              {giveUpLabel}
+            </Button>
+          )}
+        </>
+      )}
+    </div>
   )
 }

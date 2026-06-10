@@ -69,6 +69,8 @@ export default async function EditMissionPage({
           name: s.name,
           order: s.order,
           imageUrl: s.imageUrl,
+          width: s.width,
+          height: s.height,
           scroll: s.scroll as "none" | "vertical" | "horizontal" | "both",
           hotspots: s.hotspots.map((h) => ({
             id: h.id,
@@ -79,6 +81,7 @@ export default async function EditMissionPage({
           })),
           scrollRegions: s.scrollRegions.map((r) => ({
             id: r.id,
+            kind: r.kind as "scroll" | "fixed",
             coords: r.coords as { x: number; y: number; w: number; h: number },
             axis: r.axis as "horizontal" | "vertical" | "both",
             imageUrl: r.imageUrl,

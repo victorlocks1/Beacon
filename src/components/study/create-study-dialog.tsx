@@ -25,6 +25,7 @@ const deviceOptions: { value: DeviceType; label: string; desc: string; icon: Rea
 export function CreateStudyDialog() {
   const [open, setOpen] = useState(false)
   const [device, setDevice] = useState<DeviceType>("desktop")
+  const [language, setLanguage] = useState<"pt" | "es">("pt")
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -102,6 +103,46 @@ export function CreateStudyDialog() {
                       </span>
                       <span className="text-body-small text-on-surface-variant">
                         {opt.desc}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3.5">
+              <p className="text-title-small text-on-surface-variant">
+                Idioma do convite
+              </p>
+              <p className="text-body-small text-on-surface-variant -mt-2">
+                O testador receberá o convite e as instruções neste idioma.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { value: "pt" as const, label: "Português" },
+                  { value: "es" as const, label: "Español" },
+                ]).map((opt) => {
+                  const active = language === opt.value
+                  return (
+                    <label
+                      key={opt.value}
+                      className={cn(
+                        "flex items-center justify-center rounded-2xl border-2 px-3 py-3.5 cursor-pointer transition-colors",
+                        active
+                          ? "border-primary bg-primary/[0.04]"
+                          : "border-outline-variant hover:border-on-surface-variant/50"
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="language"
+                        value={opt.value}
+                        checked={active}
+                        onChange={() => setLanguage(opt.value)}
+                        className="sr-only"
+                      />
+                      <span className="text-title-small text-on-surface">
+                        {opt.label}
                       </span>
                     </label>
                   )

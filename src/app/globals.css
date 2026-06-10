@@ -82,19 +82,19 @@
   --md-on-error: #ffffff;
   --md-error-container: #f9dedc;
   --md-on-error-container: #410e0b;
-  --md-surface: #fcfcfc;
+  --md-surface: #ffffff;
   --md-on-surface: #1c1b1f;
   --md-surface-variant: #e3e2e6;
   --md-on-surface-variant: #46464a;
   --md-surface-container-lowest: #ffffff;
-  --md-surface-container-low: #f6f5f8;
+  --md-surface-container-low: #fafafa;
   --md-surface-container: #f1f0f3;
   --md-surface-container-high: #ebeaee;
   --md-surface-container-highest: #e5e4e8;
   --md-surface-dim: #dcdbdf;
   --md-surface-bright: #fcfcfc;
   --md-outline: #76777a;
-  --md-outline-variant: #c6c6ca;
+  --md-outline-variant: #bdbdbd;
   --md-inverse-surface: #2f3033;
   --md-inverse-on-surface: #f1f0f3;
   --md-inverse-primary: #c6c6ca;
@@ -183,15 +183,27 @@
   html {
     @apply font-sans;
   }
+  /* Mãozinha em tudo que é clicável */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  a[href],
+  label[for],
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /* ───────── Material 3 — Type scale ───────── */
 .text-display-large { font-size: 57px; line-height: 64px; font-weight: 400; letter-spacing: -0.25px; }
 .text-display-medium { font-size: 45px; line-height: 52px; font-weight: 400; }
 .text-display-small { font-size: 36px; line-height: 44px; font-weight: 400; }
-.text-headline-large { font-size: 32px; line-height: 40px; font-weight: 400; }
-.text-headline-medium { font-size: 28px; line-height: 36px; font-weight: 400; }
-.text-headline-small { font-size: 24px; line-height: 32px; font-weight: 400; }
+.text-headline-large { font-size: 32px; line-height: 40px; font-weight: 700; }
+.text-headline-medium { font-size: 28px; line-height: 36px; font-weight: 700; }
+.text-headline-small { font-size: 24px; line-height: 32px; font-weight: 700; }
 .text-title-large { font-size: 22px; line-height: 28px; font-weight: 400; }
 .text-title-medium { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; }
 .text-title-small { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; }
@@ -217,3 +229,14 @@
 .subtle-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .subtle-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); border-radius: 9999px; }
 .subtle-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Rola, mas sem barra visível (faixas de scroll dentro do protótipo) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* Rola e reserva o mesmo espaço da barra (mantém a proporção da versão com
+   scrollbar), porém a barra fica transparente — invisível, mas funcional. */
+.invisible-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.invisible-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.invisible-scroll::-webkit-scrollbar-thumb { background: transparent; }
+.invisible-scroll::-webkit-scrollbar-track { background: transparent; }
