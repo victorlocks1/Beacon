@@ -28,6 +28,9 @@ export function ScreenUploadForm({ studyId }: { studyId: string }) {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
+  // Marca quando um paste nativo já tratou a imagem, para o fallback de
+  // clipboard (async API) não subir a mesma imagem duas vezes.
+  const recentPasteRef = useRef(0)
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -65,24 +68,64 @@ export function ScreenUploadForm({ studyId }: { studyId: string }) {
 
   // Colar imagem com Ctrl/Cmd+V (em qualquer lugar da página, exceto campos de texto)
   useEffect(() => {
+    function isEditable(t: EventTarget | null) {
+      const el = t as HTMLElement | null
+      return !!(
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.isContentEditable)
+      )
+    }
+
+    // 1) Caminho nativo: evento paste com clipboardData (Chrome/Firefox/Edge)
     function onPaste(e: ClipboardEvent) {
-      const t = e.target as HTMLElement | null
-      if (
-        t &&
-        (t.tagName === "INPUT" ||
-          t.tagName === "TEXTAREA" ||
-          t.isContentEditable)
-      ) {
-        return
-      }
+      if (isEditable(e.target)) return
       const files = extractImageFiles(e.clipboardData)
       if (files.length) {
         e.preventDefault()
+        recentPasteRef.current = Date.now()
         handleFiles(files)
       }
     }
+
+    // 2) Fallback: Async Clipboard API no atalho Cmd/Ctrl+V.
+    // Necessário no Safari (que não dispara paste fora de campos editáveis)
+    // e quando o foco não está num elemento que recebe o evento paste.
+    async function onKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "v") return
+      if (isEditable(e.target)) return
+      if (!navigator.clipboard?.read) return
+      // Dá prioridade ao evento paste nativo (dispara logo em seguida);
+      // só usa o fallback se ele não tratou a imagem.
+      await new Promise((r) => setTimeout(r, 150))
+      if (Date.now() - recentPasteRef.current < 1500) return
+      try {
+        const items = await navigator.clipboard.read()
+        const files: File[] = []
+        for (const item of items) {
+          const imgType = item.types.find((t) => t.startsWith("image/"))
+          if (imgType) {
+            const blob = await item.getType(imgType)
+            const ext = imgType.split("/")[1] ?? "png"
+            files.push(new File([blob], `Tela colada.${ext}`, { type: blob.type }))
+          }
+        }
+        if (files.length) {
+          recentPasteRef.current = Date.now()
+          handleFiles(files)
+        }
+      } catch {
+        // permissão negada ou clipboard sem imagem — ignora silenciosamente
+      }
+    }
+
     document.addEventListener("paste", onPaste)
-    return () => document.removeEventListener("paste", onPaste)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("paste", onPaste)
+      document.removeEventListener("keydown", onKeyDown)
+    }
   }, [handleFiles])
 
   // Foca a área de upload ao montar, para o Ctrl/Cmd+V funcionar de cara
@@ -119,6 +162,7 @@ export function ScreenUploadForm({ studyId }: { studyId: string }) {
         const files = extractImageFiles(e.clipboardData)
         if (files.length) {
           e.preventDefault()
+          recentPasteRef.current = Date.now()
           handleFiles(files)
         }
       }}

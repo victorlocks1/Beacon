@@ -47,6 +47,7 @@ export function M3TextField({
         {isPassword && (
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setRevealed((v) => !v)}
             tabIndex={-1}
             aria-label={revealed ? "Ocultar senha" : "Mostrar senha"}
