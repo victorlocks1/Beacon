@@ -2,6 +2,7 @@ import Link from "next/link"
 import { registerAction } from "./actions"
 import { M3TextField } from "@/components/ui/m3-text-field"
 import { SubmitButton } from "@/components/submit-button"
+import { AuthForm } from "@/components/auth-form"
 
 const errorMessages: Record<string, string> = {
   taken: "Este email já está em uso.",
@@ -30,7 +31,7 @@ export default async function RegisterPage({
           </p>
         </div>
 
-        <form action={registerAction} className="space-y-5">
+        <AuthForm action={registerAction} className="space-y-5">
           <M3TextField label="Nome" name="name" autoComplete="name" labelBg="bg-surface-container-low" required />
           <M3TextField
             label="Email"
@@ -52,7 +53,7 @@ export default async function RegisterPage({
             <p className="text-body-small text-error px-1">{errorMsg}</p>
           )}
           <SubmitButton className="w-full">Criar conta</SubmitButton>
-        </form>
+        </AuthForm>
 
         <p className="text-body-medium text-on-surface-variant text-center mt-6">
           Já tem conta?{" "}

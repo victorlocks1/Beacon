@@ -26,6 +26,7 @@ function extractImageFiles(dt: DataTransfer | null): File[] {
 export function ScreenUploadForm({ studyId }: { studyId: string }) {
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
   // Marca quando um paste nativo já tratou a imagem, para o fallback de
@@ -36,32 +37,44 @@ export function ScreenUploadForm({ studyId }: { studyId: string }) {
     async (files: FileList | File[]) => {
       const arr = Array.from(files).filter((f) => f.type.startsWith("image/"))
       if (!arr.length) return
+      setError(null)
       setUploading(true)
 
-      const formData = new FormData()
-      await Promise.all(
-        arr.map(
-          (file) =>
-            new Promise<void>((resolve) => {
-              const img = new Image()
-              img.onload = () => {
-                formData.append("files", file)
-                formData.append("widths", String(img.naturalWidth))
-                formData.append("heights", String(img.naturalHeight))
-                formData.append(
-                  "names",
-                  file.name.replace(/\.[^/.]+$/, "") || "Tela colada"
-                )
-                URL.revokeObjectURL(img.src)
-                resolve()
-              }
-              img.src = URL.createObjectURL(file)
-            })
+      try {
+        const formData = new FormData()
+        await Promise.all(
+          arr.map(
+            (file) =>
+              new Promise<void>((resolve) => {
+                const url = URL.createObjectURL(file)
+                const img = new Image()
+                const append = (w: number, h: number) => {
+                  formData.append("files", file)
+                  formData.append("widths", String(w))
+                  formData.append("heights", String(h))
+                  formData.append(
+                    "names",
+                    file.name.replace(/\.[^/.]+$/, "") || "Tela colada"
+                  )
+                  URL.revokeObjectURL(url)
+                  resolve()
+                }
+                img.onload = () => append(img.naturalWidth, img.naturalHeight)
+                // Se a imagem não carregar, ainda assim envia com dimensão
+                // padrão — nunca deixa a Promise pendurada (loader eterno).
+                img.onerror = () => append(0, 0)
+                img.src = url
+              })
+          )
         )
-      )
 
-      await uploadScreensAction(studyId, formData)
-      setUploading(false)
+        await uploadScreensAction(studyId, formData)
+      } catch (err) {
+        console.error("Falha no upload de telas:", err)
+        setError("Não foi possível enviar a imagem. Tente novamente.")
+      } finally {
+        setUploading(false)
+      }
     },
     [studyId]
   )
@@ -199,6 +212,9 @@ export function ScreenUploadForm({ studyId }: { studyId: string }) {
             </p>
             <p className="text-body-small text-on-surface-variant mt-0.5">PNG ou JPG</p>
           </div>
+          {error && (
+            <p className="text-body-small text-error mt-1">{error}</p>
+          )}
         </>
       )}
     </div>

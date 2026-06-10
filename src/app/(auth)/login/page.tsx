@@ -2,6 +2,7 @@ import Link from "next/link"
 import { loginAction } from "./actions"
 import { M3TextField } from "@/components/ui/m3-text-field"
 import { SubmitButton } from "@/components/submit-button"
+import { AuthForm } from "@/components/auth-form"
 
 export default async function LoginPage({
   searchParams,
@@ -23,7 +24,7 @@ export default async function LoginPage({
           </p>
         </div>
 
-        <form action={loginAction} className="space-y-5">
+        <AuthForm action={loginAction} className="space-y-5">
           <M3TextField
             label="Email"
             name="email"
@@ -46,7 +47,7 @@ export default async function LoginPage({
             </p>
           )}
           <SubmitButton className="w-full">Entrar</SubmitButton>
-        </form>
+        </AuthForm>
 
         <p className="text-body-medium text-on-surface-variant text-center mt-6">
           Não tem conta?{" "}
