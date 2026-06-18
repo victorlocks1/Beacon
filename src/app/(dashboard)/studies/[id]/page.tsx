@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
+import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { PublishBar } from "@/components/study/publish-bar"
@@ -161,8 +162,18 @@ export default async function StudyPage({
             {screens.length} {screens.length === 1 ? "tela" : "telas"}
           </h2>
           {screens.length === 0 ? (
-            /* Sem telas: upload ocupa tudo */
-            <ScreenUploadForm studyId={study.id} />
+            /* Sem telas: upload + importar do Figma */
+            <div className="space-y-4">
+              <ScreenUploadForm studyId={study.id} />
+              <div className="flex items-center gap-3 text-label-medium text-on-surface-variant">
+                <span className="h-px flex-1 bg-outline-variant" />
+                ou
+                <span className="h-px flex-1 bg-outline-variant" />
+              </div>
+              <div className="flex justify-center">
+                <FigmaImportDialog studyId={study.id} />
+              </div>
+            </div>
           ) : (
             /* Com telas: duas colunas (uma só quando bloqueado) */
             <div className={editable ? "grid grid-cols-[1fr_280px] gap-5 items-start" : ""}>
@@ -234,10 +245,11 @@ export default async function StudyPage({
                 ))}
               </div>
 
-              {/* Direita: upload */}
+              {/* Direita: upload + importar do Figma */}
               {editable && (
-                <div className="sticky top-4">
+                <div className="sticky top-4 space-y-3">
                   <ScreenUploadForm studyId={study.id} />
+                  <FigmaImportDialog studyId={study.id} />
                 </div>
               )}
             </div>

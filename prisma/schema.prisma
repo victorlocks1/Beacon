@@ -12,6 +12,8 @@ model User {
   email        String   @unique
   passwordHash String
   name         String?
+  // Personal Access Token do Figma, criptografado em repouso (por usuário).
+  figmaAccessToken String?
   createdAt    DateTime @default(now())
   studies      Study[]
 }
