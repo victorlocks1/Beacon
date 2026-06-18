@@ -137,6 +137,7 @@ export function HotspotEditor({
   const [drawing, setDrawing] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [, startScrollTransition] = useTransition()
   const svgRef = useRef<SVGSVGElement>(null)
@@ -200,27 +201,33 @@ export function HotspotEditor({
 
   async function handleSave() {
     setSaving(true)
-    await onSave(
-      hotspots.map((h) => ({
-        id: h.dbId,
-        coords: h.coords,
-        action: h.action,
-        overlayPosition: h.action === "open_overlay" ? (h.overlayPosition ?? "bottom") : null,
-        targetScreenId: needsTarget(h.action) ? h.targetScreenId : null,
-        shape: "rect" as const,
-      }))
-    )
-    await onSaveRegions(
-      regions
-        .filter((r) => r.kind === "fixed" || r.imageUrl)
-        .map((r) => ({
-          kind: r.kind,
-          coords: r.coords,
-          axis: r.axis,
-          imageUrl: r.kind === "fixed" ? null : r.imageUrl,
+    setSaved(false)
+    try {
+      await onSave(
+        hotspots.map((h) => ({
+          id: h.dbId,
+          coords: h.coords,
+          action: h.action,
+          overlayPosition: h.action === "open_overlay" ? (h.overlayPosition ?? "bottom") : null,
+          targetScreenId: needsTarget(h.action) ? h.targetScreenId : null,
+          shape: "rect" as const,
         }))
-    )
-    setSaving(false)
+      )
+      await onSaveRegions(
+        regions
+          .filter((r) => r.kind === "fixed" || r.imageUrl)
+          .map((r) => ({
+            kind: r.kind,
+            coords: r.coords,
+            axis: r.axis,
+            imageUrl: r.kind === "fixed" ? null : r.imageUrl,
+          }))
+      )
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleStripUpload(localId: string, file: File) {
@@ -359,9 +366,20 @@ export function HotspotEditor({
           ))}
         </div>
 
-        <Button size="sm" onClick={handleSave} disabled={saving} className="w-full">
-          {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-          Salvar
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={saving}
+          className={cn("w-full transition-colors", saved && "bg-emerald-600 hover:bg-emerald-600 text-white")}
+        >
+          {saving ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+          ) : saved ? (
+            <Check className="h-3.5 w-3.5 mr-1" />
+          ) : (
+            <Save className="h-3.5 w-3.5 mr-1" />
+          )}
+          {saving ? "Salvando..." : saved ? "Salvo com sucesso!" : "Salvar"}
         </Button>
 
         {/* Lista do modo ativo */}

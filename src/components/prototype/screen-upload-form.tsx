@@ -171,14 +171,6 @@ export function ScreenUploadForm({ studyId }: { studyId: string }) {
         uploading && "pointer-events-none opacity-60"
       )}
       onClick={() => inputRef.current?.click()}
-      onPaste={(e) => {
-        const files = extractImageFiles(e.clipboardData)
-        if (files.length) {
-          e.preventDefault()
-          recentPasteRef.current = Date.now()
-          handleFiles(files)
-        }
-      }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
