@@ -43,7 +43,7 @@ export default async function StudyPage({
   const { id } = await params
   const { error, tab } = await searchParams
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   const study = await prisma.study.findUnique({
     where: { id, ownerId: session.user.id },

@@ -33,7 +33,7 @@ export default async function MissionResultsPage({
 }) {
   const { id, missionId } = await params
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   const mission = await prisma.mission.findFirst({
     where: { id: missionId, block: { study: { id, ownerId: session.user.id } } },

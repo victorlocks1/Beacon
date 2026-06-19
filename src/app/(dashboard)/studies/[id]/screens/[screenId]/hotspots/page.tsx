@@ -20,7 +20,7 @@ export default async function HotspotsPage({
 }) {
   const { id: studyId, screenId } = await params
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   const screen = await prisma.screen.findFirst({
     where: { id: screenId, prototype: { studyId } },

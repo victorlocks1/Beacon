@@ -24,7 +24,7 @@ export async function saveHotspotsAction(
   hotspots: HotspotInput[]
 ) {
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   // Verifica que a tela pertence a um study DO USUÁRIO LOGADO
   const screen = await prisma.screen.findFirst({
@@ -81,7 +81,7 @@ export async function saveHotspotsAction(
 
 async function assertOwnerEditable(studyId: string, screenId: string) {
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
   const screen = await prisma.screen.findFirst({
     where: { id: screenId, prototype: { study: { id: studyId, ownerId: session.user.id } } },
     include: { prototype: { include: { study: { select: { status: true } } } } },
@@ -158,7 +158,7 @@ export async function updateScreenScrollAction(
   scroll: "none" | "vertical" | "horizontal" | "both"
 ) {
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   const screen = await prisma.screen.findFirst({
     where: { id: screenId, prototype: { study: { id: studyId, ownerId: session.user.id } } },

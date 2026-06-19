@@ -7,7 +7,7 @@ import { redirect } from "next/navigation"
 
 async function getStudyOrThrow(studyId: string) {
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   const study = await prisma.study.findUnique({
     where: { id: studyId, ownerId: session.user.id },

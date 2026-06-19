@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth"
+import { redirect } from "next/navigation"
 import { prisma } from "@/lib/db"
 import { CreateStudyDialog } from "@/components/study/create-study-dialog"
 import { deleteStudyAction } from "./actions"
@@ -22,9 +23,10 @@ const statusVariant: Record<string, "secondary" | "default" | "outline"> = {
 
 export default async function StudiesPage() {
   const session = await auth()
+  if (!session?.user?.id) redirect("/login")
 
   const studies = await prisma.study.findMany({
-    where: { ownerId: session!.user.id },
+    where: { ownerId: session.user.id },
     include: {
       prototype: { include: { _count: { select: { screens: true } } } },
       blocks: true,

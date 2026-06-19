@@ -6,7 +6,7 @@ import { redirect } from "next/navigation"
 
 export async function createStudyAction(formData: FormData) {
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   const title = (formData.get("title") as string)?.trim()
   const deviceType = (formData.get("deviceType") as string) ?? "desktop"
@@ -28,7 +28,7 @@ export async function createStudyAction(formData: FormData) {
 
 export async function deleteStudyAction(studyId: string) {
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   await prisma.study.delete({
     where: { id: studyId, ownerId: session.user.id },

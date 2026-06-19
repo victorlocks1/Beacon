@@ -14,7 +14,7 @@ export default async function ResultsOverviewPage({
 }) {
   const { id } = await params
   const session = await auth()
-  if (!session) redirect("/login")
+  if (!session?.user?.id) redirect("/login")
 
   const study = await prisma.study.findUnique({
     where: { id, ownerId: session.user.id },
