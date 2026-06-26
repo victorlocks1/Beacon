@@ -36,6 +36,16 @@ export async function updateStudyTitleAction(studyId: string, formData: FormData
   revalidatePath(`/studies/${studyId}`)
 }
 
+// Zera os dados coletados (sessões → eventos + resultados via cascade),
+// mantendo protótipo/telas/missões. Útil para limpar testes internos antes
+// de divulgar o link para os testadores reais.
+export async function resetStudyDataAction(studyId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+  await prisma.session.deleteMany({ where: { studyId: study.id } })
+  revalidatePath(`/studies/${studyId}/results`)
+  revalidatePath(`/studies/${studyId}`)
+}
+
 export async function publishStudyAction(studyId: string) {
   const { study } = await getStudyOrThrow(studyId)
 

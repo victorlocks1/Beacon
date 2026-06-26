@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Users } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
+import { ResetDataButton } from "@/components/study/reset-data-button"
 
 export default async function ResultsOverviewPage({
   params,
@@ -77,6 +78,7 @@ export default async function ResultsOverviewPage({
           <Users className="h-3.5 w-3.5" />
           {study._count.sessions} sessão(ões) · {finishedSessions} concluída(s)
         </Badge>
+        <ResetDataButton studyId={id} sessionCount={study._count.sessions} />
       </div>
 
       {missions.length === 0 ? (
