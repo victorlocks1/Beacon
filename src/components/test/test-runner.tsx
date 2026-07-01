@@ -1,7 +1,7 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ClipboardList, Flag, Play } from "lucide-react"
+import { ClipboardList, Flag, Play, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
@@ -45,7 +45,15 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
   const [stepIndex, setStepIndex] = useState(0)
   const [taskStarted, setTaskStarted] = useState(false) // subfase da missão
   const [hasClicked, setHasClicked] = useState(false)
+  const [toast, setToast] = useState<string | null>(null) // "Tarefa X concluída"
   const [finished, setFinished] = useState(false)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2600)
+  }, [])
 
   const bufferRef = useRef<BufferedEvent[]>([])
   const pendingFlushesRef = useRef<Promise<unknown>[]>([])
@@ -175,6 +183,14 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
       // segue mesmo se falhar
     }
 
+    // Concluiu a tarefa (chegou no objetivo) → toast "Tarefa X concluída".
+    // Quem desiste não vê o toast. Em ambos os casos segue para o próximo passo.
+    if (signal === "reached") {
+      const taskNumber = steps
+        .slice(0, stepIndex + 1)
+        .filter((st) => st.kind === "mission").length
+      showToast(s.taskDoneToast(taskNumber))
+    }
     advance()
   }
 
@@ -241,9 +257,12 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
     advance()
   }
 
-  // ─────────── Fim ───────────
+  const started = taskStarted
+  let content: React.ReactNode
+
   if (finished || !step) {
-    return (
+    // ─────────── Fim ───────────
+    content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
         <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
           <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
@@ -251,11 +270,9 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
         </div>
       </div>
     )
-  }
-
-  // ─────────── Pergunta ───────────
-  if (step.kind === "question") {
-    return (
+  } else if (step.kind === "question") {
+    // ─────────── Pergunta ───────────
+    content = (
       <div className="min-h-screen bg-surface-container flex items-center justify-center p-4 md:p-6">
         <QuestionView
           key={step.question.id}
@@ -266,44 +283,55 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
         />
       </div>
     )
-  }
-
-  // ─────────── Missão (intro apagada / execução) ───────────
-  const started = taskStarted
-  return (
-    <div className="min-h-screen bg-surface-container flex flex-col md:flex-row md:items-start gap-6 p-4 md:p-6">
-      <aside className="w-full md:w-80 shrink-0 md:sticky md:top-6">
-        <MissionCard
-          label={s.stepOf(stepIndex + 1, steps.length)}
-          task={step.mission.task}
-          description={step.mission.description}
-          started={started}
-          startLabel={s.startTask}
-          onStart={startTask}
-          giveUpLabel={s.giveUp}
-          canGiveUp={hasClicked}
-          onGiveUp={() => completeMission("gave_up", topRef.current)}
-        />
-      </aside>
-
-      <div className="flex-1 flex justify-center w-full">
-        <div
-          className={cn(
-            "transition-opacity duration-300",
-            !started && "opacity-40 pointer-events-none select-none"
-          )}
-          aria-hidden={!started}
-        >
-          <PrototypeStage
-            key={step.mission.id}
-            screens={screens}
-            deviceType={deviceType}
-            initialScreenId={step.mission.startScreenId}
-            onInteraction={handleInteraction}
+  } else {
+    // ─────────── Missão (intro apagada / execução) ───────────
+    content = (
+      <div className="min-h-screen bg-surface-container flex flex-col md:flex-row md:items-start gap-6 p-4 md:p-6">
+        <aside className="w-full md:w-80 shrink-0 md:sticky md:top-6">
+          <MissionCard
+            label={s.stepOf(stepIndex + 1, steps.length)}
+            task={step.mission.task}
+            description={step.mission.description}
+            started={started}
+            startLabel={s.startTask}
+            onStart={startTask}
+            giveUpLabel={s.giveUp}
+            canGiveUp={hasClicked}
+            onGiveUp={() => completeMission("gave_up", topRef.current)}
           />
+        </aside>
+
+        <div className="flex-1 flex justify-center w-full">
+          <div
+            className={cn(
+              "transition-opacity duration-300",
+              !started && "opacity-40 pointer-events-none select-none"
+            )}
+            aria-hidden={!started}
+          >
+            <PrototypeStage
+              key={step.mission.id}
+              screens={screens}
+              deviceType={deviceType}
+              initialScreenId={step.mission.startScreenId}
+              onInteraction={handleInteraction}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <>
+      {content}
+      {toast && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-2.5 elevation-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <Check className="h-4 w-4" />
+          <span className="text-title-small">{toast}</span>
+        </div>
+      )}
+    </>
   )
 }
 

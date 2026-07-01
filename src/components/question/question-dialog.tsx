@@ -137,7 +137,7 @@ export function QuestionDialog({
             {/* Tipo */}
             <div className="space-y-2.5">
               <p className="text-title-small text-on-surface-variant">Tipo</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {TYPES.map((t) => {
                   const Icon = t.icon
                   const active = type === t.value
