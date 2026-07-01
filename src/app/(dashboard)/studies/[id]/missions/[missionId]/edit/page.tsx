@@ -51,7 +51,7 @@ export default async function EditMissionPage({
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link
-          href={`/studies/${studyId}`}
+          href={`/studies/${studyId}?tab=missions`}
           className={buttonVariants({ variant: "ghost", size: "icon" })}
         >
           <ArrowLeft className="h-4 w-4" />

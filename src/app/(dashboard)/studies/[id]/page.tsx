@@ -12,18 +12,12 @@ import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { PublishBar } from "@/components/study/publish-bar"
-import {
-  deleteScreenAction,
-  moveScreenAction,
-  deleteMissionAction,
-  deleteQuestionAction,
-  moveBlockAction,
-} from "./actions"
+import { deleteScreenAction, moveScreenAction } from "./actions"
 import { QuestionDialog } from "@/components/question/question-dialog"
+import { SequenceList, type SeqBlock } from "@/components/study/sequence-list"
 import {
   ArrowLeft,
   Trash2,
-  Pencil,
   MousePointerClick,
   Eye,
   Plus,
@@ -33,18 +27,10 @@ import {
   Tablet,
   Monitor,
   BarChart3,
-  Target,
-  Route,
 } from "lucide-react"
 
 const deviceIcon = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
 const deviceLabel = { mobile: "Mobile", tablet: "Tablet", desktop: "Desktop" }
-const qTypeLabel: Record<string, string> = {
-  open: "Pergunta aberta",
-  choice: "Múltipla escolha",
-  rating: "Avaliação por estrelas",
-  binary: "Sim / Não",
-}
 
 export default async function StudyPage({
   params,
@@ -99,6 +85,39 @@ export default async function StudyPage({
   const missions = study.blocks
     .filter((b) => b.type === "mission" && b.mission)
     .map((b) => b.mission!)
+
+  const seqBlocks: SeqBlock[] = blocks
+    .map((b): SeqBlock | null => {
+      if (b.type === "mission" && b.mission) {
+        const m = b.mission
+        return {
+          id: b.id,
+          kind: "mission",
+          missionId: m.id,
+          task: m.task,
+          description: m.description,
+          startScreenName: m.startScreen.name,
+          successType: m.successType as "screen" | "path",
+          goalScreenName: m.goals[0]?.goalScreen.name ?? null,
+          pathsCount: m.paths.length,
+        }
+      }
+      if (b.type === "question" && b.question) {
+        const q = b.question
+        return {
+          id: b.id,
+          kind: "question",
+          questionId: q.id,
+          qtype: q.type as "open" | "choice" | "rating" | "binary",
+          title: q.title,
+          description: q.description,
+          required: q.required,
+          options: (q.options as string[] | null) ?? [],
+        }
+      }
+      return null
+    })
+    .filter((b): b is SeqBlock => b !== null)
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
   const editable = study.status !== "live"
@@ -310,129 +329,14 @@ export default async function StudyPage({
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {blocks.map((block, index) => {
-                const moveControls = editable && (
-                  <div className="flex flex-col -my-1">
-                    <form action={moveBlockAction.bind(null, study.id, block.id, "up")}>
-                      <Button variant="ghost" size="icon-sm" type="submit" disabled={index === 0} title="Subir">
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                    </form>
-                    <form action={moveBlockAction.bind(null, study.id, block.id, "down")}>
-                      <Button variant="ghost" size="icon-sm" type="submit" disabled={index === blocks.length - 1} title="Descer">
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </form>
-                  </div>
-                )
-
-                if (block.type === "mission" && block.mission) {
-                  const mission = block.mission
-                  return (
-                    <div key={block.id} className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-label-medium text-on-surface-variant mb-1">
-                            PASSO {index + 1} · TAREFA
-                          </p>
-                          <h3 className="text-title-medium text-on-surface">{mission.task}</h3>
-                          {mission.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{mission.description}</p>
-                          )}
-                        </div>
-                        {editable && (
-                          <div className="flex items-center gap-1 shrink-0">
-                            {moveControls}
-                            <Link
-                              href={`/studies/${study.id}/missions/${mission.id}/edit`}
-                              className={buttonVariants({ variant: "ghost", size: "icon" })}
-                              title="Editar missão"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Link>
-                            <form action={deleteMissionAction.bind(null, study.id, mission.id)}>
-                              <Button variant="ghost" size="icon" type="submit" className="text-muted-foreground hover:text-red-500" title="Excluir missão">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </form>
-                          </div>
-                        )}
-                      </div>
-                      <Separator className="my-3" />
-                      <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                        <span>
-                          Início: <span className="text-foreground font-medium">{mission.startScreen.name}</span>
-                        </span>
-                        {mission.successType === "screen" ? (
-                          <span className="flex items-center gap-1">
-                            <Target className="h-3 w-3" />
-                            Tela-alvo: <span className="text-foreground font-medium">{mission.goals[0]?.goalScreen.name ?? "—"}</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1">
-                            <Route className="h-3 w-3" />
-                            Caminho exato: <span className="text-foreground font-medium">{mission.paths.length} caminho(s)</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                }
-
-                if (block.type === "question" && block.question) {
-                  const q = block.question
-                  const opts = (q.options as string[] | null) ?? []
-                  return (
-                    <div key={block.id} className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-label-medium text-on-surface-variant mb-1">
-                            PASSO {index + 1} · PERGUNTA
-                          </p>
-                          <h3 className="text-title-medium text-on-surface">{q.title}</h3>
-                          {q.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{q.description}</p>
-                          )}
-                          <div className="mt-2 flex items-center gap-2">
-                            <Badge variant="secondary">{qTypeLabel[q.type]}</Badge>
-                            {q.type === "choice" && (
-                              <span className="text-xs text-muted-foreground">{opts.length} opções</span>
-                            )}
-                            {!q.required && (
-                              <span className="text-xs text-muted-foreground">opcional</span>
-                            )}
-                          </div>
-                        </div>
-                        {editable && (
-                          <div className="flex items-center gap-1 shrink-0">
-                            {moveControls}
-                            <QuestionDialog
-                              studyId={study.id}
-                              questionId={q.id}
-                              variant="edit"
-                              initial={{
-                                type: q.type as "open" | "choice" | "rating" | "binary",
-                                title: q.title,
-                                description: q.description,
-                                required: q.required,
-                                options: opts,
-                              }}
-                            />
-                            <form action={deleteQuestionAction.bind(null, study.id, q.id)}>
-                              <Button variant="ghost" size="icon" type="submit" className="text-muted-foreground hover:text-red-500" title="Excluir pergunta">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </form>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                }
-                return null
-              })}
-            </div>
+            <>
+              {editable && (
+                <p className="text-xs text-muted-foreground mb-3">
+                  Arraste pelos <span className="align-middle">⠿</span> para reordenar a sequência.
+                </p>
+              )}
+              <SequenceList studyId={study.id} editable={editable} blocks={seqBlocks} />
+            </>
           )}
         </TabsContent>
       </Tabs>

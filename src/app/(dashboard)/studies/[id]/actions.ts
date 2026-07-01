@@ -502,3 +502,23 @@ export async function moveBlockAction(
   )
   revalidatePath(`/studies/${studyId}`)
 }
+
+// Persiste a ordem completa da sequência (usado pelo drag-and-drop).
+export async function reorderBlocksAction(studyId: string, orderedIds: string[]) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+
+  const blocks = await prisma.block.findMany({
+    where: { studyId: study.id },
+    select: { id: true },
+  })
+  const validIds = new Set(blocks.map((b) => b.id))
+  const ids = orderedIds.filter((id) => validIds.has(id))
+  // Precisa conter exatamente todos os blocos do estudo (nada a mais/menos).
+  if (ids.length !== blocks.length) return
+
+  await Promise.all(
+    ids.map((id, i) => prisma.block.update({ where: { id }, data: { order: i } }))
+  )
+  revalidatePath(`/studies/${studyId}`)
+}
