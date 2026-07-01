@@ -16,12 +16,25 @@ model User {
   figmaAccessToken String?
   createdAt    DateTime @default(now())
   studies      Study[]
+  projects     Project[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  studies   Study[]
 }
 
 model Study {
   id         String      @id @default(cuid())
   ownerId    String
   owner      User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title      String
   status     StudyStatus @default(draft)
   deviceType DeviceType  @default(desktop)

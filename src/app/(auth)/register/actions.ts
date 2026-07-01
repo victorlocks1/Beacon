@@ -43,7 +43,7 @@ export async function registerAction(formData: FormData) {
     await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
-      redirectTo: "/studies",
+      redirectTo: "/projects",
     })
   } catch (error) {
     if (error instanceof AuthError) {

@@ -22,7 +22,7 @@ const deviceOptions: { value: DeviceType; label: string; desc: string; icon: Rea
   { value: "desktop", label: "Desktop", desc: "1280px", icon: Monitor },
 ]
 
-export function CreateStudyDialog() {
+export function CreateStudyDialog({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false)
   const [device, setDevice] = useState<DeviceType>("desktop")
   const [language, setLanguage] = useState<"pt" | "es">("pt")
@@ -53,6 +53,7 @@ export function CreateStudyDialog() {
           </div>
 
           <form action={createStudyAction} className="space-y-8">
+            <input type="hidden" name="projectId" value={projectId} />
             <M3TextField
               label="Título"
               name="title"

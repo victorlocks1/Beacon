@@ -98,7 +98,7 @@ export default async function StudyPage({
       )}
       {/* Header */}
       <div className="flex items-center gap-3 mb-8">
-        <Link href="/studies" className={buttonVariants({ variant: "ghost", size: "icon" })}>
+        <Link href={`/projects/${study.projectId}`} className={buttonVariants({ variant: "ghost", size: "icon" })}>
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="flex-1 min-w-0">
