@@ -1,7 +1,7 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ClipboardList, Flag, ChevronUp, ChevronDown } from "lucide-react"
+import { ClipboardList, Flag, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
@@ -41,7 +41,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
   const [phase, setPhase] = useState<Phase>("intro")
   const [missionIndex, setMissionIndex] = useState(0)
   const [hasClicked, setHasClicked] = useState(false)
-  const [panelCollapsed, setPanelCollapsed] = useState(false)
 
   const bufferRef = useRef<BufferedEvent[]>([])
   const pendingFlushesRef = useRef<Promise<unknown>[]>([])
@@ -110,7 +109,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
     pathRef.current = [mission.startScreenId]
     topRef.current = mission.startScreenId
     setHasClicked(false)
-    setPanelCollapsed(false) // começa expandida: o testador lê a tarefa antes de agir
     record({
       screenId: mission.startScreenId,
       type: "navigate",
@@ -175,8 +173,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
 
     clickCountRef.current += 1
     if (!hasClicked) setHasClicked(true)
-    // Ao interagir com o protótipo, a missão recolhe (a tela é a prioridade)
-    setPanelCollapsed(true)
 
     if (ev.kind === "misclick") {
       misclickCountRef.current += 1
@@ -217,29 +213,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
     }
   }
 
-  // ─────────── Intro ───────────
-  if (phase === "intro") {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
-        <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-10 space-y-6">
-          <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
-            <ClipboardList className="h-4 w-4" />
-            {s.taskOf(missionIndex + 1, missions.length)}
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-headline-small text-on-surface">{mission.task}</h1>
-            {mission.description && (
-              <p className="text-body-medium text-on-surface-variant">{mission.description}</p>
-            )}
-          </div>
-          <Button onClick={startMission} className="w-full h-12" size="lg">
-            {s.start}
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   // ─────────── Thanks ───────────
   if (phase === "thanks") {
     return (
@@ -252,33 +225,44 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
     )
   }
 
-  // ─────────── Running ───────────
+  // ─────────── Tarefa (intro) + Execução (running) ───────────
+  // Layout único: tarefa sempre à esquerda; protótipo à direita fica "apagado"
+  // e não-interativo até o testador clicar em "Iniciar tarefa".
+  const started = phase === "running"
   return (
     <div className="min-h-screen bg-surface-container flex flex-col md:flex-row md:items-start gap-6 p-4 md:p-6">
-      {/* Esquerda: missão (sempre presente; só encolhe pra cima) */}
+      {/* Esquerda: missão — sempre visível para consulta */}
       <aside className="w-full md:w-80 shrink-0 md:sticky md:top-6">
         <MissionCard
           label={s.taskOf(missionIndex + 1, missions.length)}
           task={mission.task}
           description={mission.description}
+          started={started}
+          startLabel={s.startTask}
+          onStart={startMission}
           giveUpLabel={s.giveUp}
-          viewLabel={s.viewMission}
-          collapsed={panelCollapsed}
           canGiveUp={hasClicked}
           onGiveUp={() => completeMission("gave_up", topRef.current)}
-          onToggle={() => setPanelCollapsed((c) => !c)}
         />
       </aside>
 
-      {/* Direita: protótipo */}
+      {/* Direita: protótipo (apagado + bloqueado até iniciar a tarefa) */}
       <div className="flex-1 flex justify-center w-full">
-        <PrototypeStage
-          key={mission.id}
-          screens={screens}
-          deviceType={deviceType}
-          initialScreenId={mission.startScreenId}
-          onInteraction={handleInteraction}
-        />
+        <div
+          className={cn(
+            "transition-opacity duration-300",
+            !started && "opacity-40 pointer-events-none select-none"
+          )}
+          aria-hidden={!started}
+        >
+          <PrototypeStage
+            key={mission.id}
+            screens={screens}
+            deviceType={deviceType}
+            initialScreenId={mission.startScreenId}
+            onInteraction={handleInteraction}
+          />
+        </div>
       </div>
     </div>
   )
@@ -289,73 +273,55 @@ function MissionCard({
   label,
   task,
   description,
+  started,
+  startLabel,
+  onStart,
   giveUpLabel,
-  viewLabel,
-  collapsed,
   canGiveUp,
   onGiveUp,
-  onToggle,
 }: {
   label: string
   task: string
   description: string | null
+  started: boolean
+  startLabel: string
+  onStart: () => void
   giveUpLabel: string
-  viewLabel: string
-  collapsed: boolean
   canGiveUp: boolean
   onGiveUp: () => void
-  onToggle: () => void
 }) {
   return (
     <div className="rounded-3xl bg-surface-container-low border border-outline-variant p-6">
-      {/* Cabeçalho (sempre visível) */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 text-label-large text-on-surface-variant">
-          <ClipboardList className="h-4 w-4" />
-          {label}
-        </span>
-        <button
-          type="button"
-          onClick={onToggle}
-          className={cn(
-            "shrink-0 flex items-center gap-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-high",
-            collapsed ? "px-3 py-1.5 text-title-small text-primary" : "p-1.5"
-          )}
-          title={collapsed ? viewLabel : "Ocultar"}
-        >
-          {collapsed ? (
-            <>
-              <ChevronDown className="h-4 w-4" />
-              {viewLabel}
-            </>
-          ) : (
-            <ChevronUp className="h-5 w-5" />
-          )}
-        </button>
+      <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
+        <ClipboardList className="h-4 w-4" />
+        {label}
       </div>
 
-      {/* Corpo (encolhe pra cima) */}
-      {!collapsed && (
-        <>
-          <div className="space-y-2 mt-4">
-            <h2 className="text-title-large text-on-surface">{task}</h2>
-            {description && (
-              <p className="text-body-medium text-on-surface-variant">{description}</p>
-            )}
-          </div>
+      {/* Tarefa — permanece visível durante toda a execução */}
+      <div className="space-y-2 mt-4">
+        <h2 className="text-title-large text-on-surface">{task}</h2>
+        {description && (
+          <p className="text-body-medium text-on-surface-variant">{description}</p>
+        )}
+      </div>
 
-          {canGiveUp && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="-ml-2 mt-4 text-on-surface-variant"
-              onClick={onGiveUp}
-            >
-              <Flag className="h-3.5 w-3.5 mr-1.5" />
-              {giveUpLabel}
-            </Button>
-          )}
-        </>
+      {!started ? (
+        <Button onClick={onStart} className="w-full h-12 mt-6" size="lg">
+          <Play className="h-4 w-4 mr-2" />
+          {startLabel}
+        </Button>
+      ) : (
+        canGiveUp && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 mt-4 text-on-surface-variant"
+            onClick={onGiveUp}
+          >
+            <Flag className="h-3.5 w-3.5 mr-1.5" />
+            {giveUpLabel}
+          </Button>
+        )
       )}
     </div>
   )
