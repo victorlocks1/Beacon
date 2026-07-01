@@ -45,16 +45,30 @@ export interface QuestionInitial {
   options: string[]
 }
 
+export interface QuestionInput {
+  type: QType
+  title: string
+  description: string | null
+  required: boolean
+  options?: string[]
+}
+
 export function QuestionDialog({
   studyId,
   questionId,
   initial,
   variant,
+  onSubmit,
+  trigger,
 }: {
-  studyId: string
+  studyId?: string
   questionId?: string
   initial?: QuestionInitial
   variant: "create" | "edit"
+  // Modo local: quando fornecido, o dialog NÃO persiste — devolve o input.
+  onSubmit?: (input: QuestionInput) => void
+  // Trigger custom (ex.: botão "Adicionar pergunta" dentro do form de missão)
+  trigger?: React.ReactNode
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -78,17 +92,23 @@ export function QuestionDialog({
   }
 
   function save() {
-    const input = {
+    const input: QuestionInput = {
       type,
       title: title.trim(),
       description: description.trim() || null,
       required,
       options: type === "choice" ? options.map((o) => o.trim()).filter(Boolean) : undefined,
     }
+    // Modo local (dentro do form de missão): devolve o input, não persiste.
+    if (onSubmit) {
+      onSubmit(input)
+      setOpen(false)
+      return
+    }
     startTransition(async () => {
-      if (variant === "edit" && questionId) {
+      if (variant === "edit" && questionId && studyId) {
         await updateQuestionAction(studyId, questionId, input)
-      } else {
+      } else if (studyId) {
         await createQuestionAction(studyId, input)
       }
       setOpen(false)
@@ -104,7 +124,9 @@ export function QuestionDialog({
         if (v) reset()
       }}
     >
-      {variant === "create" ? (
+      {trigger ? (
+        <DialogTrigger className="cursor-pointer outline-none">{trigger}</DialogTrigger>
+      ) : variant === "create" ? (
         <DialogTrigger className={cn(buttonVariants({ variant: "outline" }), "cursor-pointer")}>
           <Plus className="w-4 h-4 mr-2" />
           Nova pergunta

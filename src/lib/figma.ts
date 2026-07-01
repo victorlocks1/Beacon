@@ -177,8 +177,9 @@ const CLICK_TRIGGERS = new Set(["ON_CLICK", "ON_PRESS", "ON_TAP", "MOUSE_DOWN", 
 function edgeForNode(n: FigNode): { action: ImportAction; dest: string | null } | null {
   if (Array.isArray(n.interactions) && n.interactions.length) {
     for (const it of n.interactions) {
-      if (!CLICK_TRIGGERS.has(it.trigger?.type ?? "")) continue
+      if (!it || !CLICK_TRIGGERS.has(it.trigger?.type ?? "")) continue
       for (const a of it.actions || []) {
+        if (!a) continue
         const type = a.type as string
         if (type === "BACK") return { action: "back", dest: null }
         if (type === "CLOSE") return { action: "close_overlay", dest: null }
@@ -223,9 +224,28 @@ function overflowToScroll(dir?: string): ImportScreen["scroll"] {
   }
 }
 
-function overlayPositionOf(dest: FigNode | undefined): "bottom" | "center" {
+// Posição do overlay. Na prática o `overlayPositionType` NÃO vem na resposta
+// REST do Figma (confirmado), então a detecção é por: (1) preset quando existe,
+// (2) nome contendo "bottom sheet", (3) geometria — overlay full-width e mais
+// baixo que a tela é bottom sheet.
+function overlayPositionOf(
+  dest: FigNode | undefined,
+  screen: FigNode
+): "bottom" | "center" {
   const t = dest?.overlayPositionType ?? ""
-  return t.includes("BOTTOM") ? "bottom" : "center"
+  if (t.includes("BOTTOM")) return "bottom"
+  if (t.includes("TOP") || t === "CENTER") return "center"
+
+  if (/bottom[\s_-]*sheet/i.test(dest?.name ?? "")) return "bottom"
+
+  const b = dest?.absoluteBoundingBox
+  const s = screen.absoluteBoundingBox
+  if (b && s && s.width && s.height) {
+    const fullWidth = b.width >= s.width * 0.9 // ocupa (quase) toda a largura
+    const shorterThanScreen = b.height < s.height * 0.9 // não cobre a tela toda
+    if (fullWidth && shorterThanScreen) return "bottom"
+  }
+  return "center"
 }
 
 // percorre a subárvore de uma tela coletando hotspots + regiões
@@ -244,7 +264,8 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
           hotspots.push({
             coords,
             action: edge.action,
-            overlayPosition: edge.action === "open_overlay" ? overlayPositionOf(dest) : null,
+            overlayPosition:
+              edge.action === "open_overlay" ? overlayPositionOf(dest, screen) : null,
             destFigmaId: edge.dest,
           })
         }

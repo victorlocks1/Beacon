@@ -15,7 +15,13 @@ export default async function QuestionResultsPage({
   if (!session?.user?.id) redirect("/login")
 
   const question = await prisma.question.findFirst({
-    where: { id: questionId, block: { study: { id, ownerId: session.user.id } } },
+    where: {
+      id: questionId,
+      OR: [
+        { block: { study: { id, ownerId: session.user.id } } },
+        { mission: { block: { study: { id, ownerId: session.user.id } } } },
+      ],
+    },
     include: { answers: { orderBy: { createdAt: "desc" } } },
   })
   if (!question) notFound()

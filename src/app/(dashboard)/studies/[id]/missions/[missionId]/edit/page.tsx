@@ -32,6 +32,7 @@ export default async function EditMissionPage({
     include: {
       goals: true,
       paths: { include: { steps: { orderBy: { order: "asc" } } } },
+      questions: { orderBy: { order: "asc" } },
     },
   })
   if (!mission) notFound()
@@ -45,6 +46,13 @@ export default async function EditMissionPage({
     startScreenId: mission.startScreenId,
     goalScreenId: mission.goals[0]?.goalScreenId ?? null,
     paths: mission.paths.map((p) => p.steps.map((s) => s.screenId)),
+    questions: mission.questions.map((q) => ({
+      type: q.type as "open" | "choice" | "rating" | "binary",
+      title: q.title,
+      description: q.description,
+      required: q.required,
+      options: (q.options as string[] | null) ?? [],
+    })),
   }
 
   return (

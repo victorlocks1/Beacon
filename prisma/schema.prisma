@@ -179,10 +179,15 @@ enum QuestionType {
   binary // sim/não
 }
 
+// Pergunta pertence a UM Block (geral/solta na sequência) OU a uma Mission
+// (pergunta de acompanhamento, respondida logo após a tarefa).
 model Question {
   id          String       @id @default(cuid())
-  blockId     String       @unique
-  block       Block        @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  blockId     String?      @unique
+  block       Block?       @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  missionId   String?
+  mission     Mission?     @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  order       Int          @default(0) // ordem dentro da missão
   type        QuestionType
   title       String
   description String?
@@ -218,6 +223,7 @@ model Mission {
   paths         MissionPath[]
   results       MissionResult[]
   events        Event[]
+  questions     Question[]
 }
 
 enum SuccessType {

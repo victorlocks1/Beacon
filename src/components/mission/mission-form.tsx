@@ -1,6 +1,6 @@
 "use client"
-import { useState, useTransition } from "react"
-import { Button } from "@/components/ui/button"
+import { useRef, useState, useTransition } from "react"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { M3TextField } from "@/components/ui/m3-text-field"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -12,9 +12,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PathRecorder } from "@/components/mission/path-recorder"
+import { QuestionDialog, type QuestionInput } from "@/components/question/question-dialog"
 import { createMissionAction, updateMissionAction } from "@/app/(dashboard)/studies/[id]/actions"
 import { cn } from "@/lib/utils"
-import { Target, Route, Loader2 } from "lucide-react"
+import { Target, Route, Loader2, Plus, Pencil, Trash2 } from "lucide-react"
+
+const qTypeLabel: Record<string, string> = {
+  open: "Aberta",
+  choice: "Múltipla escolha",
+  rating: "Estrelas",
+  binary: "Sim / Não",
+}
+type LocalQuestion = QuestionInput & { key: string }
 
 type DeviceType = "desktop" | "tablet" | "mobile"
 type SuccessType = "screen" | "path"
@@ -51,6 +60,7 @@ export interface MissionInitial {
   startScreenId: string
   goalScreenId: string | null
   paths: string[][]
+  questions?: QuestionInput[]
 }
 
 interface Props {
@@ -69,8 +79,22 @@ export function MissionForm({ studyId, deviceType, screens, missionId, initial }
   const [startScreenId, setStartScreenId] = useState<string>(initial?.startScreenId ?? "")
   const [goalScreenId, setGoalScreenId] = useState<string>(initial?.goalScreenId ?? "")
   const [paths, setPaths] = useState<string[][]>(initial?.paths ?? [])
+  const keyRef = useRef(0)
+  const [questions, setQuestions] = useState<LocalQuestion[]>(
+    (initial?.questions ?? []).map((q) => ({ ...q, key: `q${keyRef.current++}` }))
+  )
   const [pending, startTransition] = useTransition()
   const [err, setErr] = useState<string | null>(null)
+
+  function addQuestion(input: QuestionInput) {
+    setQuestions((prev) => [...prev, { ...input, key: `q${keyRef.current++}` }])
+  }
+  function updateQuestion(key: string, input: QuestionInput) {
+    setQuestions((prev) => prev.map((q) => (q.key === key ? { ...input, key } : q)))
+  }
+  function removeQuestion(key: string) {
+    setQuestions((prev) => prev.filter((q) => q.key !== key))
+  }
 
   const screenItems = Object.fromEntries(
     screens.map((s) => [s.id, `Tela ${s.order + 1}: ${s.name}`])
@@ -92,6 +116,9 @@ export function MissionForm({ studyId, deviceType, screens, missionId, initial }
       successType,
       goalScreenId: successType === "screen" ? goalScreenId : null,
       paths: successType === "path" ? paths : undefined,
+      questions: questions
+        .filter((q) => q.title.trim())
+        .map(({ key: _key, ...q }) => q),
     }
 
     startTransition(() =>
@@ -227,6 +254,70 @@ export function MissionForm({ studyId, deviceType, screens, missionId, initial }
             />
           </div>
         )}
+      </section>
+
+      {/* ── Perguntas de acompanhamento ── */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-title-medium text-on-surface">Perguntas de acompanhamento</h2>
+          <p className="text-body-small text-on-surface-variant mt-0.5">
+            Perguntas que o testador responde logo após concluir esta tarefa (opcional).
+          </p>
+        </div>
+
+        {questions.length > 0 && (
+          <div className="space-y-2">
+            {questions.map((q) => (
+              <div
+                key={q.key}
+                className="flex items-center gap-2 rounded-2xl border border-outline-variant p-3 bg-surface-container-low"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-body-medium text-on-surface truncate">{q.title || "—"}</p>
+                  <p className="text-label-small text-on-surface-variant">
+                    {qTypeLabel[q.type]}
+                    {!q.required ? " · opcional" : ""}
+                  </p>
+                </div>
+                <QuestionDialog
+                  variant="edit"
+                  initial={{
+                    type: q.type,
+                    title: q.title,
+                    description: q.description,
+                    required: q.required,
+                    options: q.options ?? [],
+                  }}
+                  onSubmit={(input) => updateQuestion(q.key, input)}
+                  trigger={
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high">
+                      <Pencil className="h-4 w-4" />
+                    </span>
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => removeQuestion(q.key)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-variant hover:text-error"
+                  title="Remover"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <QuestionDialog
+          variant="create"
+          onSubmit={addQuestion}
+          trigger={
+            <span className={cn(buttonVariants({ variant: "outline" }))}>
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar pergunta
+            </span>
+          }
+        />
       </section>
 
       {err && (

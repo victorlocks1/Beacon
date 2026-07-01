@@ -30,6 +30,7 @@ export default async function TestRunPage({
                 include: {
                   goals: true,
                   paths: { include: { steps: { orderBy: { order: "asc" } } } },
+                  questions: { orderBy: { order: "asc" } },
                 },
               },
               question: true,
@@ -52,23 +53,66 @@ export default async function TestRunPage({
   const study = testSession.study
   const screens = study.prototype?.screens ?? []
 
-  // Sequência de passos na ordem definida pelo criador (missões + perguntas)
-  const testSteps = study.blocks
-    .map((b) => {
-      if (b.type === "mission" && b.mission) {
-        const m = b.mission
-        const goalScreenIds =
-          m.successType === "path"
-            ? [
-                ...new Set(
-                  m.paths
-                    .map((p) => p.steps[p.steps.length - 1]?.screenId)
-                    .filter((sid): sid is string => !!sid)
-                ),
-              ]
-            : m.goals.map((g) => g.goalScreenId)
-        return {
-          kind: "mission" as const,
+  type Step =
+    | {
+        kind: "mission"
+        mission: {
+          id: string
+          task: string
+          description: string | null
+          startScreenId: string
+          goalScreenIds: string[]
+        }
+      }
+    | {
+        kind: "question"
+        question: {
+          id: string
+          type: "open" | "choice" | "rating" | "binary"
+          title: string
+          description: string | null
+          required: boolean
+          options: string[]
+        }
+      }
+
+  const toQuestionStep = (q: {
+    id: string
+    type: string
+    title: string
+    description: string | null
+    required: boolean
+    options: unknown
+  }): Step => ({
+    kind: "question",
+    question: {
+      id: q.id,
+      type: q.type as "open" | "choice" | "rating" | "binary",
+      title: q.title,
+      description: q.description,
+      required: q.required,
+      options: (q.options as string[] | null) ?? [],
+    },
+  })
+
+  // Sequência de passos na ordem definida pelo criador. Cada missão é seguida
+  // pelas suas perguntas de acompanhamento; perguntas gerais entram soltas.
+  const testSteps: Step[] = study.blocks.flatMap((b): Step[] => {
+    if (b.type === "mission" && b.mission) {
+      const m = b.mission
+      const goalScreenIds =
+        m.successType === "path"
+          ? [
+              ...new Set(
+                m.paths
+                  .map((p) => p.steps[p.steps.length - 1]?.screenId)
+                  .filter((sid): sid is string => !!sid)
+              ),
+            ]
+          : m.goals.map((g) => g.goalScreenId)
+      return [
+        {
+          kind: "mission",
           mission: {
             id: m.id,
             task: m.task,
@@ -76,25 +120,15 @@ export default async function TestRunPage({
             startScreenId: m.startScreenId,
             goalScreenIds,
           },
-        }
-      }
-      if (b.type === "question" && b.question) {
-        const q = b.question
-        return {
-          kind: "question" as const,
-          question: {
-            id: q.id,
-            type: q.type as "open" | "choice" | "rating" | "binary",
-            title: q.title,
-            description: q.description,
-            required: q.required,
-            options: (q.options as string[] | null) ?? [],
-          },
-        }
-      }
-      return null
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null)
+        },
+        ...m.questions.map(toQuestionStep),
+      ]
+    }
+    if (b.type === "question" && b.question) {
+      return [toQuestionStep(b.question)]
+    }
+    return []
+  })
 
   const hasMission = testSteps.some((st) => st.kind === "mission")
   if (testSteps.length === 0 || (hasMission && screens.length === 0)) {

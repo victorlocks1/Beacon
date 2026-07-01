@@ -42,10 +42,22 @@ export default async function ResultsOverviewPage({
     where: { studyId: id, finishedAt: { not: null } },
   })
 
-  const questions = await prisma.question.findMany({
-    where: { block: { studyId: id } },
-    orderBy: { block: { order: "asc" } },
-    include: { answers: true },
+  const questionsRaw = await prisma.question.findMany({
+    where: {
+      OR: [{ block: { studyId: id } }, { mission: { block: { studyId: id } } }],
+    },
+    include: {
+      answers: true,
+      block: { select: { order: true } },
+      mission: { select: { task: true, block: { select: { order: true } } } },
+    },
+  })
+  // Ordena pela posição do bloco (missão ou pergunta geral) e, dentro da
+  // missão, pela ordem da pergunta.
+  const questions = [...questionsRaw].sort((a, b) => {
+    const ao = a.block?.order ?? a.mission?.block.order ?? 0
+    const bo = b.block?.order ?? b.mission?.block.order ?? 0
+    return ao - bo || a.order - b.order
   })
 
   function statsFor(missionId: string) {
@@ -155,6 +167,7 @@ type QuestionWithAnswers = {
   type: string
   title: string
   options: unknown
+  mission?: { task: string } | null
   answers: { text: string | null; choice: string | null; rating: number | null }[]
 }
 
@@ -175,6 +188,7 @@ function QuestionResultCard({
       <div className="min-w-0">
         <p className="text-label-medium text-on-surface-variant mb-1">
           PERGUNTA {index + 1} · {qTypeLabel[question.type]}
+          {question.mission ? ` · sobre “${question.mission.task}”` : ""}
         </p>
         <h3 className="text-title-medium text-on-surface">{question.title}</h3>
       </div>

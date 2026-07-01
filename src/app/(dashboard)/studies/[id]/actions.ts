@@ -219,6 +219,14 @@ export async function updateScreenNameAction(
 }
 
 
+interface MissionQuestionInput {
+  type: "open" | "choice" | "rating" | "binary"
+  title: string
+  description?: string | null
+  required: boolean
+  options?: string[]
+}
+
 interface CreateMissionInput {
   task: string
   description?: string | null
@@ -226,6 +234,33 @@ interface CreateMissionInput {
   successType: "screen" | "path"
   goalScreenId?: string | null
   paths?: string[][] // cada caminho: sequência de screenIds (start..final)
+  questions?: MissionQuestionInput[] // perguntas de acompanhamento da missão
+}
+
+// Cria as perguntas de acompanhamento de uma missão (ordem = posição na lista).
+async function createMissionQuestions(missionId: string, questions?: MissionQuestionInput[]) {
+  if (!questions?.length) return
+  const rows = questions
+    .map((q, i) => {
+      const title = q.title?.trim()
+      if (!title) return null
+      const isChoice = q.type === "choice"
+      const options = isChoice
+        ? (q.options ?? []).map((o) => o.trim()).filter(Boolean)
+        : []
+      if (isChoice && options.length < 2) return null
+      return {
+        missionId,
+        order: i,
+        type: q.type,
+        title,
+        description: q.description?.trim() || null,
+        required: !!q.required,
+        options,
+      }
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+  if (rows.length) await prisma.question.createMany({ data: rows })
 }
 
 export async function createMissionAction(
@@ -292,6 +327,8 @@ export async function createMissionAction(
     }
   }
 
+  await createMissionQuestions(mission.id, input.questions)
+
   redirect(`/studies/${studyId}?tab=missions`)
 }
 
@@ -357,6 +394,10 @@ export async function updateMissionAction(
       })
     }
   }
+
+  // Substitui as perguntas de acompanhamento (remove as antigas, recria)
+  await prisma.question.deleteMany({ where: { missionId } })
+  await createMissionQuestions(missionId, input.questions)
 
   redirect(`/studies/${studyId}?tab=missions`)
 }
@@ -470,7 +511,7 @@ export async function deleteQuestionAction(studyId: string, questionId: string) 
     where: { id: questionId, block: { studyId: study.id } },
     select: { blockId: true },
   })
-  if (!q) return
+  if (!q?.blockId) return
   await prisma.block.delete({ where: { id: q.blockId } }) // cascateia Question + Answers
   revalidatePath(`/studies/${studyId}`)
 }
