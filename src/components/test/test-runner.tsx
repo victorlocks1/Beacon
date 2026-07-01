@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
 import { PrototypeStage, type StageScreen, type StageInteraction } from "@/components/prototype/stage"
+import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { tt, type Lang } from "@/lib/i18n"
 
 interface Mission {
@@ -15,12 +16,17 @@ interface Mission {
   startScreenId: string
   goalScreenIds: string[]
 }
+
+export type Step =
+  | { kind: "mission"; mission: Mission }
+  | { kind: "question"; question: StepQuestion }
+
 interface Props {
   token: string
   lang: Lang
   deviceType: DeviceType
   screens: StageScreen[]
-  missions: Mission[]
+  steps: Step[]
 }
 
 interface BufferedEvent {
@@ -34,13 +40,12 @@ interface BufferedEvent {
   timestampMs: number
 }
 
-type Phase = "intro" | "running" | "thanks"
-
-export function TestRunner({ token, lang, deviceType, screens, missions }: Props) {
+export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
   const s = tt(lang)
-  const [phase, setPhase] = useState<Phase>("intro")
-  const [missionIndex, setMissionIndex] = useState(0)
+  const [stepIndex, setStepIndex] = useState(0)
+  const [taskStarted, setTaskStarted] = useState(false) // subfase da missão
   const [hasClicked, setHasClicked] = useState(false)
+  const [finished, setFinished] = useState(false)
 
   const bufferRef = useRef<BufferedEvent[]>([])
   const pendingFlushesRef = useRef<Promise<unknown>[]>([])
@@ -51,21 +56,23 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
   const startTimeRef = useRef(0)
   const completedRef = useRef(false)
 
-  const mission = missions[missionIndex]
-  const isLastMission = missionIndex === missions.length - 1
+  const step = steps[stepIndex]
+  const mission = step?.kind === "mission" ? step.mission : null
+  const isLastStep = stepIndex === steps.length - 1
 
   const now = () =>
     typeof performance !== "undefined" ? performance.now() : Date.now()
 
   const record = useCallback(
     (e: Omit<BufferedEvent, "missionId" | "timestampMs">) => {
+      if (!mission) return
       bufferRef.current.push({
         ...e,
         missionId: mission.id,
         timestampMs: Math.round(now() - startTimeRef.current),
       })
     },
-    [mission.id]
+    [mission]
   )
 
   const flush = useCallback(async () => {
@@ -80,7 +87,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
         keepalive: true,
       })
     } catch {
-      // Re-enfileira em caso de falha
       bufferRef.current = [...events, ...bufferRef.current]
     }
   }, [token])
@@ -90,17 +96,32 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
     function onPageHide() {
       if (bufferRef.current.length === 0) return
       const payload = JSON.stringify({ token, events: bufferRef.current })
-      navigator.sendBeacon(
-        "/api/t/events",
-        new Blob([payload], { type: "application/json" })
-      )
+      navigator.sendBeacon("/api/t/events", new Blob([payload], { type: "application/json" }))
       bufferRef.current = []
     }
     window.addEventListener("pagehide", onPageHide)
     return () => window.removeEventListener("pagehide", onPageHide)
   }, [token])
 
-  function startMission() {
+  // Avança para o próximo passo — ou finaliza a sessão inteira.
+  const advance = useCallback(() => {
+    if (isLastStep) {
+      setFinished(true)
+      fetch("/api/t/finish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+        keepalive: true,
+      }).catch(() => {})
+    } else {
+      setStepIndex((i) => i + 1)
+      setTaskStarted(false)
+      setHasClicked(false)
+    }
+  }, [isLastStep, token])
+
+  function startTask() {
+    if (!mission) return
     clickCountRef.current = 0
     misclickCountRef.current = 0
     startTimeRef.current = now()
@@ -109,21 +130,20 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
     pathRef.current = [mission.startScreenId]
     topRef.current = mission.startScreenId
     setHasClicked(false)
-    record({
+    bufferRef.current.push({
+      missionId: mission.id,
       screenId: mission.startScreenId,
       type: "navigate",
       xNorm: 0,
       yNorm: 0,
       targetScreenId: mission.startScreenId,
+      timestampMs: 0,
     })
-    setPhase("running")
+    setTaskStarted(true)
   }
 
-  async function completeMission(
-    signal: "reached" | "gave_up",
-    lastEventScreenId: string
-  ) {
-    if (completedRef.current) return
+  async function completeMission(signal: "reached" | "gave_up", lastEventScreenId: string) {
+    if (!mission || completedRef.current) return
     completedRef.current = true
 
     record({
@@ -132,8 +152,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
       xNorm: 0,
       yNorm: 0,
     })
-    // Garante que todos os eventos (inclusive flushes de navegação em voo)
-    // sejam persistidos antes de finalizar.
     await flush()
     await Promise.allSettled(pendingFlushesRef.current)
     pendingFlushesRef.current = []
@@ -146,13 +164,10 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
           token,
           missionId: mission.id,
           signal,
-          // Caminho percorrido enviado pelo cliente (fonte da verdade para a
-          // classificação direct/indirect — evita corrida de persistência).
           path: pathRef.current,
           durationMs: Math.round(now() - startTimeRef.current),
           misclickCount: misclickCountRef.current,
           clickCount: clickCountRef.current,
-          isLast: isLastMission,
         }),
         keepalive: true,
       })
@@ -160,16 +175,11 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
       // segue mesmo se falhar
     }
 
-    if (isLastMission) {
-      setPhase("thanks")
-    } else {
-      setMissionIndex((i) => i + 1)
-      setPhase("intro")
-    }
+    advance()
   }
 
   async function handleInteraction(ev: StageInteraction) {
-    if (completedRef.current) return
+    if (!mission || completedRef.current) return
 
     clickCountRef.current += 1
     if (!hasClicked) setHasClicked(true)
@@ -180,7 +190,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
       return
     }
 
-    // Clique em hotspot: registra o ponto (heatmap) quando há coordenadas reais
     if (ev.hotspotId) {
       record({
         screenId: ev.fromScreenId,
@@ -192,7 +201,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
       })
     }
 
-    // Mudou a tela visível? registra navegação + atualiza caminho
     if (ev.topScreenId !== topRef.current) {
       topRef.current = ev.topScreenId
       record({
@@ -204,7 +212,6 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
       })
       pathRef.current = dedupeConsecutive([...pathRef.current, ev.topScreenId])
 
-      // Chegou na tela-alvo / tela final do caminho?
       if (mission.goalScreenIds.includes(ev.topScreenId)) {
         await completeMission("reached", ev.topScreenId)
         return
@@ -213,8 +220,29 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
     }
   }
 
-  // ─────────── Thanks ───────────
-  if (phase === "thanks") {
+  async function submitAnswer(payload: AnswerPayload) {
+    if (step?.kind !== "question") return
+    const hasValue =
+      (typeof payload.text === "string" && payload.text.length > 0) ||
+      (typeof payload.choice === "string" && payload.choice.length > 0) ||
+      typeof payload.rating === "number"
+    if (hasValue) {
+      try {
+        await fetch("/api/t/answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, questionId: step.question.id, ...payload }),
+          keepalive: true,
+        })
+      } catch {
+        // segue mesmo se falhar
+      }
+    }
+    advance()
+  }
+
+  // ─────────── Fim ───────────
+  if (finished || !step) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
         <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
@@ -225,28 +253,39 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
     )
   }
 
-  // ─────────── Tarefa (intro) + Execução (running) ───────────
-  // Layout único: tarefa sempre à esquerda; protótipo à direita fica "apagado"
-  // e não-interativo até o testador clicar em "Iniciar tarefa".
-  const started = phase === "running"
+  // ─────────── Pergunta ───────────
+  if (step.kind === "question") {
+    return (
+      <div className="min-h-screen bg-surface-container flex items-center justify-center p-4 md:p-6">
+        <QuestionView
+          key={step.question.id}
+          question={step.question}
+          lang={lang}
+          stepLabel={s.stepOf(stepIndex + 1, steps.length)}
+          onSubmit={submitAnswer}
+        />
+      </div>
+    )
+  }
+
+  // ─────────── Missão (intro apagada / execução) ───────────
+  const started = taskStarted
   return (
     <div className="min-h-screen bg-surface-container flex flex-col md:flex-row md:items-start gap-6 p-4 md:p-6">
-      {/* Esquerda: missão — sempre visível para consulta */}
       <aside className="w-full md:w-80 shrink-0 md:sticky md:top-6">
         <MissionCard
-          label={s.taskOf(missionIndex + 1, missions.length)}
-          task={mission.task}
-          description={mission.description}
+          label={s.stepOf(stepIndex + 1, steps.length)}
+          task={step.mission.task}
+          description={step.mission.description}
           started={started}
           startLabel={s.startTask}
-          onStart={startMission}
+          onStart={startTask}
           giveUpLabel={s.giveUp}
           canGiveUp={hasClicked}
           onGiveUp={() => completeMission("gave_up", topRef.current)}
         />
       </aside>
 
-      {/* Direita: protótipo (apagado + bloqueado até iniciar a tarefa) */}
       <div className="flex-1 flex justify-center w-full">
         <div
           className={cn(
@@ -256,10 +295,10 @@ export function TestRunner({ token, lang, deviceType, screens, missions }: Props
           aria-hidden={!started}
         >
           <PrototypeStage
-            key={mission.id}
+            key={step.mission.id}
             screens={screens}
             deviceType={deviceType}
-            initialScreenId={mission.startScreenId}
+            initialScreenId={step.mission.startScreenId}
             onInteraction={handleInteraction}
           />
         </div>
@@ -297,7 +336,6 @@ function MissionCard({
         {label}
       </div>
 
-      {/* Tarefa — permanece visível durante toda a execução */}
       <div className="space-y-2 mt-4">
         <h2 className="text-title-large text-on-surface">{task}</h2>
         {description && (

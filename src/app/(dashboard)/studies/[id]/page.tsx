@@ -12,7 +12,14 @@ import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { PublishBar } from "@/components/study/publish-bar"
-import { deleteScreenAction, moveScreenAction, deleteMissionAction } from "./actions"
+import {
+  deleteScreenAction,
+  moveScreenAction,
+  deleteMissionAction,
+  deleteQuestionAction,
+  moveBlockAction,
+} from "./actions"
+import { QuestionDialog } from "@/components/question/question-dialog"
 import {
   ArrowLeft,
   Trash2,
@@ -32,6 +39,12 @@ import {
 
 const deviceIcon = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
 const deviceLabel = { mobile: "Mobile", tablet: "Tablet", desktop: "Desktop" }
+const qTypeLabel: Record<string, string> = {
+  open: "Pergunta aberta",
+  choice: "Múltipla escolha",
+  rating: "Avaliação por estrelas",
+  binary: "Sim / Não",
+}
 
 export default async function StudyPage({
   params,
@@ -73,6 +86,7 @@ export default async function StudyPage({
               },
             },
           },
+          question: true,
         },
       },
     },
@@ -81,6 +95,7 @@ export default async function StudyPage({
   if (!study) notFound()
 
   const screens = study.prototype?.screens ?? []
+  const blocks = study.blocks
   const missions = study.blocks
     .filter((b) => b.type === "mission" && b.mission)
     .map((b) => b.mission!)
@@ -133,7 +148,7 @@ export default async function StudyPage({
         <div className="flex items-center justify-between gap-3 mb-8">
           <TabsList>
             <TabsTrigger value="prototype">Protótipo</TabsTrigger>
-            <TabsTrigger value="missions">Missões</TabsTrigger>
+            <TabsTrigger value="missions">Sequência</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
             <Badge variant={study.status === "live" ? "default" : "secondary"}>
@@ -256,104 +271,167 @@ export default async function StudyPage({
           )}
         </TabsContent>
 
-        {/* ── Missões ── */}
+        {/* ── Sequência (missões + perguntas) ── */}
         <TabsContent value="missions">
-          <h2 className="text-title-medium text-on-surface mb-4">
-            {missions.length} {missions.length === 1 ? "missão" : "missões"}
-          </h2>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-muted-foreground">
-              Defina o que o testador deve realizar no protótipo.
-            </p>
-            {editable && screens.length > 0 ? (
-              <Link href={`/studies/${study.id}/missions/new`} className={buttonVariants()}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nova missão
-              </Link>
-            ) : editable ? (
-              <Button disabled>
-                <Plus className="h-4 w-4 mr-2" />
-                Nova missão
-              </Button>
-            ) : null}
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-title-medium text-on-surface">
+                {blocks.length} {blocks.length === 1 ? "bloco" : "blocos"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Tarefas e perguntas na ordem que o testador vê.
+              </p>
+            </div>
+            {editable && (
+              <div className="flex items-center gap-2 shrink-0">
+                <QuestionDialog studyId={study.id} variant="create" />
+                {screens.length > 0 ? (
+                  <Link href={`/studies/${study.id}/missions/new`} className={buttonVariants()}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova missão
+                  </Link>
+                ) : (
+                  <Button disabled title="Adicione telas primeiro">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova missão
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
-          {missions.length === 0 ? (
+          {blocks.length === 0 ? (
             <div className="text-center py-20 border border-outline-variant rounded-3xl bg-surface-container-low">
-              <p className="text-title-medium text-on-surface">Nenhuma missão ainda</p>
+              <p className="text-title-medium text-on-surface">Sequência vazia</p>
               <p className="text-body-medium text-on-surface-variant mt-1.5">
                 {screens.length === 0
-                  ? "Adicione telas ao protótipo primeiro"
-                  : "Clique em \"Nova missão\" para criar a primeira tarefa"}
+                  ? "Adicione telas ao protótipo e crie a primeira tarefa"
+                  : "Adicione uma missão ou uma pergunta para começar"}
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {missions.map((mission, index) => (
-                <div key={mission.id} className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-label-medium text-on-surface-variant mb-1">
-                        MISSÃO {index + 1}
-                      </p>
-                      <h3 className="text-title-medium text-on-surface">{mission.task}</h3>
-                      {mission.description && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {mission.description}
-                        </p>
-                      )}
-                    </div>
-                    {editable && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Link
-                          href={`/studies/${study.id}/missions/${mission.id}/edit`}
-                          className={buttonVariants({ variant: "ghost", size: "icon" })}
-                          title="Editar missão"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Link>
-                        <form action={deleteMissionAction.bind(null, study.id, mission.id)}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            type="submit"
-                            className="text-muted-foreground hover:text-red-500"
-                            title="Excluir missão"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </form>
+              {blocks.map((block, index) => {
+                const moveControls = editable && (
+                  <div className="flex flex-col -my-1">
+                    <form action={moveBlockAction.bind(null, study.id, block.id, "up")}>
+                      <Button variant="ghost" size="icon-sm" type="submit" disabled={index === 0} title="Subir">
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                    </form>
+                    <form action={moveBlockAction.bind(null, study.id, block.id, "down")}>
+                      <Button variant="ghost" size="icon-sm" type="submit" disabled={index === blocks.length - 1} title="Descer">
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </form>
+                  </div>
+                )
+
+                if (block.type === "mission" && block.mission) {
+                  const mission = block.mission
+                  return (
+                    <div key={block.id} className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-label-medium text-on-surface-variant mb-1">
+                            PASSO {index + 1} · TAREFA
+                          </p>
+                          <h3 className="text-title-medium text-on-surface">{mission.task}</h3>
+                          {mission.description && (
+                            <p className="text-sm text-muted-foreground mt-1">{mission.description}</p>
+                          )}
+                        </div>
+                        {editable && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {moveControls}
+                            <Link
+                              href={`/studies/${study.id}/missions/${mission.id}/edit`}
+                              className={buttonVariants({ variant: "ghost", size: "icon" })}
+                              title="Editar missão"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Link>
+                            <form action={deleteMissionAction.bind(null, study.id, mission.id)}>
+                              <Button variant="ghost" size="icon" type="submit" className="text-muted-foreground hover:text-red-500" title="Excluir missão">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </form>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <Separator className="my-3" />
-                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                    <span>
-                      Início:{" "}
-                      <span className="text-foreground font-medium">
-                        {mission.startScreen.name}
-                      </span>
-                    </span>
-                    {mission.successType === "screen" ? (
-                      <span className="flex items-center gap-1">
-                        <Target className="h-3 w-3" />
-                        Tela-alvo:{" "}
-                        <span className="text-foreground font-medium">
-                          {mission.goals[0]?.goalScreen.name ?? "—"}
+                      <Separator className="my-3" />
+                      <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+                        <span>
+                          Início: <span className="text-foreground font-medium">{mission.startScreen.name}</span>
                         </span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1">
-                        <Route className="h-3 w-3" />
-                        Caminho exato:{" "}
-                        <span className="text-foreground font-medium">
-                          {mission.paths.length} caminho(s)
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                        {mission.successType === "screen" ? (
+                          <span className="flex items-center gap-1">
+                            <Target className="h-3 w-3" />
+                            Tela-alvo: <span className="text-foreground font-medium">{mission.goals[0]?.goalScreen.name ?? "—"}</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <Route className="h-3 w-3" />
+                            Caminho exato: <span className="text-foreground font-medium">{mission.paths.length} caminho(s)</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                }
+
+                if (block.type === "question" && block.question) {
+                  const q = block.question
+                  const opts = (q.options as string[] | null) ?? []
+                  return (
+                    <div key={block.id} className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-label-medium text-on-surface-variant mb-1">
+                            PASSO {index + 1} · PERGUNTA
+                          </p>
+                          <h3 className="text-title-medium text-on-surface">{q.title}</h3>
+                          {q.description && (
+                            <p className="text-sm text-muted-foreground mt-1">{q.description}</p>
+                          )}
+                          <div className="mt-2 flex items-center gap-2">
+                            <Badge variant="secondary">{qTypeLabel[q.type]}</Badge>
+                            {q.type === "choice" && (
+                              <span className="text-xs text-muted-foreground">{opts.length} opções</span>
+                            )}
+                            {!q.required && (
+                              <span className="text-xs text-muted-foreground">opcional</span>
+                            )}
+                          </div>
+                        </div>
+                        {editable && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {moveControls}
+                            <QuestionDialog
+                              studyId={study.id}
+                              questionId={q.id}
+                              variant="edit"
+                              initial={{
+                                type: q.type as "open" | "choice" | "rating" | "binary",
+                                title: q.title,
+                                description: q.description,
+                                required: q.required,
+                                options: opts,
+                              }}
+                            />
+                            <form action={deleteQuestionAction.bind(null, study.id, q.id)}>
+                              <Button variant="ghost" size="icon" type="submit" className="text-muted-foreground hover:text-red-500" title="Excluir pergunta">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </form>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })}
             </div>
           )}
         </TabsContent>

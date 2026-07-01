@@ -255,10 +255,8 @@ export async function createMissionAction(
     if (validPaths.length === 0) return
   }
 
-  const maxOrder = await prisma.block.count({ where: { studyId: study.id } })
-
   const block = await prisma.block.create({
-    data: { studyId: study.id, type: "mission", order: maxOrder },
+    data: { studyId: study.id, type: "mission", order: await nextBlockOrder(study.id) },
   })
 
   const mission = await prisma.mission.create({
@@ -375,5 +373,132 @@ export async function deleteMissionAction(studyId: string, missionId: string) {
 
   // Apaga o bloco → cascateia missão, goals, paths, steps, results e events
   await prisma.block.delete({ where: { id: mission.blockId } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+// ─────────── Perguntas (blocos type=question) ───────────
+type QType = "open" | "choice" | "rating" | "binary"
+interface QuestionInput {
+  type: QType
+  title: string
+  description?: string | null
+  required: boolean
+  options?: string[]
+}
+
+// Próxima ordem de bloco = (maior ordem atual) + 1 — evita colisões após deleções.
+async function nextBlockOrder(studyId: string) {
+  const last = await prisma.block.findFirst({
+    where: { studyId },
+    orderBy: { order: "desc" },
+    select: { order: true },
+  })
+  return (last?.order ?? -1) + 1
+}
+
+function cleanQuestionInput(input: QuestionInput) {
+  const title = input.title?.trim()
+  if (!title) return null
+  const isChoice = input.type === "choice"
+  const options = isChoice
+    ? (input.options ?? []).map((o) => o.trim()).filter(Boolean)
+    : []
+  if (isChoice && options.length < 2) return null // múltipla escolha precisa de ≥2 opções
+  return {
+    type: input.type,
+    title,
+    description: input.description?.trim() || null,
+    required: !!input.required,
+    options,
+  }
+}
+
+export async function createQuestionAction(studyId: string, input: QuestionInput) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+  const clean = cleanQuestionInput(input)
+  if (!clean) return
+
+  const block = await prisma.block.create({
+    data: { studyId: study.id, type: "question", order: await nextBlockOrder(study.id) },
+  })
+  await prisma.question.create({
+    data: {
+      blockId: block.id,
+      type: clean.type,
+      title: clean.title,
+      description: clean.description,
+      required: clean.required,
+      options: clean.options,
+    },
+  })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+export async function updateQuestionAction(
+  studyId: string,
+  questionId: string,
+  input: QuestionInput
+) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+  const existing = await prisma.question.findFirst({
+    where: { id: questionId, block: { studyId: study.id } },
+    select: { id: true },
+  })
+  if (!existing) return
+  const clean = cleanQuestionInput(input)
+  if (!clean) return
+
+  await prisma.question.update({
+    where: { id: questionId },
+    data: {
+      type: clean.type,
+      title: clean.title,
+      description: clean.description,
+      required: clean.required,
+      options: clean.options,
+    },
+  })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+export async function deleteQuestionAction(studyId: string, questionId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+  const q = await prisma.question.findFirst({
+    where: { id: questionId, block: { studyId: study.id } },
+    select: { blockId: true },
+  })
+  if (!q) return
+  await prisma.block.delete({ where: { id: q.blockId } }) // cascateia Question + Answers
+  revalidatePath(`/studies/${studyId}`)
+}
+
+// Reordena a SEQUÊNCIA (missões + perguntas): troca de posição e reindexa 0..n-1.
+export async function moveBlockAction(
+  studyId: string,
+  blockId: string,
+  direction: "up" | "down"
+) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+
+  const blocks = await prisma.block.findMany({
+    where: { studyId: study.id },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  })
+  const idx = blocks.findIndex((b) => b.id === blockId)
+  if (idx === -1) return
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1
+  if (swapIdx < 0 || swapIdx >= blocks.length) return
+
+  const reordered = [...blocks]
+  ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]]
+
+  await Promise.all(
+    reordered.map((b, i) => prisma.block.update({ where: { id: b.id }, data: { order: i } }))
+  )
   revalidatePath(`/studies/${studyId}`)
 }

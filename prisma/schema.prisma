@@ -158,17 +158,51 @@ model Hotspot {
 }
 
 model Block {
-  id      String    @id @default(cuid())
-  studyId String
-  study   Study     @relation(fields: [studyId], references: [id], onDelete: Cascade)
-  type    BlockType
-  order   Int
-  mission Mission?
+  id       String    @id @default(cuid())
+  studyId  String
+  study    Study     @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  type     BlockType
+  order    Int
+  mission  Mission?
+  question Question?
 }
 
 enum BlockType {
   mission
   question
+}
+
+enum QuestionType {
+  open // resposta aberta (texto)
+  choice // múltipla escolha (uma opção)
+  rating // estrelas 1..5
+  binary // sim/não
+}
+
+model Question {
+  id          String       @id @default(cuid())
+  blockId     String       @unique
+  block       Block        @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  type        QuestionType
+  title       String
+  description String?
+  required    Boolean      @default(true)
+  options     Json? // choice: string[]
+  answers     Answer[]
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String? // open
+  choice     String? // choice (opção) ou binary ("yes"/"no")
+  rating     Int? // rating 1..5
+  createdAt  DateTime @default(now())
+
+  @@unique([sessionId, questionId])
 }
 
 model Mission {
@@ -227,6 +261,7 @@ model Session {
   deviceType String?
   results    MissionResult[]
   events     Event[]
+  answers    Answer[]
 }
 
 enum MissionOutcome {

@@ -86,12 +86,9 @@ export async function POST(request: Request) {
     })
   }
 
-  if (isLast && !session.finishedAt) {
-    await prisma.session.update({
-      where: { id: session.id },
-      data: { finishedAt: new Date() },
-    })
-  }
+  // A sessão só é finalizada no fim da sequência inteira (via /api/t/finish),
+  // pois pode haver perguntas depois da última missão.
+  void isLast
 
   return Response.json({ ok: true, outcome })
 }

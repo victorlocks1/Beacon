@@ -24,7 +24,6 @@ export default async function TestRunPage({
             },
           },
           blocks: {
-            where: { type: "mission" },
             orderBy: { order: "asc" },
             include: {
               mission: {
@@ -33,6 +32,7 @@ export default async function TestRunPage({
                   paths: { include: { steps: { orderBy: { order: "asc" } } } },
                 },
               },
+              question: true,
             },
           },
         },
@@ -51,31 +51,53 @@ export default async function TestRunPage({
 
   const study = testSession.study
   const screens = study.prototype?.screens ?? []
-  const missions = study.blocks
-    .map((b) => b.mission)
-    .filter((m): m is NonNullable<typeof m> => m !== null)
-    .map((m) => {
-      // Telas que encerram a missão: alvos (screen) ou telas finais dos caminhos (path)
-      const goalScreenIds =
-        m.successType === "path"
-          ? [
-              ...new Set(
-                m.paths
-                  .map((p) => p.steps[p.steps.length - 1]?.screenId)
-                  .filter((s): s is string => !!s)
-              ),
-            ]
-          : m.goals.map((g) => g.goalScreenId)
-      return {
-        id: m.id,
-        task: m.task,
-        description: m.description,
-        startScreenId: m.startScreenId,
-        goalScreenIds,
-      }
-    })
 
-  if (screens.length === 0 || missions.length === 0) {
+  // Sequência de passos na ordem definida pelo criador (missões + perguntas)
+  const testSteps = study.blocks
+    .map((b) => {
+      if (b.type === "mission" && b.mission) {
+        const m = b.mission
+        const goalScreenIds =
+          m.successType === "path"
+            ? [
+                ...new Set(
+                  m.paths
+                    .map((p) => p.steps[p.steps.length - 1]?.screenId)
+                    .filter((sid): sid is string => !!sid)
+                ),
+              ]
+            : m.goals.map((g) => g.goalScreenId)
+        return {
+          kind: "mission" as const,
+          mission: {
+            id: m.id,
+            task: m.task,
+            description: m.description,
+            startScreenId: m.startScreenId,
+            goalScreenIds,
+          },
+        }
+      }
+      if (b.type === "question" && b.question) {
+        const q = b.question
+        return {
+          kind: "question" as const,
+          question: {
+            id: q.id,
+            type: q.type as "open" | "choice" | "rating" | "binary",
+            title: q.title,
+            description: q.description,
+            required: q.required,
+            options: (q.options as string[] | null) ?? [],
+          },
+        }
+      }
+      return null
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+
+  const hasMission = testSteps.some((st) => st.kind === "mission")
+  if (testSteps.length === 0 || (hasMission && screens.length === 0)) {
     return <ThankYou lang={lang} />
   }
 
@@ -106,7 +128,7 @@ export default async function TestRunPage({
           imageUrl: r.imageUrl,
         })),
       }))}
-      missions={missions}
+      steps={testSteps}
     />
   )
 }
