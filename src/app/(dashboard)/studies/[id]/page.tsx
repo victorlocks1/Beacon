@@ -15,6 +15,8 @@ import { PublishBar } from "@/components/study/publish-bar"
 import { deleteScreenAction, moveScreenAction } from "./actions"
 import { QuestionDialog } from "@/components/question/question-dialog"
 import { SequenceList, type SeqBlock } from "@/components/study/sequence-list"
+import { WelcomeDialog } from "@/components/study/welcome-dialog"
+import { tt, type Lang } from "@/lib/i18n"
 import {
   ArrowLeft,
   Trash2,
@@ -167,7 +169,7 @@ export default async function StudyPage({
         <div className="flex items-center justify-between gap-3 mb-8">
           <TabsList>
             <TabsTrigger value="prototype">Protótipo</TabsTrigger>
-            <TabsTrigger value="missions">Sequência</TabsTrigger>
+            <TabsTrigger value="missions">Missões</TabsTrigger>
           </TabsList>
           <div className="flex items-center gap-2">
             <Badge variant={study.status === "live" ? "default" : "secondary"}>
@@ -292,6 +294,34 @@ export default async function StudyPage({
 
         {/* ── Sequência (missões + perguntas) ── */}
         <TabsContent value="missions">
+          {(() => {
+            const s = tt((study.language ?? "pt") as Lang)
+            const wTitle = study.welcomeTitle || s.welcomeTitle
+            const wMsg = study.welcomeMessage || s.welcomeIntro
+            return (
+              <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container-low p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-label-medium text-on-surface-variant mb-1">
+                      TELA DE BOAS-VINDAS
+                    </p>
+                    <h3 className="text-title-medium text-on-surface">{wTitle}</h3>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{wMsg}</p>
+                  </div>
+                  {editable && (
+                    <WelcomeDialog
+                      studyId={study.id}
+                      title={study.welcomeTitle}
+                      message={study.welcomeMessage}
+                      defaultTitle={s.welcomeTitle}
+                      defaultMessage={s.welcomeIntro}
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          })()}
+
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <h2 className="text-title-medium text-on-surface">

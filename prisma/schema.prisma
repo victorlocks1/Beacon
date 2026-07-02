@@ -39,6 +39,9 @@ model Study {
   status     StudyStatus @default(draft)
   deviceType DeviceType  @default(desktop)
   language   Language    @default(pt)
+  // Boas-vindas customizáveis do testador (nulo = usa o padrão do idioma)
+  welcomeTitle   String?
+  welcomeMessage String?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   prototype  Prototype?

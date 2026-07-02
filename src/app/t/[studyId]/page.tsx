@@ -43,9 +43,11 @@ export default async function TestEntryPage({
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-on-primary mb-1">
             <ClipboardCheck className="h-7 w-7" />
           </div>
-          <h1 className="text-headline-small text-on-surface">{s.welcomeTitle}</h1>
-          <p className="text-body-medium text-on-surface-variant">
-            {s.welcomeIntro}
+          <h1 className="text-headline-small text-on-surface">
+            {study.welcomeTitle || s.welcomeTitle}
+          </h1>
+          <p className="text-body-medium text-on-surface-variant whitespace-pre-wrap">
+            {study.welcomeMessage || s.welcomeIntro}
           </p>
         </div>
 
