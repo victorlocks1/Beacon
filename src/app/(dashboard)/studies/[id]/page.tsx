@@ -11,25 +11,22 @@ import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
-import { PublishBar } from "@/components/study/publish-bar"
 import { deleteScreenAction, moveScreenAction } from "./actions"
 import { QuestionDialog } from "@/components/question/question-dialog"
 import { SequenceList, type SeqBlock } from "@/components/study/sequence-list"
 import { WelcomeDialog } from "@/components/study/welcome-dialog"
-import { ShareDialog } from "@/components/study/share-dialog"
+import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import {
   ArrowLeft,
   Trash2,
   MousePointerClick,
-  Eye,
   Plus,
   ChevronUp,
   ChevronDown,
   Smartphone,
   Tablet,
   Monitor,
-  BarChart3,
 } from "lucide-react"
 
 const deviceIcon = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
@@ -142,29 +139,18 @@ export default async function StudyPage({
         <div className="flex-1 min-w-0">
           <EditableStudyTitle studyId={study.id} initialTitle={study.title} />
         </div>
-        <ShareDialog
+        <StudyHeaderActions
           studyId={study.id}
+          status={study.status as "draft" | "live" | "closed"}
+          canPublish={screens.length > 0 && missions.length > 0}
           shareCode={study.shareCode}
+          deviceType={study.deviceType ?? "desktop"}
+          language={study.language ?? "pt"}
           members={study.members.map((m) => ({
             userId: m.user.id,
             name: m.user.name ?? m.user.email,
             email: m.user.email,
           }))}
-        />
-        <Link href={`/studies/${study.id}/results`} className={buttonVariants({ variant: "outline" })}>
-          <BarChart3 className="h-4 w-4 mr-2" />
-          Resultados
-        </Link>
-        {screens.length > 0 && (
-          <Link href={`/studies/${study.id}/review`} className={buttonVariants({ variant: "outline" })}>
-            <Eye className="h-4 w-4 mr-2" />
-            Revisão
-          </Link>
-        )}
-        <PublishBar
-          studyId={study.id}
-          status={study.status as "draft" | "live" | "closed"}
-          canPublish={screens.length > 0 && missions.length > 0}
         />
       </div>
 

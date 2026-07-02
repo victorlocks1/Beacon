@@ -18,19 +18,27 @@ import {
   removeMemberAction,
 } from "@/app/(dashboard)/studies/[id]/share/actions"
 
-type Member = { userId: string; name: string; email: string }
+export type ShareMember = { userId: string; name: string; email: string }
 
 export function ShareDialog({
   studyId,
   members,
   shareCode,
+  open: openProp,
+  onOpenChange,
+  hideTrigger,
 }: {
   studyId: string
-  members: Member[]
+  members: ShareMember[]
   shareCode: string | null
+  open?: boolean
+  onOpenChange?: (v: boolean) => void
+  hideTrigger?: boolean
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const open = openProp ?? openState
+  const setOpen = onOpenChange ?? setOpenState
   const [code, setCode] = useState<string | null>(shareCode)
   const [email, setEmail] = useState("")
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -77,10 +85,12 @@ export function ShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className={cn(buttonVariants({ variant: "outline" }), "cursor-pointer")}>
-        <Users className="h-4 w-4 mr-2" />
-        Compartilhar
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger className={cn(buttonVariants({ variant: "outline" }), "cursor-pointer")}>
+          <Users className="h-4 w-4 mr-2" />
+          Compartilhar
+        </DialogTrigger>
+      )}
 
       <DialogContent
         showCloseButton={false}
