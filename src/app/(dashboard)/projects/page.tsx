@@ -27,6 +27,16 @@ export default async function ProjectsPage() {
   const active = projects.filter((p) => !p.archived)
   const archived = projects.filter((p) => p.archived)
 
+  const shared = await prisma.studyMember.findMany({
+    where: { userId: session.user.id },
+    orderBy: { createdAt: "desc" },
+    include: {
+      study: {
+        select: { id: true, title: true, owner: { select: { name: true, email: true } } },
+      },
+    },
+  })
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -47,6 +57,26 @@ export default async function ProjectsPage() {
           <ProjectGrid projects={archived} empty="Nenhum projeto arquivado." />
         </TabsContent>
       </Tabs>
+
+      {shared.length > 0 && (
+        <div className="mt-14">
+          <h2 className="text-title-large text-on-surface mb-5">Compartilhados comigo</h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {shared.map((m) => (
+              <Link
+                key={m.id}
+                href={`/studies/${m.study.id}/review`}
+                className="rounded-3xl bg-surface-container-low border border-outline-variant p-6 block transition-shadow hover:elevation-2"
+              >
+                <h3 className="text-title-large text-on-surface truncate">{m.study.title}</h3>
+                <p className="text-body-small text-on-surface-variant mt-1">
+                  por {m.study.owner.name ?? m.study.owner.email}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

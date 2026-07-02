@@ -16,6 +16,7 @@ import { deleteScreenAction, moveScreenAction } from "./actions"
 import { QuestionDialog } from "@/components/question/question-dialog"
 import { SequenceList, type SeqBlock } from "@/components/study/sequence-list"
 import { WelcomeDialog } from "@/components/study/welcome-dialog"
+import { ShareDialog } from "@/components/study/share-dialog"
 import { tt, type Lang } from "@/lib/i18n"
 import {
   ArrowLeft,
@@ -77,6 +78,7 @@ export default async function StudyPage({
           question: true,
         },
       },
+      members: { include: { user: { select: { id: true, name: true, email: true } } } },
     },
   })
 
@@ -140,6 +142,15 @@ export default async function StudyPage({
         <div className="flex-1 min-w-0">
           <EditableStudyTitle studyId={study.id} initialTitle={study.title} />
         </div>
+        <ShareDialog
+          studyId={study.id}
+          shareCode={study.shareCode}
+          members={study.members.map((m) => ({
+            userId: m.user.id,
+            name: m.user.name ?? m.user.email,
+            email: m.user.email,
+          }))}
+        />
         <Link href={`/studies/${study.id}/results`} className={buttonVariants({ variant: "outline" })}>
           <BarChart3 className="h-4 w-4 mr-2" />
           Resultados

@@ -17,6 +17,8 @@ model User {
   createdAt    DateTime @default(now())
   studies      Study[]
   projects     Project[]
+  memberships  StudyMember[]
+  comments     Comment[]
 }
 
 model Project {
@@ -42,17 +44,53 @@ model Study {
   // Boas-vindas customizáveis do testador (nulo = usa o padrão do idioma)
   welcomeTitle   String?
   welcomeMessage String?
+  // Código de compartilhamento (link) para o time interno entrar como membro
+  shareCode  String?     @unique
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   prototype  Prototype?
   blocks     Block[]
   sessions   Session[]
+  members    StudyMember[]
+  comments   Comment[]
 }
 
 enum StudyStatus {
   draft
   live
   closed
+}
+
+// Colaborador de um estudo (ver + comentar; não edita).
+model StudyMember {
+  id        String   @id @default(cuid())
+  studyId   String
+  study     Study    @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([studyId, userId])
+}
+
+// Comentário de revisão. Top-level = pin numa tela (screenId + coords);
+// respostas usam parentId (sem coords).
+model Comment {
+  id        String    @id @default(cuid())
+  studyId   String
+  study     Study     @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  screenId  String?
+  screen    Screen?   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  xNorm     Float?
+  yNorm     Float?
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  resolved  Boolean   @default(false)
+  createdAt DateTime  @default(now())
 }
 
 model Prototype {
@@ -128,6 +166,7 @@ model Screen {
   pathSteps        PathStep[]
   events           Event[]       @relation("EventScreen")
   targetedByEvents Event[]       @relation("EventTargetScreen")
+  comments         Comment[]
 }
 
 enum HotspotShape {
