@@ -9,7 +9,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu"
 import { ShareDialog, type ShareMember } from "@/components/study/share-dialog"
 import {
@@ -145,12 +144,22 @@ export function StudyHeaderActions({
           )}
 
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Informações</DropdownMenuLabel>
-          <div className="px-2 pb-1.5 text-xs text-muted-foreground space-y-1">
-            <div>Status: <span className="text-foreground">{statusLabel[status]}</span></div>
-            <div>Dispositivo: <span className="text-foreground">{deviceLabel[deviceType] ?? deviceType}</span></div>
-            <div>Idioma: <span className="text-foreground">{langLabel[language] ?? language}</span></div>
-            <div>Membros: <span className="text-foreground">{members.length}</span></div>
+          <div className="px-2 pt-1 pb-1.5 space-y-1">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Informações
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Status: <span className="text-foreground">{statusLabel[status]}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Dispositivo: <span className="text-foreground">{deviceLabel[deviceType] ?? deviceType}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Idioma: <span className="text-foreground">{langLabel[language] ?? language}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Membros: <span className="text-foreground">{members.length}</span>
+            </p>
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
