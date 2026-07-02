@@ -3,7 +3,9 @@ import { prisma } from "@/lib/db"
 import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PrototypePlayer } from "@/components/preview/prototype-player"
+import { CommentsBoard, type BoardComment } from "@/components/comments/comments-board"
 
 export default async function ReviewPage({
   params,
@@ -11,7 +13,7 @@ export default async function ReviewPage({
   params: Promise<{ id: string }>
 }) {
   const { id: studyId } = await params
-  const { isOwner } = await requireStudyView(studyId)
+  const { userId, isOwner } = await requireStudyView(studyId)
 
   const study = await prisma.study.findUnique({
     where: { id: studyId },
@@ -36,6 +38,37 @@ export default async function ReviewPage({
   const screens = study.prototype?.screens ?? []
   const firstMission = study.blocks[0]?.mission ?? null
 
+  const rawComments = await prisma.comment.findMany({
+    where: { studyId, parentId: null },
+    orderBy: { createdAt: "asc" },
+    include: {
+      author: { select: { id: true, name: true, email: true } },
+      replies: {
+        orderBy: { createdAt: "asc" },
+        include: { author: { select: { id: true, name: true, email: true } } },
+      },
+    },
+  })
+
+  const comments: BoardComment[] = rawComments
+    .filter((c) => c.screenId && c.xNorm != null && c.yNorm != null)
+    .map((c) => ({
+      id: c.id,
+      screenId: c.screenId!,
+      xNorm: c.xNorm!,
+      yNorm: c.yNorm!,
+      body: c.body,
+      resolved: c.resolved,
+      authorName: c.author.name ?? c.author.email,
+      authorId: c.author.id,
+      replies: c.replies.map((r) => ({
+        id: r.id,
+        body: r.body,
+        authorName: r.author.name ?? r.author.email,
+        authorId: r.author.id,
+      })),
+    }))
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -48,7 +81,7 @@ export default async function ReviewPage({
         <div>
           <h1 className="text-title-large text-on-surface">{study.title}</h1>
           <p className="text-body-small text-on-surface-variant">
-            Revisão do protótipo{isOwner ? "" : " — compartilhado com você"}
+            Revisão{isOwner ? "" : " — compartilhado com você"}
           </p>
         </div>
       </div>
@@ -58,40 +91,59 @@ export default async function ReviewPage({
           Este estudo ainda não tem telas.
         </div>
       ) : (
-        <PrototypePlayer
-          deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-          screens={screens.map((s) => ({
-            id: s.id,
-            name: s.name,
-            imageUrl: s.imageUrl,
-            width: s.width,
-            height: s.height,
-            scroll: s.scroll,
-            hotspots: s.hotspots.map((h) => ({
-              id: h.id,
-              coords: h.coords as { x: number; y: number; w: number; h: number },
-              action: h.action,
-              overlayPosition: h.overlayPosition,
-              targetScreenId: h.targetScreenId,
-            })),
-            scrollRegions: s.scrollRegions.map((r) => ({
-              id: r.id,
-              kind: r.kind as "scroll" | "fixed",
-              coords: r.coords as { x: number; y: number; w: number; h: number },
-              axis: r.axis as "horizontal" | "vertical" | "both",
-              imageUrl: r.imageUrl,
-            })),
-          }))}
-          mission={
-            firstMission
-              ? {
-                  task: firstMission.task,
-                  description: firstMission.description,
-                  startScreenId: firstMission.startScreenId,
-                }
-              : null
-          }
-        />
+        <Tabs defaultValue="preview">
+          <TabsList className="mb-6">
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+            <TabsTrigger value="comments">Comentários ({comments.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="preview">
+            <PrototypePlayer
+              deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+              screens={screens.map((s) => ({
+                id: s.id,
+                name: s.name,
+                imageUrl: s.imageUrl,
+                width: s.width,
+                height: s.height,
+                scroll: s.scroll,
+                hotspots: s.hotspots.map((h) => ({
+                  id: h.id,
+                  coords: h.coords as { x: number; y: number; w: number; h: number },
+                  action: h.action,
+                  overlayPosition: h.overlayPosition,
+                  targetScreenId: h.targetScreenId,
+                })),
+                scrollRegions: s.scrollRegions.map((r) => ({
+                  id: r.id,
+                  kind: r.kind as "scroll" | "fixed",
+                  coords: r.coords as { x: number; y: number; w: number; h: number },
+                  axis: r.axis as "horizontal" | "vertical" | "both",
+                  imageUrl: r.imageUrl,
+                })),
+              }))}
+              mission={
+                firstMission
+                  ? {
+                      task: firstMission.task,
+                      description: firstMission.description,
+                      startScreenId: firstMission.startScreenId,
+                    }
+                  : null
+              }
+            />
+          </TabsContent>
+
+          <TabsContent value="comments">
+            <CommentsBoard
+              studyId={studyId}
+              currentUserId={userId}
+              isOwner={isOwner}
+              screens={screens.map((s) => ({ id: s.id, name: s.name, imageUrl: s.imageUrl }))}
+              comments={comments}
+            />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   )

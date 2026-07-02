@@ -156,9 +156,9 @@ export default async function StudyPage({
           Resultados
         </Link>
         {screens.length > 0 && (
-          <Link href={`/studies/${study.id}/preview`} className={buttonVariants({ variant: "outline" })}>
+          <Link href={`/studies/${study.id}/review`} className={buttonVariants({ variant: "outline" })}>
             <Eye className="h-4 w-4 mr-2" />
-            Preview
+            Revisão
           </Link>
         )}
         <PublishBar
