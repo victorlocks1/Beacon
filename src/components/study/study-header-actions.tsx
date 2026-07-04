@@ -144,7 +144,7 @@ export function StudyHeaderActions({
           )}
 
           <DropdownMenuSeparator />
-          <div className="px-2 pt-1 pb-1.5 space-y-1">
+          <div className="px-3 pt-1 pb-1.5 space-y-1">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Informações
             </p>
