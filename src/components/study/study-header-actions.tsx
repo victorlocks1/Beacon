@@ -125,7 +125,7 @@ export function StudyHeaderActions({
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push(`/studies/${studyId}/review`)}>
             <Eye className="h-4 w-4" />
-            Revisão (preview + comentários)
+            Revisão
           </DropdownMenuItem>
           {status === "live" && (
             <>
