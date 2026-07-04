@@ -42,6 +42,34 @@ export default async function ResultsOverviewPage({
     where: { studyId: id, finishedAt: { not: null } },
   })
 
+  // Sessões encerradas de fato (finishedAt OU inativas além do timeout) — mesma
+  // regra da página de detalhe. Necessário para o denominador correto da taxa de
+  // conclusão: incluir as PERDIDAS (não só quem tem MissionResult).
+  const SESSION_TIMEOUT_MS = 30 * 60 * 1000
+  const nowMs = Date.now()
+  const studySessions = await prisma.session.findMany({
+    where: { studyId: id },
+    select: { id: true, startedAt: true, finishedAt: true },
+  })
+  const sessionEnded = new Map(
+    studySessions.map((s) => [
+      s.id,
+      s.finishedAt != null || nowMs - s.startedAt.getTime() > SESSION_TIMEOUT_MS,
+    ])
+  )
+  // Quem INICIOU cada missão (tem evento) — base da classificação por sessão.
+  const startEvents = await prisma.event.findMany({
+    where: { session: { studyId: id } },
+    select: { missionId: true, sessionId: true },
+  })
+  const startedByMission = new Map<string, Set<string>>()
+  for (const e of startEvents) {
+    if (!e.missionId) continue
+    const set = startedByMission.get(e.missionId) ?? new Set<string>()
+    set.add(e.sessionId)
+    startedByMission.set(e.missionId, set)
+  }
+
   const questionsRaw = await prisma.question.findMany({
     where: {
       OR: [{ block: { studyId: id } }, { mission: { block: { studyId: id } } }],
@@ -62,18 +90,30 @@ export default async function ResultsOverviewPage({
 
   function statsFor(missionId: string) {
     const rs = results.filter((r) => r.missionId === missionId)
-    const total = rs.length
-    const successes = rs.filter(
-      (r) => r.outcome === "direct" || r.outcome === "indirect"
-    ).length
+    const resultBySession = new Map(rs.map((r) => [r.sessionId, r]))
+    const started = startedByMission.get(missionId) ?? new Set<string>()
+
+    // Classificação por sessão (exclusão em ordem): concluída → declarada →
+    // perdida (encerrada sem resultado) → em aberto. As três taxas somam 100%
+    // sobre as ENCERRADAS — a perdida agora está no denominador (antes inflava).
+    let completed = 0, declared = 0, lost = 0
+    for (const sid of started) {
+      const r = resultBySession.get(sid)
+      if (r && (r.outcome === "direct" || r.outcome === "indirect")) completed++
+      else if (r && r.outcome === "given_up") declared++
+      else if (sessionEnded.get(sid)) lost++
+    }
+    const ended = completed + declared + lost
+
     const totalClicks = rs.reduce((a, r) => a + r.clickCount, 0)
     const totalMisclicks = rs.reduce((a, r) => a + r.misclickCount, 0)
-    const avgDuration = total
-      ? rs.reduce((a, r) => a + r.durationMs, 0) / total
+    const avgDuration = rs.length
+      ? rs.reduce((a, r) => a + r.durationMs, 0) / rs.length
       : 0
     return {
-      total,
-      successRate: total ? (successes / total) * 100 : 0,
+      started: started.size,
+      completionRate: ended ? (completed / ended) * 100 : 0,
+      lostRate: ended ? (lost / ended) * 100 : 0,
       misclickRate: totalClicks ? (totalMisclicks / totalClicks) * 100 : 0,
       avgDuration,
     }
@@ -123,14 +163,14 @@ export default async function ResultsOverviewPage({
                   <ArrowRight className="h-4 w-4 text-on-surface-variant shrink-0 mt-1" />
                 </div>
 
-                {s.total === 0 ? (
+                {s.started === 0 ? (
                   <p className="text-body-medium text-on-surface-variant mt-4">
                     Ainda sem respostas.
                   </p>
                 ) : (
                   <div className="grid grid-cols-4 gap-3 mt-6">
-                    <Stat label="Respostas" value={String(s.total)} />
-                    <Stat label="Sucesso" value={formatPct(s.successRate)} />
+                    <Stat label="Conclusão" value={formatPct(s.completionRate)} />
+                    <Stat label="Perdida" value={formatPct(s.lostRate)} />
                     <Stat label="Misclick" value={formatPct(s.misclickRate)} />
                     <Stat label="Duração méd." value={formatDuration(s.avgDuration)} />
                   </div>

@@ -71,27 +71,101 @@ export default async function MissionResultsPage({
   const studySessions = await prisma.session.findMany({
     where: { studyId: id },
     orderBy: { startedAt: "asc" },
-    select: { id: true },
+    select: { id: true, startedAt: true, finishedAt: true },
   })
   const testerNumber = new Map(studySessions.map((s, i) => [s.id, i + 1]))
+
+  // Sessão "encerrada de fato": concluiu o teste (finishedAt) OU está inativa
+  // há mais que o timeout. Enquanto viva e sem timeout, a tarefa fica "em aberto"
+  // (não conta como perdida) — evita falso positivo de quem ainda está fazendo.
+  const SESSION_TIMEOUT_MS = 30 * 60 * 1000
+  const nowMs = Date.now()
+  const sessionEnded = new Map(
+    studySessions.map((s) => [
+      s.id,
+      s.finishedAt != null || nowMs - s.startedAt.getTime() > SESSION_TIMEOUT_MS,
+    ])
+  )
 
   const events = await prisma.event.findMany({
     where: { missionId, session: { studyId: id } },
     orderBy: { timestampMs: "asc" },
   })
 
-  // ── KPIs ──
-  const total = results.length
-  const successes = results.filter(
-    (r) => r.outcome === "direct" || r.outcome === "indirect"
-  ).length
+  // ── Classificação por sessão que INICIOU a tarefa (exclusão em ordem) ──
+  // 1) concluída (resultado direct/indirect) 2) declarada (given_up)
+  // 3) perdida (iniciou, sem resultado, e sessão encerrada) — o resto fica "em aberto".
+  const startedSessionIds = new Set(events.map((e) => e.sessionId))
+  const resultBySession = new Map(results.map((r) => [r.sessionId, r]))
+
+  type TaskState = "completed" | "declared" | "lost" | "open"
+  const stateBySession = new Map<string, TaskState>()
+  for (const sid of startedSessionIds) {
+    const r = resultBySession.get(sid)
+    if (r && (r.outcome === "direct" || r.outcome === "indirect")) stateBySession.set(sid, "completed")
+    else if (r && r.outcome === "given_up") stateBySession.set(sid, "declared")
+    else if (sessionEnded.get(sid)) stateBySession.set(sid, "lost")
+    else stateBySession.set(sid, "open")
+  }
+  const counts = { completed: 0, declared: 0, lost: 0, open: 0 }
+  for (const st of stateBySession.values()) counts[st]++
+  // As três taxas somam 100% sobre as sessões ENCERRADAS (concluída+declarada+perdida)
+  const ended = counts.completed + counts.declared + counts.lost
+  const completionRate = ended ? (counts.completed / ended) * 100 : 0
+  const declaredRate = ended ? (counts.declared / ended) * 100 : 0
+  const lostRate = ended ? (counts.lost / ended) * 100 : 0
+
+  // Esforço (sobre quem tem resultado registrado)
+  const withResult = results.length
   const totalClicks = results.reduce((a, r) => a + r.clickCount, 0)
   const totalMisclicks = results.reduce((a, r) => a + r.misclickCount, 0)
-  const successRate = total ? (successes / total) * 100 : 0
   const misclickRate = totalClicks ? (totalMisclicks / totalClicks) * 100 : 0
-  const avgDuration = total
-    ? results.reduce((a, r) => a + r.durationMs, 0) / total
-    : 0
+  const avgDuration = withResult ? results.reduce((a, r) => a + r.durationMs, 0) / withResult : 0
+
+  // ── Primeiro clique: 1 por participante, o mais antigo por timestamp (travado).
+  //    Retornos à mesma tela NÃO geram novo primeiro clique. ──
+  const firstClickBySession = new Map<string, { screenId: string; x: number; y: number; tMs: number }>()
+  for (const e of events) {
+    if (e.type !== "click" && e.type !== "misclick") continue
+    if (!firstClickBySession.has(e.sessionId)) {
+      firstClickBySession.set(e.sessionId, {
+        screenId: e.screenId,
+        x: e.xNorm,
+        y: e.yNorm,
+        tMs: Number(e.timestampMs),
+      })
+    }
+  }
+  const firstClickByScreen = new Map<string, { x: number; y: number; type: "click" }[]>()
+  for (const fc of firstClickBySession.values()) {
+    const arr = firstClickByScreen.get(fc.screenId) ?? []
+    arr.push({ x: fc.x, y: fc.y, type: "click" })
+    firstClickByScreen.set(fc.screenId, arr)
+  }
+  const firstClickScreens = screens
+    .filter((s) => firstClickByScreen.has(s.id))
+    .map((s) => ({ id: s.id, name: s.name, order: s.order, imageUrl: s.imageUrl, points: firstClickByScreen.get(s.id)! }))
+
+  // ── Tempo até o 1º toque: média só de quem clicou; reporta quantos nunca clicaram ──
+  const firstTaps = [...firstClickBySession.values()].map((fc) => fc.tMs)
+  const clickers = firstTaps.length
+  const neverClicked = startedSessionIds.size - clickers
+  const avgFirstTap = clickers ? firstTaps.reduce((a, b) => a + b, 0) / clickers : 0
+
+  // ── Abandono: tela onde DESISTIU (escolha) e ÚLTIMA tela vista das perdidas (inferência) ──
+  const giveUpByScreen = new Map<string, number>()
+  for (const e of events) if (e.type === "give_up") giveUpByScreen.set(e.screenId, (giveUpByScreen.get(e.screenId) ?? 0) + 1)
+  const lastScreenBySession = new Map<string, string>()
+  for (const e of events) lastScreenBySession.set(e.sessionId, e.screenId) // eventos em ordem asc → última = mais recente
+  const lostLastScreen = new Map<string, number>()
+  for (const [sid, st] of stateBySession) {
+    if (st !== "lost") continue
+    const sc = lastScreenBySession.get(sid)
+    if (sc) lostLastScreen.set(sc, (lostLastScreen.get(sc) ?? 0) + 1)
+  }
+  const nameOf = (sid: string) => screenById.get(sid)?.name ?? "?"
+  const giveUpRows = [...giveUpByScreen.entries()].sort((a, b) => b[1] - a[1])
+  const lostRows = [...lostLastScreen.entries()].sort((a, b) => b[1] - a[1])
 
   // ── Pontos por tela (heatmap) ──
   const pointsByScreen = new Map<string, { x: number; y: number; type: "click" | "misclick" }[]>()
@@ -187,7 +261,7 @@ export default async function MissionResultsPage({
         </div>
       </div>
 
-      {total === 0 ? (
+      {startedSessionIds.size === 0 ? (
         <div className="text-center py-24 border border-outline-variant rounded-3xl bg-surface-container-low">
           <p className="text-title-medium text-on-surface">Ainda sem respostas</p>
           <p className="text-body-medium text-on-surface-variant mt-1.5">
@@ -196,17 +270,91 @@ export default async function MissionResultsPage({
         </div>
       ) : (
         <div className="space-y-8">
-          {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Kpi label="Respostas" value={String(total)} />
-            <Kpi label="Taxa de sucesso" value={formatPct(successRate)} />
-            <Kpi label="Misclick rate" value={formatPct(misclickRate)} />
-            <Kpi label="Duração média" value={formatDuration(avgDuration)} />
+          {/* Desfecho — as três taxas somam 100% das sessões encerradas */}
+          <div>
+            <div className="grid grid-cols-3 gap-3">
+              <Kpi label="Conclusão" value={formatPct(completionRate)} sub={`${counts.completed} de ${ended}`} />
+              <Kpi label="Desistência declarada" value={formatPct(declaredRate)} sub={`${counts.declared} de ${ended}`} />
+              <Kpi label="Perdida" value={formatPct(lostRate)} sub={`${counts.lost} de ${ended}`} />
+            </div>
+            {counts.open > 0 && (
+              <p className="text-body-small text-on-surface-variant mt-2">
+                {counts.open} sessão(ões) ainda em aberto (não encerradas) — fora do cálculo.
+              </p>
+            )}
           </div>
 
-          {/* Heatmap */}
+          {/* Esforço */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Kpi label="Duração média" value={formatDuration(avgDuration)} />
+            <Kpi
+              label="Tempo até 1º toque"
+              value={clickers ? formatDuration(avgFirstTap) : "—"}
+              sub={clickers ? `méd. de ${clickers}` : "sem cliques"}
+            />
+            <Kpi label="Nunca clicaram" value={String(neverClicked)} sub="não têm 1º toque" />
+            <Kpi label="Misclick rate" value={formatPct(misclickRate)} />
+          </div>
+
+          {/* Primeiro clique isolado */}
           <section>
-            <h2 className="text-title-large text-on-surface mb-4">Heatmap por tela</h2>
+            <h2 className="text-title-large text-on-surface mb-1">Primeiro clique</h2>
+            <p className="text-body-small text-on-surface-variant mb-4">
+              O primeiríssimo toque de cada participante na tarefa (1 por pessoa). Revela o modelo
+              mental antes de qualquer correção de rota.
+            </p>
+            {firstClickScreens.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Ninguém clicou ainda.</p>
+            ) : (
+              <HeatmapViewer screens={firstClickScreens} deviceType={deviceType} />
+            )}
+          </section>
+
+          {/* Tela do abandono */}
+          {(giveUpRows.length > 0 || lostRows.length > 0) && (
+            <section>
+              <h2 className="text-title-large text-on-surface mb-4">Onde as pessoas abandonam</h2>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="border border-outline-variant rounded-2xl p-4 bg-surface-container-low">
+                  <p className="text-title-small text-on-surface mb-2">Desistiu (declarado)</p>
+                  {giveUpRows.length === 0 ? (
+                    <p className="text-body-small text-on-surface-variant">Nenhuma desistência declarada.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {giveUpRows.map(([sid, n]) => (
+                        <div key={sid} className="flex items-center justify-between text-body-medium">
+                          <span className="text-on-surface truncate">{nameOf(sid)}</span>
+                          <span className="text-on-surface-variant">{n}×</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="border border-outline-variant rounded-2xl p-4 bg-surface-container-low">
+                  <p className="text-title-small text-on-surface mb-2">Última tela vista (perdidas)</p>
+                  {lostRows.length === 0 ? (
+                    <p className="text-body-small text-on-surface-variant">Nenhuma sessão perdida.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {lostRows.map(([sid, n]) => (
+                        <div key={sid} className="flex items-center justify-between text-body-medium">
+                          <span className="text-on-surface truncate">{nameOf(sid)}</span>
+                          <span className="text-on-surface-variant">{n}×</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="text-body-small text-on-surface-variant mt-2">
+                &ldquo;Desistiu&rdquo; é escolha explícita; &ldquo;última tela vista&rdquo; é inferência das perdidas.
+              </p>
+            </section>
+          )}
+
+          {/* Heatmap geral */}
+          <section>
+            <h2 className="text-title-large text-on-surface mb-4">Heatmap por tela (todos os cliques)</h2>
             {heatmapScreens.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nenhum clique registrado nas telas.
@@ -287,11 +435,12 @@ export default async function MissionResultsPage({
   )
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
       <p className="text-headline-small text-on-surface">{value}</p>
       <p className="text-body-small text-on-surface-variant mt-1">{label}</p>
+      {sub && <p className="text-label-small text-on-surface-variant/70 mt-0.5">{sub}</p>}
     </div>
   )
 }

@@ -44,7 +44,6 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
   const s = tt(lang)
   const [stepIndex, setStepIndex] = useState(0)
   const [taskStarted, setTaskStarted] = useState(false) // subfase da missão
-  const [hasClicked, setHasClicked] = useState(false)
   const [toast, setToast] = useState<string | null>(null) // "Tarefa X concluída"
   const [finished, setFinished] = useState(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -124,7 +123,6 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
     } else {
       setStepIndex((i) => i + 1)
       setTaskStarted(false)
-      setHasClicked(false)
     }
   }, [isLastStep, token])
 
@@ -137,7 +135,6 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
     pendingFlushesRef.current = []
     pathRef.current = [mission.startScreenId]
     topRef.current = mission.startScreenId
-    setHasClicked(false)
     bufferRef.current.push({
       missionId: mission.id,
       screenId: mission.startScreenId,
@@ -147,6 +144,9 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
       targetScreenId: mission.startScreenId,
       timestampMs: 0,
     })
+    // Persiste o INÍCIO da tarefa imediatamente: é o que permite, no relatório,
+    // distinguir "iniciou e sumiu" (perdida) de "nunca chegou aqui".
+    pendingFlushesRef.current.push(flush())
     setTaskStarted(true)
   }
 
@@ -198,7 +198,6 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
     if (!mission || completedRef.current) return
 
     clickCountRef.current += 1
-    if (!hasClicked) setHasClicked(true)
 
     if (ev.kind === "misclick") {
       misclickCountRef.current += 1
@@ -296,7 +295,6 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
             startLabel={s.startTask}
             onStart={startTask}
             giveUpLabel={s.giveUp}
-            canGiveUp={hasClicked}
             onGiveUp={() => completeMission("gave_up", topRef.current)}
           />
         </aside>
@@ -344,7 +342,6 @@ function MissionCard({
   startLabel,
   onStart,
   giveUpLabel,
-  canGiveUp,
   onGiveUp,
 }: {
   label: string
@@ -354,7 +351,6 @@ function MissionCard({
   startLabel: string
   onStart: () => void
   giveUpLabel: string
-  canGiveUp: boolean
   onGiveUp: () => void
 }) {
   return (
@@ -377,17 +373,16 @@ function MissionCard({
           {startLabel}
         </Button>
       ) : (
-        canGiveUp && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2 mt-4 text-on-surface-variant"
-            onClick={onGiveUp}
-          >
-            <Flag className="h-3.5 w-3.5 mr-1.5" />
-            {giveUpLabel}
-          </Button>
-        )
+        // Sempre visível durante a tarefa (desde a 1ª tela), mesmo sem clique.
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 mt-4 text-on-surface-variant"
+          onClick={onGiveUp}
+        >
+          <Flag className="h-3.5 w-3.5 mr-1.5" />
+          {giveUpLabel}
+        </Button>
       )}
     </div>
   )
