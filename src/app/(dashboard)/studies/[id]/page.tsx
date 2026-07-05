@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -25,13 +24,7 @@ import {
   Plus,
   ChevronUp,
   ChevronDown,
-  Smartphone,
-  Tablet,
-  Monitor,
 } from "lucide-react"
-
-const deviceIcon = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
-const deviceLabel = { mobile: "Mobile", tablet: "Tablet", desktop: "Desktop" }
 
 export default async function StudyPage({
   params,
@@ -145,8 +138,6 @@ export default async function StudyPage({
           status={study.status as "draft" | "live" | "closed"}
           canPublish={screens.length > 0 && missions.length > 0}
           shareCode={study.shareCode}
-          deviceType={study.deviceType ?? "desktop"}
-          language={study.language ?? "pt"}
           members={study.members.map((m) => ({
             userId: m.user.id,
             name: m.user.name ?? m.user.email,
@@ -164,30 +155,11 @@ export default async function StudyPage({
       )}
 
       <Tabs defaultValue={activeTab}>
-        <div className="flex items-center justify-between gap-3 mb-8">
+        <div className="mb-8">
           <TabsList>
             <TabsTrigger value="prototype">Protótipo</TabsTrigger>
             <TabsTrigger value="missions">Missões</TabsTrigger>
           </TabsList>
-          <div className="flex items-center gap-2">
-            <Badge variant={study.status === "live" ? "default" : "secondary"}>
-              {study.status === "draft"
-                ? "Rascunho"
-                : study.status === "live"
-                  ? "Ao vivo"
-                  : "Encerrado"}
-            </Badge>
-            {(() => {
-              const dt = (study.deviceType ?? "desktop") as "mobile" | "tablet" | "desktop"
-              const Icon = deviceIcon[dt]
-              return (
-                <Badge variant="outline" className="gap-1 font-normal">
-                  <Icon className="h-3 w-3" />
-                  {deviceLabel[dt]}
-                </Badge>
-              )
-            })()}
-          </div>
         </div>
 
         {/* ── Protótipo ── */}

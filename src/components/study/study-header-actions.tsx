@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { ShareDialog, type ShareMember } from "@/components/study/share-dialog"
 import { toast } from "@/components/ui/toast"
@@ -34,26 +33,18 @@ import {
 
 type Status = "draft" | "live" | "closed"
 
-const statusLabel: Record<Status, string> = { draft: "Rascunho", live: "Ao vivo", closed: "Encerrado" }
-const deviceLabel: Record<string, string> = { mobile: "Mobile", tablet: "Tablet", desktop: "Desktop" }
-const langLabel: Record<string, string> = { pt: "Português", es: "Espanhol" }
-
 export function StudyHeaderActions({
   studyId,
   status,
   canPublish,
   members,
   shareCode,
-  deviceType,
-  language,
 }: {
   studyId: string
   status: Status
   canPublish: boolean
   members: ShareMember[]
   shareCode: string | null
-  deviceType: string
-  language: string
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -170,25 +161,6 @@ export function StudyHeaderActions({
               </DropdownMenuItem>
             </>
           )}
-
-          <DropdownMenuSeparator />
-          <div className="px-3 pt-1 pb-1.5 space-y-1">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Informações
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Status: <span className="text-foreground">{statusLabel[status]}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Dispositivo: <span className="text-foreground">{deviceLabel[deviceType] ?? deviceType}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Idioma: <span className="text-foreground">{langLabel[language] ?? language}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Membros: <span className="text-foreground">{members.length}</span>
-            </p>
-          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 
