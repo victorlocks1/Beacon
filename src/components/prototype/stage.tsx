@@ -318,11 +318,14 @@ export function PrototypeStage({
               className={`absolute inset-0 bg-black/40 ${backdropAnim}`}
               onClick={() => isTop && closeTopOverlay(layer.screenId, null, 0, 0)}
             />
-            {/* Conteúdo do overlay */}
+            {/* Conteúdo do overlay. Sem fundo branco: a bottom sheet do Figma
+                costuma vir com o topo transparente (a sheet ancorada embaixo);
+                pintar de branco viraria uma "caixa branca". A transparência do
+                PNG revela a base escurecida, igual ao protótipo. */}
             <div
               className={
-                "relative z-10 bg-white overflow-hidden shadow-2xl " +
-                (layer.position === "bottom" ? "w-full rounded-t-2xl " : "w-[90%] rounded-2xl ") +
+                "relative z-10 overflow-hidden " +
+                (layer.position === "bottom" ? "w-full " : "w-[90%] rounded-2xl shadow-2xl ") +
                 contentAnim
               }
             >
@@ -330,7 +333,14 @@ export function PrototypeStage({
               <img
                 src={screen.imageUrl}
                 alt=""
-                style={{ width: "100%", height: "auto", display: "block" }}
+                // aspect-ratio reserva a altura ANTES da imagem carregar: sem
+                // isso a altura vai de 0→cheia e a animação de subida "quica".
+                style={{
+                  width: "100%",
+                  height: "auto",
+                  aspectRatio: `${screen.width} / ${screen.height}`,
+                  display: "block",
+                }}
                 className="select-none cursor-pointer"
                 draggable={false}
                 onClick={(e) => handleImageClick(screen, e)}
