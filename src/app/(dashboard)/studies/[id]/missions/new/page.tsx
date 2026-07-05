@@ -69,6 +69,7 @@ export default async function NewMissionPage({
             axis: r.axis as "horizontal" | "vertical" | "both",
             imageUrl: r.imageUrl,
             contentBox: r.contentBox as { x: number; y: number; w: number; h: number } | null,
+            pieces: r.pieces as { url: string; x: number; y: number; w: number; h: number }[] | null,
           })),
         }))}
       />

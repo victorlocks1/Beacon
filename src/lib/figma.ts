@@ -15,16 +15,18 @@ export interface ImportHotspot {
   overlayPosition: "bottom" | "center" | null
   destFigmaId: string | null
 }
+export interface RegionPiece {
+  figmaId: string
+  // caixa da peça relativa à TELA, sem clamp (pode passar de 0..1)
+  box: { x: number; y: number; w: number; h: number }
+}
 export interface ImportRegion {
   kind: "fixed" | "scroll"
   coords: { x: number; y: number; w: number; h: number }
   axis: "horizontal" | "vertical" | "both"
-  // Para scroll: nó do Figma cujo conteúdo transborda o viewport. É exportado em
-  // tamanho cheio e vira a "tira" que realmente rola no teste. null p/ fixed.
-  stripFigmaId?: string | null
-  // Caixa da tira (o conteúdo rolável) relativa à TELA, sem clamp (w pode > 1).
-  // Permite renderizar a tira na mesma escala/posição da base (sem fantasma).
-  contentBox?: { x: number; y: number; w: number; h: number } | null
+  // Peças do conteúdo rolável (container único ou cards soltos). Cada uma é
+  // exportada e reposicionada na escala da base. Vazio p/ fixed.
+  pieces?: RegionPiece[]
 }
 export interface ImportScreen {
   figmaId: string
@@ -247,15 +249,24 @@ function collectDescendants(node: FigNode, out: FigNode[], depth = 0) {
 
 type Box = { x: number; y: number; width: number; height: number }
 
+const OVER = 1.02 // conteúdo precisa passar ao menos 2% da borda para valer scroll
+
+function boxOverflows(b: Box | null | undefined, fb: Box, wantH: boolean, wantV: boolean) {
+  if (!b) return false
+  if (wantH && b.x + b.width > fb.x + fb.width * OVER) return true
+  if (wantV && b.y + b.height > fb.y + fb.height * OVER) return true
+  return false
+}
+
 // Decisão de scroll = a CONFIG do Figma ("Overflow" do frame → overflowDirection).
-// Horizontal/Vertical/Both ligam o scroll; a geometria serve só para achar a
-// "tira" (o descendente que mais transborda), exportada em tamanho cheio. O
-// alinhamento correto no runtime vem do contentBox (a caixa da tira).
+// As PEÇAS do conteúdo (o que rola) são: o container único quando ele transborda
+// (linha com hug), ou os filhos soltos (cards lado a lado). Cada peça é exportada
+// e reposicionada na escala da base — cobre os dois formatos sem fantasma.
 function detectScrollRegion(frame: FigNode): {
   axis: "horizontal" | "vertical" | "both"
-  stripFigmaId: string | null
+  pieceIds: string[]
 } | null {
-  const fb = frame.absoluteBoundingBox
+  const fb = frame.absoluteBoundingBox as Box | null | undefined
   if (!SCREEN_TYPES.has(frame.type) || !fb || !fb.width || !fb.height) return null
 
   const sc = overflowToScroll(frame.overflowDirection)
@@ -263,40 +274,39 @@ function detectScrollRegion(frame: FigNode): {
   const wantH = sc === "horizontal" || sc === "both"
   const wantV = sc === "vertical" || sc === "both"
 
-  const kids: FigNode[] = []
-  collectDescendants(frame, kids)
-
-  const fx1 = fb.x + fb.width
-  const fy1 = fb.y + fb.height
-  const OVER = 1.02 // transborda ao menos 2% para valer como conteúdo rolável
-
-  // Tira = o descendente que MAIS transborda no eixo (o container do conteúdo).
-  // Sem restringir por posição/cobertura: o alinhamento correto vem do contentBox.
-  let hStrip: FigNode | null = null
-  let hMax = fb.width * OVER
-  let vStrip: FigNode | null = null
-  let vMax = fb.height * OVER
-  for (const c of kids) {
-    const cb = c.absoluteBoundingBox as Box | null | undefined
-    if (!cb || !cb.width || !cb.height) continue
-    // só conta como transbordo se de fato ultrapassa a borda direita/inferior
-    if (wantH && cb.x + cb.width > fx1 + fb.width * (OVER - 1) && cb.width > hMax) {
-      hMax = cb.width
-      hStrip = c
-    }
-    if (wantV && cb.y + cb.height > fy1 + fb.height * (OVER - 1) && cb.height > vMax) {
-      vMax = cb.height
-      vStrip = c
-    }
+  // desce por wrappers de 1 único filho (frames que só embrulham o conteúdo)
+  let container = frame
+  let guard = 0
+  while (container.children && container.children.length === 1 && guard++ < 20) {
+    container = container.children[0]
   }
 
-  // O eixo é a CONFIG do Figma. A tira pode não ser achada (ex.: cards soltos sem
-  // um container único) → região criada sem tira (fica estática, sem fantasma).
-  const strip = wantH ? hStrip ?? vStrip : vStrip ?? hStrip
-  return {
-    axis: sc,
-    stripFigmaId: strip ? strip.id : null,
-  }
+  const kids = (container.children ?? []).filter((k) => k.absoluteBoundingBox)
+  // container único que transborda → 1 peça (linha hug). Senão → os filhos.
+  const pieceNodes =
+    container !== frame && boxOverflows(container.absoluteBoundingBox as Box, fb, wantH, wantV)
+      ? [container]
+      : kids
+  if (!pieceNodes.length) return null
+
+  // a UNIÃO das peças precisa transbordar o frame — senão não há o que rolar
+  // (e criar região só duplicaria a base).
+  const union = pieceNodes.reduce<Box | null>((acc, n) => {
+    const b = n.absoluteBoundingBox as Box | null | undefined
+    if (!b) return acc
+    if (!acc) return { ...b }
+    const x = Math.min(acc.x, b.x)
+    const y = Math.min(acc.y, b.y)
+    return {
+      x,
+      y,
+      width: Math.max(acc.x + acc.width, b.x + b.width) - x,
+      height: Math.max(acc.y + acc.height, b.y + b.height) - y,
+    }
+  }, null)
+  if (!boxOverflows(union, fb, wantH, wantV)) return null
+
+  return { axis: sc, pieceIds: pieceNodes.map((n) => n.id) }
 }
 
 function overflowToScroll(dir?: string): ImportScreen["scroll"] {
@@ -377,17 +387,15 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
       if (det) {
         const coords = relCoords(n, screen)
         if (coords) {
-          const stripNode = det.stripFigmaId ? idx.byId[det.stripFigmaId] : undefined
-          const contentBox = stripNode
-            ? relCoordsRaw(stripNode.absoluteBoundingBox, screen)
-            : null
-          regions.push({
-            kind: "scroll",
-            coords,
-            axis: det.axis,
-            stripFigmaId: det.stripFigmaId,
-            contentBox,
-          })
+          const pieces = det.pieceIds
+            .map((id) => {
+              const box = relCoordsRaw(idx.byId[id]?.absoluteBoundingBox, screen)
+              return box ? { figmaId: id, box } : null
+            })
+            .filter((p): p is RegionPiece => p != null)
+          if (pieces.length) {
+            regions.push({ kind: "scroll", coords, axis: det.axis, pieces })
+          }
         }
       }
     }

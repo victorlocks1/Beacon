@@ -144,8 +144,9 @@ model ScrollRegion {
   kind      RegionKind @default(scroll)
   coords    Json // {x,y,w,h} do viewport (o frame que corta), normalizado sobre a tela
   axis      ScrollAxis @default(horizontal)
-  imageUrl  String? // tira (só para kind=scroll); fixed reaproveita a imagem da tela
-  contentBox Json? // {x,y,w,h} do CONTEÚDO rolável (a tira), normalizado sobre a tela; alinha a tira na escala da base
+  imageUrl  String? // tira única (legado/fixed reaproveita a imagem da tela)
+  contentBox Json? // {x,y,w,h} do CONTEÚDO rolável (união das peças), sobre a tela
+  pieces    Json? // [{url,x,y,w,h}] — peças do conteúdo rolável, posicionadas na escala da base (cobre o caso de cards soltos)
   createdAt DateTime   @default(now())
 }
 

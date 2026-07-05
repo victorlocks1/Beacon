@@ -17,6 +17,13 @@ export interface StageHotspot {
   overlayPosition: OverlayPosition | null
   targetScreenId: string | null
 }
+export interface StageRegionPiece {
+  url: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
 export interface StageScrollRegion {
   id: string
   kind: "scroll" | "fixed"
@@ -24,6 +31,7 @@ export interface StageScrollRegion {
   axis: "horizontal" | "vertical" | "both"
   imageUrl: string | null
   contentBox?: { x: number; y: number; w: number; h: number } | null
+  pieces?: StageRegionPiece[] | null
 }
 export interface StageScreen {
   id: string
@@ -358,7 +366,9 @@ export function PrototypeStage({
 }
 
 function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
-  const scrollRegions = regions?.filter((r) => r.kind === "scroll" && r.imageUrl)
+  const scrollRegions = regions?.filter(
+    (r) => r.kind === "scroll" && ((r.pieces && r.pieces.length > 0) || r.imageUrl)
+  )
   if (!scrollRegions?.length) return null
   return (
     <>
@@ -409,13 +419,13 @@ function ScrollRegionView({ r }: { r: StageScrollRegion }) {
   }
   const cn = "absolute invisible-scroll bg-white cursor-grab active:cursor-grabbing " + (horiz ? "touch-pan-x " : "touch-pan-y ")
 
-  const cb = r.contentBox
-  if (cb && r.coords.w > 0 && r.coords.h > 0) {
-    // frações da tira relativas ao viewport (mesma escala da base)
-    const leftFrac = (cb.x - r.coords.x) / r.coords.w
-    const topFrac = (cb.y - r.coords.y) / r.coords.h
-    const wFrac = cb.w / r.coords.w
-    const hFrac = cb.h / r.coords.h
+  // Modo peças: cada pedaço posicionado na MESMA escala da base (sem fantasma).
+  const wv = r.coords.w || 1
+  const hv = r.coords.h || 1
+  if (r.pieces && r.pieces.length > 0) {
+    // extensão rolável = far edge da união das peças relativa ao viewport
+    const rightFrac = Math.max(1, ...r.pieces.map((p) => (p.x + p.w - r.coords.x) / wv))
+    const bottomFrac = Math.max(1, ...r.pieces.map((p) => (p.y + p.h - r.coords.y) / hv))
     return (
       <div
         ref={ref}
@@ -426,33 +436,31 @@ function ScrollRegionView({ r }: { r: StageScrollRegion }) {
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
-        {/* espaçador: define a extensão rolável (largura/altura da tira) */}
-        <div
-          style={{
-            width: `${Math.max(1, leftFrac + wFrac) * 100}%`,
-            height: `${Math.max(1, topFrac + hFrac) * 100}%`,
-          }}
-        />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={r.imageUrl ?? ""}
-          alt=""
-          draggable={false}
-          className="select-none pointer-events-none"
-          style={{
-            position: "absolute",
-            left: `${leftFrac * 100}%`,
-            top: `${topFrac * 100}%`,
-            width: `${wFrac * 100}%`,
-            height: `${hFrac * 100}%`,
-            maxWidth: "none",
-          }}
-        />
+        {/* espaçador: define a extensão rolável (união das peças) */}
+        <div style={{ width: `${rightFrac * 100}%`, height: `${bottomFrac * 100}%` }} />
+        {r.pieces.map((p, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            src={p.url}
+            alt=""
+            draggable={false}
+            className="select-none pointer-events-none"
+            style={{
+              position: "absolute",
+              left: `${((p.x - r.coords.x) / wv) * 100}%`,
+              top: `${((p.y - r.coords.y) / hv) * 100}%`,
+              width: `${(p.w / wv) * 100}%`,
+              height: `${(p.h / hv) * 100}%`,
+              maxWidth: "none",
+            }}
+          />
+        ))}
       </div>
     )
   }
 
-  // Legado (imports antigos sem contentBox): melhor esforço.
+  // Legado (imports antigos sem peças): melhor esforço com a imagem única.
   const imgStyle: React.CSSProperties =
     horiz && !vert
       ? { height: "100%", width: "auto", maxWidth: "none", display: "block" }

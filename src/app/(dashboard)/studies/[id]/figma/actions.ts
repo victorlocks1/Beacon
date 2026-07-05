@@ -173,31 +173,29 @@ export async function figmaImportAction(
     idMap[s.figmaId] = created.id
   }
 
-  // 3b) tiras de scroll: exporta o CONTEÚDO rolável (nó que transborda o
-  //     viewport) em tamanho cheio e re-hospeda, para a região realmente rolar
-  //     no teste. Sem isso a região é detectada mas fica estática.
-  const stripIds = [
+  // 3b) peças de scroll: exporta cada pedaço do conteúdo rolável (container único
+  //     ou cards soltos) em tamanho cheio e re-hospeda. Sem isso a região é
+  //     detectada mas fica estática.
+  const pieceIds = [
     ...new Set(
       screens.flatMap((s) =>
-        s.regions
-          .filter((r) => r.kind === "scroll" && r.stripFigmaId)
-          .map((r) => r.stripFigmaId as string)
+        s.regions.flatMap((r) => (r.pieces ?? []).map((p) => p.figmaId))
       )
     ),
   ]
-  const stripUrls: Record<string, string> = {}
-  if (stripIds.length) {
-    const stripExport = await figmaGetImages(token, fileKey, stripIds, {
+  const pieceUrls: Record<string, string> = {}
+  if (pieceIds.length) {
+    const pieceExport = await figmaGetImages(token, fileKey, pieceIds, {
       scale: 2,
       format: "png",
     })
-    for (let i = 0; i < stripIds.length; i += 4) {
-      const batch = stripIds.slice(i, i + 4)
+    for (let i = 0; i < pieceIds.length; i += 4) {
+      const batch = pieceIds.slice(i, i + 4)
       await Promise.all(
         batch.map(async (id, j) => {
-          const src = stripExport[id]
+          const src = pieceExport[id]
           if (!src) return
-          stripUrls[id] = await downloadAndUpload(studyId, src, 10000 + i + j)
+          pieceUrls[id] = await downloadAndUpload(studyId, src, 10000 + i + j)
         })
       )
     }
@@ -224,18 +222,35 @@ export async function figmaImportAction(
       hotspotCount++
     }
     for (const r of s.regions) {
-      // fixed reaproveita a imagem da tela; scroll usa a tira exportada.
-      const imageUrl =
-        r.kind === "scroll" && r.stripFigmaId ? stripUrls[r.stripFigmaId] ?? null : null
+      // fixed reaproveita a imagem da tela; scroll monta as peças exportadas.
+      const pieces =
+        r.kind === "scroll"
+          ? (r.pieces ?? [])
+              .map((p) => {
+                const url = pieceUrls[p.figmaId]
+                return url ? { url, ...p.box } : null
+              })
+              .filter((p): p is { url: string; x: number; y: number; w: number; h: number } => p != null)
+          : []
+      // união das peças (para o extensor de rolagem no runtime)
+      const contentBox = pieces.length
+        ? (() => {
+            const x = Math.min(...pieces.map((p) => p.x))
+            const y = Math.min(...pieces.map((p) => p.y))
+            const w = Math.max(...pieces.map((p) => p.x + p.w)) - x
+            const h = Math.max(...pieces.map((p) => p.y + p.h)) - y
+            return { x, y, w, h }
+          })()
+        : null
       await prisma.scrollRegion.create({
         data: {
           screenId,
           kind: r.kind,
           coords: r.coords,
           axis: r.axis,
-          imageUrl,
-          // caixa da tira (alinha o overlay na escala da base). Só quando há tira.
-          ...(r.contentBox ? { contentBox: r.contentBox } : {}),
+          imageUrl: null,
+          ...(contentBox ? { contentBox } : {}),
+          ...(pieces.length ? { pieces } : {}),
         },
       })
     }
