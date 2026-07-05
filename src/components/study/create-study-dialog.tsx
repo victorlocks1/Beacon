@@ -17,9 +17,9 @@ import { cn } from "@/lib/utils"
 type DeviceType = "mobile" | "tablet" | "desktop"
 
 const deviceOptions: { value: DeviceType; label: string; desc: string; icon: React.ElementType }[] = [
-  { value: "mobile", label: "Mobile", desc: "390px", icon: Smartphone },
-  { value: "tablet", label: "Tablet", desc: "768px", icon: Tablet },
-  { value: "desktop", label: "Desktop", desc: "1280px", icon: Monitor },
+  { value: "mobile", label: "Mobile", desc: "360 × 800", icon: Smartphone },
+  { value: "tablet", label: "Tablet", desc: "768 × 1024", icon: Tablet },
+  { value: "desktop", label: "Desktop", desc: "1280 × 800", icon: Monitor },
 ]
 
 export function CreateStudyDialog({ projectId }: { projectId: string }) {
