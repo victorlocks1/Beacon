@@ -34,8 +34,31 @@ export default function FigmaEmbedTest() {
     if (!clean) return
     setEvents([])
     counter.current = 0
+
+    // Converte QUALQUER link do Figma (design/file/proto) para o modo PROTÓTIPO,
+    // igual o Maze faz — senão o embed abre o arquivo inteiro (todas as telas).
+    let target = clean
+    try {
+      const key = clean.match(/figma\.com\/(?:proto|design|file|board)\/([A-Za-z0-9_-]+)/)?.[1]
+      const u = new URL(clean)
+      const nodeId =
+        u.searchParams.get("node-id") ||
+        u.searchParams.get("starting-point-node-id") ||
+        ""
+      if (key) {
+        const proto = new URL(`https://www.figma.com/proto/${key}/embed`)
+        if (nodeId) proto.searchParams.set("node-id", nodeId)
+        proto.searchParams.set("scaling", "scale-down")
+        proto.searchParams.set("content-scaling", "fixed")
+        proto.searchParams.set("hide-ui", "1") // UI limpa (só o protótipo), como no Maze
+        target = proto.toString()
+      }
+    } catch {
+      /* usa o link cru */
+    }
+
     // embed_host habilita a Embed API (postMessage) do Figma
-    setEmbed(`https://www.figma.com/embed?embed_host=beacon&url=${encodeURIComponent(clean)}`)
+    setEmbed(`https://www.figma.com/embed?embed_host=beacon&url=${encodeURIComponent(target)}`)
   }
 
   return (
