@@ -100,7 +100,48 @@ export default async function ReviewPage({
     return []
   })
 
-  const missionCount = reviewSteps.filter((st) => st.kind === "mission").length
+  // Sem nenhuma missão, mas com telas: adiciona um passo de EXPLORAÇÃO LIVRE do
+  // protótipo, para a revisão do fluxo não perder o protótipo.
+  const hasMissionStep = reviewSteps.some((st) => st.kind === "mission")
+  if (!hasMissionStep && screens.length > 0) {
+    reviewSteps.unshift({
+      kind: "mission",
+      mission: {
+        id: "__explore__",
+        task: "Explore o protótipo",
+        description: "Navegue livremente pelas telas para revisar o fluxo.",
+        startScreenId: screens[0].id,
+        goalScreenIds: [], // sem objetivo: avança pelo botão "Avançar"
+      },
+    })
+  }
+
+  const missionCount = reviewSteps.filter(
+    (st) => st.kind === "mission" && st.mission.id !== "__explore__"
+  ).length
+
+  // Tarefas para o contexto dos comentários (âncoras: tela inicial + objetivos).
+  const commentTasks = study.blocks
+    .filter((b) => b.type === "mission" && b.mission)
+    .map((b, i) => {
+      const m = b.mission!
+      const goalIds =
+        m.successType === "path"
+          ? m.paths
+              .map((p) => p.steps[p.steps.length - 1]?.screenId)
+              .filter((sid): sid is string => !!sid)
+          : m.goals.map((g) => g.goalScreenId)
+      const screenIds = [...new Set([m.startScreenId, ...goalIds])].filter((id) =>
+        screens.some((s) => s.id === id)
+      )
+      return {
+        id: m.id,
+        label: `Tarefa ${i + 1}`,
+        task: m.task,
+        description: m.description,
+        screenIds,
+      }
+    })
 
   const rawComments = await prisma.comment.findMany({
     where: { studyId, parentId: null },
@@ -210,6 +251,7 @@ export default async function ReviewPage({
               currentUserId={userId}
               isOwner={isOwner}
               screens={screens.map((s) => ({ id: s.id, name: s.name, imageUrl: s.imageUrl }))}
+              tasks={commentTasks}
               comments={comments}
             />
           </TabsContent>

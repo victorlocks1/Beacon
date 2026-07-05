@@ -130,6 +130,21 @@ export function TestRunner({
     return () => window.removeEventListener("pagehide", onPageHide)
   }, [token, preview])
 
+  // No preview/revisão cada passo de missão começa "pronto para explorar":
+  // reinicia o estado de interação (senão completedRef do passo anterior trava).
+  useEffect(() => {
+    if (!preview) return
+    completedRef.current = false
+    clickCountRef.current = 0
+    misclickCountRef.current = 0
+    startTimeRef.current = now()
+    if (mission) {
+      pathRef.current = [mission.startScreenId]
+      topRef.current = mission.startScreenId
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIndex, preview])
+
   // Avança para o próximo passo — ou finaliza a sessão inteira.
   const advance = useCallback(() => {
     if (isLastStep) {
@@ -280,7 +295,8 @@ export function TestRunner({
     advance()
   }
 
-  const started = taskStarted
+  // No preview/revisão o protótipo já fica interativo (sem "Iniciar tarefa").
+  const started = preview || taskStarted
   let content: React.ReactNode
 
   if (welcome && !flowStarted) {
@@ -359,7 +375,12 @@ export function TestRunner({
               )}
             </div>
 
-            {!started ? (
+            {preview ? (
+              // Revisão: protótipo já interativo; botão para seguir o fluxo.
+              <Button onClick={advance} className="h-12 px-6" size="lg">
+                {isLastStep ? "Concluir revisão" : "Avançar"}
+              </Button>
+            ) : !started ? (
               <Button onClick={startTask} className="h-12 px-6" size="lg">
                 <Play className="h-4 w-4 mr-2" />
                 {s.startTask}

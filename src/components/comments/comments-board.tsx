@@ -14,6 +14,13 @@ import {
 } from "@/app/(dashboard)/studies/[id]/review/actions"
 
 export type BoardScreen = { id: string; name: string; imageUrl: string }
+export type BoardTask = {
+  id: string
+  label: string // "Tarefa 1"
+  task: string
+  description: string | null
+  screenIds: string[] // telas âncora da tarefa (inicial + objetivo)
+}
 export type BoardReply = { id: string; body: string; authorName: string; authorId: string }
 export type BoardComment = {
   id: string
@@ -35,12 +42,14 @@ type Selection =
 export function CommentsBoard({
   studyId,
   screens,
+  tasks = [],
   comments,
   currentUserId,
   isOwner,
 }: {
   studyId: string
   screens: BoardScreen[]
+  tasks?: BoardTask[]
   comments: BoardComment[]
   currentUserId: string
   isOwner: boolean
@@ -118,56 +127,98 @@ export function CommentsBoard({
   }
 
   const commentsByScreen = (id: string) => comments.filter((c) => c.screenId === id)
+  const screenById = new Map(screens.map((s) => [s.id, s]))
+
+  // Uma tela com seus pins de comentário (bloco reutilizável).
+  function ScreenPins({ s }: { s: BoardScreen }) {
+    const cs = commentsByScreen(s.id)
+    return (
+      <div className="space-y-2">
+        <p className="text-title-small text-on-surface">{s.name}</p>
+        <div
+          className="relative w-full max-w-[360px] rounded-xl overflow-hidden border border-outline-variant cursor-crosshair"
+          onClick={(e) => screenClick(e, s.id)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={s.imageUrl} alt={s.name} className="w-full block select-none" draggable={false} />
+          {cs.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelection({ kind: "thread", commentId: c.id })
+              }}
+              style={{ left: `${c.xNorm * 100}%`, top: `${c.yNorm * 100}%` }}
+              className={cn(
+                "absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full rounded-bl-none border-2 border-white text-xs font-semibold flex items-center justify-center shadow",
+                c.resolved ? "bg-emerald-600 text-white" : "bg-primary text-on-primary",
+                selection?.kind === "thread" && selection.commentId === c.id && "ring-2 ring-primary ring-offset-1"
+              )}
+              title={c.body}
+            >
+              {i + 1}
+            </button>
+          ))}
+          {selection?.kind === "new" && selection.screenId === s.id && (
+            <span
+              style={{ left: `${selection.x * 100}%`, top: `${selection.y * 100}%` }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full rounded-bl-none border-2 border-white bg-amber-500 shadow animate-pulse"
+            />
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Telas âncora já cobertas pelas tarefas → o resto vai para "Outras telas".
+  const taskedIds = new Set(tasks.flatMap((t) => t.screenIds))
+  const otherScreens = screens.filter((s) => !taskedIds.has(s.id))
 
   return (
     <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
-      {/* Telas com pins */}
-      <div className="space-y-8">
+      {/* Fluxo por tarefa + pins */}
+      <div className="space-y-10">
         <p className="text-body-small text-on-surface-variant">
-          Clique em qualquer ponto de uma tela para deixar um comentário.
+          Revise cada tarefa no seu contexto. Clique em qualquer ponto de uma tela para comentar.
         </p>
-        {screens.map((s) => {
-          const cs = commentsByScreen(s.id)
+
+        {tasks.map((t) => {
+          const taskScreens = t.screenIds
+            .map((id) => screenById.get(id))
+            .filter((s): s is BoardScreen => !!s)
           return (
-            <div key={s.id} className="space-y-2">
-              <p className="text-title-small text-on-surface">{s.name}</p>
-              <div
-                className="relative w-full max-w-[360px] rounded-xl overflow-hidden border border-outline-variant cursor-crosshair"
-                onClick={(e) => screenClick(e, s.id)}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.imageUrl} alt={s.name} className="w-full block select-none" draggable={false} />
-                {cs.map((c, i) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelection({ kind: "thread", commentId: c.id })
-                    }}
-                    style={{ left: `${c.xNorm * 100}%`, top: `${c.yNorm * 100}%` }}
-                    className={cn(
-                      "absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full rounded-bl-none border-2 border-white text-xs font-semibold flex items-center justify-center shadow",
-                      c.resolved
-                        ? "bg-emerald-600 text-white"
-                        : "bg-primary text-on-primary",
-                      selection?.kind === "thread" && selection.commentId === c.id && "ring-2 ring-primary ring-offset-1"
-                    )}
-                    title={c.body}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                {selection?.kind === "new" && selection.screenId === s.id && (
-                  <span
-                    style={{ left: `${selection.x * 100}%`, top: `${selection.y * 100}%` }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 h-6 w-6 rounded-full rounded-bl-none border-2 border-white bg-amber-500 shadow animate-pulse"
-                  />
+            <section key={t.id} className="space-y-4">
+              <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-4">
+                <p className="text-label-medium text-on-surface-variant">{t.label}</p>
+                <h3 className="text-title-medium text-on-surface mt-0.5">{t.task}</h3>
+                {t.description && (
+                  <p className="text-body-medium text-on-surface-variant mt-1">{t.description}</p>
                 )}
               </div>
-            </div>
+              <div className="flex flex-wrap gap-6">
+                {taskScreens.map((s) => (
+                  <ScreenPins key={s.id} s={s} />
+                ))}
+              </div>
+            </section>
           )
         })}
+
+        {otherScreens.length > 0 && (
+          <section className="space-y-4">
+            <div className="rounded-2xl border border-outline-variant bg-surface-container-low p-4">
+              <p className="text-label-medium text-on-surface-variant">
+                {tasks.length > 0 ? "Outras telas do protótipo" : "Telas"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-6">
+              {otherScreens.map((s) => (
+                <ScreenPins key={s.id} s={s} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       {/* Painel: novo comentário OU thread selecionada */}
