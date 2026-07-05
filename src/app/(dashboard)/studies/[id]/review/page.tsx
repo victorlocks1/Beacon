@@ -4,7 +4,8 @@ import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PrototypePlayer } from "@/components/preview/prototype-player"
+import { TestRunner, type Step } from "@/components/test/test-runner"
+import { type Lang } from "@/lib/i18n"
 import { CommentsBoard, type BoardComment } from "@/components/comments/comments-board"
 
 export default async function ReviewPage({
@@ -27,16 +28,79 @@ export default async function ReviewPage({
         },
       },
       blocks: {
-        where: { type: "mission" },
         orderBy: { order: "asc" },
-        include: { mission: true },
+        include: {
+          mission: {
+            include: {
+              goals: true,
+              paths: { include: { steps: { orderBy: { order: "asc" } } } },
+              questions: { orderBy: { order: "asc" } },
+            },
+          },
+          question: true,
+        },
       },
     },
   })
   if (!study) return null
 
   const screens = study.prototype?.screens ?? []
-  const firstMission = study.blocks[0]?.mission ?? null
+  const lang = (study.language ?? "pt") as Lang
+
+  // Monta os passos do fluxo (idêntico ao testador): missões + perguntas.
+  const toQuestionStep = (q: {
+    id: string
+    type: string
+    title: string
+    description: string | null
+    required: boolean
+    options: unknown
+  }): Step => ({
+    kind: "question",
+    question: {
+      id: q.id,
+      type: q.type as "open" | "choice" | "rating" | "binary",
+      title: q.title,
+      description: q.description,
+      required: q.required,
+      options: (q.options as string[] | null) ?? [],
+    },
+  })
+
+  const reviewSteps: Step[] = study.blocks.flatMap((b): Step[] => {
+    if (b.type === "mission" && b.mission) {
+      const m = b.mission
+      const goalScreenIds =
+        m.successType === "path"
+          ? [
+              ...new Set(
+                m.paths
+                  .map((p) => p.steps[p.steps.length - 1]?.screenId)
+                  .filter((sid): sid is string => !!sid)
+              ),
+            ]
+          : m.goals.map((g) => g.goalScreenId)
+      return [
+        {
+          kind: "mission",
+          mission: {
+            id: m.id,
+            task: m.task,
+            description: m.description,
+            startScreenId: m.startScreenId,
+            goalScreenIds,
+          },
+        },
+        ...m.questions.map(toQuestionStep),
+      ]
+    }
+    if (b.type === "question" && b.question) {
+      return [toQuestionStep(b.question)]
+    }
+    return []
+  })
+
+  const missionCount = reviewSteps.filter((st) => st.kind === "mission").length
 
   const rawComments = await prisma.comment.findMany({
     where: { studyId, parentId: null },
@@ -86,54 +150,58 @@ export default async function ReviewPage({
         </div>
       </div>
 
-      {screens.length === 0 ? (
+      {reviewSteps.length === 0 ? (
         <div className="text-center py-24 border border-outline-variant rounded-3xl bg-surface-container-low text-on-surface-variant">
-          Este estudo ainda não tem telas.
+          Este estudo ainda não tem tarefas ou perguntas.
         </div>
       ) : (
         <Tabs defaultValue="preview">
           <TabsList className="mb-6">
-            <TabsTrigger value="preview">Preview</TabsTrigger>
+            <TabsTrigger value="preview">Fluxo completo</TabsTrigger>
             <TabsTrigger value="comments">Comentários ({comments.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="preview">
-            <PrototypePlayer
-              deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-              screens={screens.map((s) => ({
-                id: s.id,
-                name: s.name,
-                imageUrl: s.imageUrl,
-                width: s.width,
-                height: s.height,
-                scroll: s.scroll,
-                hotspots: s.hotspots.map((h) => ({
-                  id: h.id,
-                  coords: h.coords as { x: number; y: number; w: number; h: number },
-                  action: h.action,
-                  overlayPosition: h.overlayPosition,
-                  targetScreenId: h.targetScreenId,
-                })),
-                scrollRegions: s.scrollRegions.map((r) => ({
-                  id: r.id,
-                  kind: r.kind as "scroll" | "fixed",
-                  coords: r.coords as { x: number; y: number; w: number; h: number },
-                  axis: r.axis as "horizontal" | "vertical" | "both",
-                  imageUrl: r.imageUrl,
-                  contentBox: r.contentBox as { x: number; y: number; w: number; h: number } | null,
-                  pieces: r.pieces as { url: string; x: number; y: number; w: number; h: number }[] | null,
-                })),
-              }))}
-              mission={
-                firstMission
-                  ? {
-                      task: firstMission.task,
-                      description: firstMission.description,
-                      startScreenId: firstMission.startScreenId,
-                    }
-                  : null
-              }
-            />
+            {/* Fluxo inteiro em modo revisão: boas-vindas → tarefas → perguntas →
+                obrigado. Não grava nenhum dado (preview). */}
+            <div className="rounded-3xl overflow-hidden border border-outline-variant">
+              <TestRunner
+                token=""
+                lang={lang}
+                preview
+                welcome={{
+                  title: study.welcomeTitle ?? "",
+                  message: study.welcomeMessage ?? "",
+                  taskCount: missionCount,
+                }}
+                deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+                screens={screens.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  imageUrl: s.imageUrl,
+                  width: s.width,
+                  height: s.height,
+                  scroll: s.scroll,
+                  hotspots: s.hotspots.map((h) => ({
+                    id: h.id,
+                    coords: h.coords as { x: number; y: number; w: number; h: number },
+                    action: h.action,
+                    overlayPosition: h.overlayPosition,
+                    targetScreenId: h.targetScreenId,
+                  })),
+                  scrollRegions: s.scrollRegions.map((r) => ({
+                    id: r.id,
+                    kind: r.kind as "scroll" | "fixed",
+                    coords: r.coords as { x: number; y: number; w: number; h: number },
+                    axis: r.axis as "horizontal" | "vertical" | "both",
+                    imageUrl: r.imageUrl,
+                    contentBox: r.contentBox as { x: number; y: number; w: number; h: number } | null,
+                    pieces: r.pieces as { url: string; x: number; y: number; w: number; h: number }[] | null,
+                  })),
+                }))}
+                steps={reviewSteps}
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value="comments">
