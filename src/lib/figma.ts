@@ -46,6 +46,8 @@ interface FigNode {
   name: string
   type: string
   absoluteBoundingBox?: { x: number; y: number; width: number; height: number } | null
+  // caixa que INCLUI efeitos (sombra/blur) — bate com a imagem exportada
+  absoluteRenderBounds?: { x: number; y: number; width: number; height: number } | null
   overflowDirection?: string
   scrollBehavior?: string
   overlayPositionType?: string
@@ -360,7 +362,14 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
       // hotspot?
       const edge = edgeForNode(n)
       if (edge) {
-        const coords = relCoords(n, screen)
+        // Sem clamp: hotspots DENTRO de áreas roláveis podem começar além do
+        // frame (x/y > 1) — o clamp os grudava na borda e quebrava o clique
+        // depois de rolar. Guarda apenas contra tamanho ínfimo / nós distantes.
+        const raw = relCoordsRaw(n.absoluteBoundingBox, screen)
+        const coords =
+          raw && raw.w >= 0.005 && raw.h >= 0.005 && raw.x < 4 && raw.x + raw.w > -0.5 && raw.y < 6 && raw.y + raw.h > -0.5
+            ? raw
+            : null
         if (coords) {
           // Normaliza o destino para o FRAME DE TOPO (a "tela" que importamos e
           // renderizamos). O destino cru de um overlay/navigate pode ser um nó
@@ -389,7 +398,12 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
         if (coords) {
           const pieces = det.pieceIds
             .map((id) => {
-              const box = relCoordsRaw(idx.byId[id]?.absoluteBoundingBox, screen)
+              const node = idx.byId[id]
+              // posiciona pela render bounds (inclui sombra) p/ bater com o PNG
+              const box = relCoordsRaw(
+                node?.absoluteRenderBounds ?? node?.absoluteBoundingBox,
+                screen
+              )
               return box ? { figmaId: id, box } : null
             })
             .filter((p): p is RegionPiece => p != null)

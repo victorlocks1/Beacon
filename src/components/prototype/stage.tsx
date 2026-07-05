@@ -266,7 +266,13 @@ export function PrototypeStage({
             draggable={false}
             onClick={(e) => handleImageClick(baseScreen, e)}
           />
-          <RegionLayer regions={baseScreen.scrollRegions} />
+          <RegionLayer
+            regions={baseScreen.scrollRegions}
+            onScrollClick={(x, y) => {
+              const hit = hitTest(baseScreen, x, y)
+              if (hit) dispatch(hit, baseScreen.id, x, y)
+            }}
+          />
         </div>
       </div>
 
@@ -356,7 +362,13 @@ export function PrototypeStage({
                 draggable={false}
                 onClick={(e) => handleImageClick(screen, e)}
               />
-              <RegionLayer regions={screen.scrollRegions} />
+              <RegionLayer
+                regions={screen.scrollRegions}
+                onScrollClick={(x, y) => {
+                  const hit = hitTest(screen, x, y)
+                  if (hit) dispatch(hit, screen.id, x, y)
+                }}
+              />
             </div>
           </div>
         )
@@ -365,7 +377,13 @@ export function PrototypeStage({
   )
 }
 
-function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
+function RegionLayer({
+  regions,
+  onScrollClick,
+}: {
+  regions?: StageScrollRegion[]
+  onScrollClick?: (xNorm: number, yNorm: number) => void
+}) {
   const scrollRegions = regions?.filter(
     (r) => r.kind === "scroll" && ((r.pieces && r.pieces.length > 0) || r.imageUrl)
   )
@@ -373,7 +391,7 @@ function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
   return (
     <>
       {scrollRegions.map((r) => (
-        <ScrollRegionView key={r.id} r={r} />
+        <ScrollRegionView key={r.id} r={r} onScrollClick={onScrollClick} />
       ))}
     </>
   )
@@ -383,7 +401,13 @@ function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
 // posicionada via contentBox na MESMA escala da base — cobre exatamente o que a
 // base mostra (sem fantasma) e revela o resto ao rolar. Rola com roda/trackpad
 // e também clicando-segurando-arrastando.
-function ScrollRegionView({ r }: { r: StageScrollRegion }) {
+function ScrollRegionView({
+  r,
+  onScrollClick,
+}: {
+  r: StageScrollRegion
+  onScrollClick?: (xNorm: number, yNorm: number) => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const drag = useRef({ x: 0, y: 0, sl: 0, st: 0, active: false, moved: false })
   const horiz = r.axis === "horizontal" || r.axis === "both"
@@ -400,13 +424,26 @@ function ScrollRegionView({ r }: { r: StageScrollRegion }) {
     if (!el || !drag.current.active) return
     const dx = e.clientX - drag.current.x
     const dy = e.clientY - drag.current.y
-    if (Math.abs(dx) + Math.abs(dy) > 3) drag.current.moved = true
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.current.moved = true
     if (horiz) el.scrollLeft = drag.current.sl - dx
     if (vert) el.scrollTop = drag.current.st - dy
   }
   function endDrag(e: React.PointerEvent) {
+    const el = ref.current
     drag.current.active = false
-    try { ref.current?.releasePointerCapture(e.pointerId) } catch {}
+    try { el?.releasePointerCapture(e.pointerId) } catch {}
+    // Toque (sem arrasto): repassa o clique para o hotspot sob o ponteiro,
+    // considerando a rolagem — restaura navegação dentro da área rolável.
+    if (!drag.current.moved && el && onScrollClick) {
+      const rect = el.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        const contentX = e.clientX - rect.left + el.scrollLeft
+        const contentY = e.clientY - rect.top + el.scrollTop
+        const sx = r.coords.x + (contentX / rect.width) * r.coords.w
+        const sy = r.coords.y + (contentY / rect.height) * r.coords.h
+        onScrollClick(sx, sy)
+      }
+    }
   }
 
   const viewport: React.CSSProperties = {
