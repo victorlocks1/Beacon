@@ -195,7 +195,7 @@ model Hotspot {
   action          HotspotAction    @default(navigate)
   overlayPosition OverlayPosition?
   targetScreenId  String?
-  targetScreen    Screen?          @relation("HotspotTarget", fields: [targetScreenId], references: [id])
+  targetScreen    Screen?          @relation("HotspotTarget", fields: [targetScreenId], references: [id], onDelete: SetNull)
   events          Event[]
 }
 
@@ -259,7 +259,7 @@ model Mission {
   task          String
   description   String?
   startScreenId String
-  startScreen   Screen          @relation("MissionStartScreen", fields: [startScreenId], references: [id])
+  startScreen   Screen          @relation("MissionStartScreen", fields: [startScreenId], references: [id], onDelete: Cascade)
   successType   SuccessType
   goals         MissionGoal[]
   paths         MissionPath[]
@@ -278,7 +278,7 @@ model MissionGoal {
   missionId    String
   mission      Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
   goalScreenId String
-  goalScreen   Screen  @relation(fields: [goalScreenId], references: [id])
+  goalScreen   Screen  @relation(fields: [goalScreenId], references: [id], onDelete: Cascade)
 }
 
 model MissionPath {
@@ -294,7 +294,7 @@ model PathStep {
   missionPathId String
   missionPath   MissionPath @relation(fields: [missionPathId], references: [id], onDelete: Cascade)
   screenId      String
-  screen        Screen      @relation(fields: [screenId], references: [id])
+  screen        Screen      @relation(fields: [screenId], references: [id], onDelete: Cascade)
   order         Int
 }
 
@@ -346,13 +346,13 @@ model Event {
   missionId      String
   mission        Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
   screenId       String
-  screen         Screen    @relation("EventScreen", fields: [screenId], references: [id])
+  screen         Screen    @relation("EventScreen", fields: [screenId], references: [id], onDelete: Cascade)
   type           EventType
   xNorm          Float
   yNorm          Float
   hotspotId      String?
-  hotspot        Hotspot?  @relation(fields: [hotspotId], references: [id])
+  hotspot        Hotspot?  @relation(fields: [hotspotId], references: [id], onDelete: SetNull)
   targetScreenId String?
-  targetScreen   Screen?   @relation("EventTargetScreen", fields: [targetScreenId], references: [id])
+  targetScreen   Screen?   @relation("EventTargetScreen", fields: [targetScreenId], references: [id], onDelete: SetNull)
   timestampMs    BigInt
 }
