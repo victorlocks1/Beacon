@@ -11,20 +11,35 @@ export default function FigmaEmbedTest() {
   const counter = useRef(0)
 
   useEffect(() => {
+    // DIAGNÓSTICO: loga TODA mensagem (qualquer origem), mostrando origem e forma
+    // crua — pra saber se o Figma manda algo ou se o filtro estava errado.
     function onMsg(e: MessageEvent) {
-      if (!e.origin.includes("figma.com")) return
-      const data = e.data
-      if (!data || typeof data !== "object") return
-      const type = (data.type as string) || "(sem type)"
-      const clock = new Date().toLocaleTimeString()
+      const raw = e.data
+      let type = "(sem type)"
       let body = ""
       try {
-        body = JSON.stringify(data, null, 0)
+        if (typeof raw === "string") {
+          body = raw
+          try {
+            const p = JSON.parse(raw)
+            type = (p?.type as string) || type
+            body = JSON.stringify(p)
+          } catch {
+            /* string pura */
+          }
+        } else if (raw && typeof raw === "object") {
+          type = ((raw.type || raw.name || raw.event) as string) || "(sem type)"
+          body = JSON.stringify(raw)
+        } else {
+          body = String(raw)
+        }
       } catch {
-        body = String(data)
+        body = "(não serializável)"
       }
+      const clock = new Date().toLocaleTimeString()
+      const origin = e.origin || "(sem origem)"
       counter.current += 1
-      setEvents((prev) => [{ t: clock, type, body }, ...prev].slice(0, 300))
+      setEvents((prev) => [{ t: clock, type: `${type}  ⟵ ${origin}`, body }, ...prev].slice(0, 400))
     }
     window.addEventListener("message", onMsg)
     return () => window.removeEventListener("message", onMsg)
@@ -109,6 +124,11 @@ export default function FigmaEmbedTest() {
           Sem client-id o protótipo só renderiza (sem eventos). Com client-id (Embed Kit 2.0) os
           eventos passam a aparecer. Veja abaixo como criar o app.
         </p>
+        {embed && (
+          <p style={{ color: "#5a5", fontSize: 11, marginTop: 6, wordBreak: "break-all" }}>
+            embed: {embed}
+          </p>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 420px", gap: 16, marginTop: 20, alignItems: "start" }}>
           <div style={{ border: "1px solid #222", borderRadius: 12, overflow: "hidden", background: "#000", aspectRatio: "9 / 16" }}>
