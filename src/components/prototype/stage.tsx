@@ -268,10 +268,10 @@ export function PrototypeStage({
           />
           <RegionLayer
             regions={baseScreen.scrollRegions}
-            onScrollClick={(x, y) => {
-              const hit = hitTest(baseScreen, x, y)
-              if (hit) dispatch(hit, baseScreen.id, x, y)
-            }}
+            hotspots={baseScreen.hotspots}
+            onDispatch={(h) =>
+              dispatch(h, baseScreen.id, h.coords.x + h.coords.w / 2, h.coords.y + h.coords.h / 2)
+            }
           />
         </div>
       </div>
@@ -364,10 +364,10 @@ export function PrototypeStage({
               />
               <RegionLayer
                 regions={screen.scrollRegions}
-                onScrollClick={(x, y) => {
-                  const hit = hitTest(screen, x, y)
-                  if (hit) dispatch(hit, screen.id, x, y)
-                }}
+                hotspots={screen.hotspots}
+                onDispatch={(h) =>
+                  dispatch(h, screen.id, h.coords.x + h.coords.w / 2, h.coords.y + h.coords.h / 2)
+                }
               />
             </div>
           </div>
@@ -379,10 +379,12 @@ export function PrototypeStage({
 
 function RegionLayer({
   regions,
-  onScrollClick,
+  hotspots,
+  onDispatch,
 }: {
   regions?: StageScrollRegion[]
-  onScrollClick?: (xNorm: number, yNorm: number) => void
+  hotspots?: StageHotspot[]
+  onDispatch?: (h: StageHotspot) => void
 }) {
   const scrollRegions = regions?.filter(
     (r) => r.kind === "scroll" && ((r.pieces && r.pieces.length > 0) || r.imageUrl)
@@ -391,27 +393,33 @@ function RegionLayer({
   return (
     <>
       {scrollRegions.map((r) => (
-        <ScrollRegionView key={r.id} r={r} onScrollClick={onScrollClick} />
+        <ScrollRegionView key={r.id} r={r} hotspots={hotspots ?? []} onDispatch={onDispatch} />
       ))}
     </>
   )
 }
 
-// Uma área de scroll interna. A tira (conteúdo maior que o viewport) é
-// posicionada via contentBox na MESMA escala da base — cobre exatamente o que a
-// base mostra (sem fantasma) e revela o resto ao rolar. Rola com roda/trackpad
-// e também clicando-segurando-arrastando.
+// Área de scroll interna, modelada como o scroll NATIVO: um viewport que recorta
+// um conteúdo maior. A tira (imagem) e os hotspots vivem no MESMO container
+// rolável e no mesmo sistema de coordenadas — rolam juntos. A imagem fixa só o
+// eixo do scroll (o outro fica `auto`, preservando a proporção do design, sem
+// esticar). Os hotspots são elementos clicáveis que disparam a navegação exata
+// definida no Figma. Rola por roda/trackpad e arrastando.
 function ScrollRegionView({
   r,
-  onScrollClick,
+  hotspots,
+  onDispatch,
 }: {
   r: StageScrollRegion
-  onScrollClick?: (xNorm: number, yNorm: number) => void
+  hotspots: StageHotspot[]
+  onDispatch?: (h: StageHotspot) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const drag = useRef({ x: 0, y: 0, sl: 0, st: 0, active: false, moved: false })
   const horiz = r.axis === "horizontal" || r.axis === "both"
   const vert = r.axis === "vertical" || r.axis === "both"
+  const wv = r.coords.w || 1
+  const hv = r.coords.h || 1
 
   function onPointerDown(e: React.PointerEvent) {
     const el = ref.current
@@ -429,21 +437,8 @@ function ScrollRegionView({
     if (vert) el.scrollTop = drag.current.st - dy
   }
   function endDrag(e: React.PointerEvent) {
-    const el = ref.current
     drag.current.active = false
-    try { el?.releasePointerCapture(e.pointerId) } catch {}
-    // Toque (sem arrasto): repassa o clique para o hotspot sob o ponteiro,
-    // considerando a rolagem — restaura navegação dentro da área rolável.
-    if (!drag.current.moved && el && onScrollClick) {
-      const rect = el.getBoundingClientRect()
-      if (rect.width > 0 && rect.height > 0) {
-        const contentX = e.clientX - rect.left + el.scrollLeft
-        const contentY = e.clientY - rect.top + el.scrollTop
-        const sx = r.coords.x + (contentX / rect.width) * r.coords.w
-        const sy = r.coords.y + (contentY / rect.height) * r.coords.h
-        onScrollClick(sx, sy)
-      }
-    }
+    try { ref.current?.releasePointerCapture(e.pointerId) } catch {}
   }
 
   const viewport: React.CSSProperties = {
@@ -454,56 +449,36 @@ function ScrollRegionView({
     overflowX: horiz ? "auto" : "hidden",
     overflowY: vert ? "auto" : "hidden",
   }
-  const cn = "absolute invisible-scroll bg-white cursor-grab active:cursor-grabbing " + (horiz ? "touch-pan-x " : "touch-pan-y ")
+  const cn =
+    "absolute invisible-scroll bg-white cursor-grab active:cursor-grabbing " +
+    (horiz ? "touch-pan-x " : "touch-pan-y ")
 
-  // Modo peças: cada pedaço posicionado na MESMA escala da base (sem fantasma).
-  const wv = r.coords.w || 1
-  const hv = r.coords.h || 1
-  if (r.pieces && r.pieces.length > 0) {
-    // extensão rolável = far edge da união das peças relativa ao viewport
-    const rightFrac = Math.max(1, ...r.pieces.map((p) => (p.x + p.w - r.coords.x) / wv))
-    const bottomFrac = Math.max(1, ...r.pieces.map((p) => (p.y + p.h - r.coords.y) / hv))
-    return (
-      <div
-        ref={ref}
-        className={cn}
-        style={viewport}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      >
-        {/* espaçador: define a extensão rolável (união das peças) */}
-        <div style={{ width: `${rightFrac * 100}%`, height: `${bottomFrac * 100}%` }} />
-        {r.pieces.map((p, i) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={i}
-            src={p.url}
-            alt=""
-            draggable={false}
-            className="select-none pointer-events-none"
-            style={{
-              position: "absolute",
-              left: `${((p.x - r.coords.x) / wv) * 100}%`,
-              top: `${((p.y - r.coords.y) / hv) * 100}%`,
-              width: `${(p.w / wv) * 100}%`,
-              height: `${(p.h / hv) * 100}%`,
-              maxWidth: "none",
-            }}
-          />
-        ))}
-      </div>
-    )
-  }
+  const pieces = r.pieces ?? []
+  // extensão do conteúdo rolável (união das peças), em coords da tela
+  const ext =
+    pieces.length > 0
+      ? {
+          x: Math.min(...pieces.map((p) => p.x)),
+          y: Math.min(...pieces.map((p) => p.y)),
+          x2: Math.max(...pieces.map((p) => p.x + p.w)),
+          y2: Math.max(...pieces.map((p) => p.y + p.h)),
+        }
+      : { x: r.coords.x, y: r.coords.y, x2: r.coords.x + r.coords.w, y2: r.coords.y + r.coords.h }
 
-  // Legado (imports antigos sem peças): melhor esforço com a imagem única.
-  const imgStyle: React.CSSProperties =
-    horiz && !vert
-      ? { height: "100%", width: "auto", maxWidth: "none", display: "block" }
-      : vert && !horiz
-        ? { width: "100%", height: "auto", display: "block" }
-        : { width: "auto", height: "auto", maxWidth: "none", display: "block" }
+  const rightFrac = Math.max(1, (ext.x2 - r.coords.x) / wv)
+  const bottomFrac = Math.max(1, (ext.y2 - r.coords.y) / hv)
+
+  // hotspots cujo centro cai dentro do conteúdo rolável → viram elementos que
+  // rolam junto e navegam. (coords sem clamp: cards rolados têm x/y reais.)
+  const regionHotspots = hotspots.filter((h) => {
+    const cx = h.coords.x + h.coords.w / 2
+    const cy = h.coords.y + h.coords.h / 2
+    return cx >= ext.x - 0.01 && cx <= ext.x2 + 0.01 && cy >= ext.y - 0.01 && cy <= ext.y2 + 0.01
+  })
+
+  const leftPct = (v: number) => `${((v - r.coords.x) / wv) * 100}%`
+  const topPct = (v: number) => `${((v - r.coords.y) / hv) * 100}%`
+
   return (
     <div
       ref={ref}
@@ -514,8 +489,63 @@ function ScrollRegionView({
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={r.imageUrl ?? ""} alt="" draggable={false} className="select-none pointer-events-none" style={imgStyle} />
+      {/* espaçador: define a extensão rolável (largura/altura do conteúdo) */}
+      <div style={{ width: `${rightFrac * 100}%`, height: `${bottomFrac * 100}%` }} />
+
+      {/* Peças da tira — fixa só o eixo do scroll; o outro em auto (sem esticar) */}
+      {pieces.length > 0
+        ? pieces.map((p, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={p.url}
+              alt=""
+              draggable={false}
+              className="select-none pointer-events-none"
+              style={{
+                position: "absolute",
+                left: leftPct(p.x),
+                top: topPct(p.y),
+                ...(vert && !horiz
+                  ? { height: `${(p.h / hv) * 100}%`, width: "auto" }
+                  : { width: `${(p.w / wv) * 100}%`, height: "auto" }),
+                maxWidth: "none",
+              }}
+            />
+          ))
+        : // Legado (import antigo sem peças): imagem única, melhor esforço.
+          r.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={r.imageUrl}
+              alt=""
+              draggable={false}
+              className="select-none pointer-events-none"
+              style={
+                horiz && !vert
+                  ? { height: "100%", width: "auto", maxWidth: "none", display: "block" }
+                  : { width: "100%", height: "auto", display: "block" }
+              }
+            />
+          )}
+
+      {/* Hotspots dentro da área rolável: clicáveis, rolam junto, navegam */}
+      {regionHotspots.map((h) => (
+        <div
+          key={h.id}
+          onClick={() => {
+            if (!drag.current.moved) onDispatch?.(h)
+          }}
+          style={{
+            position: "absolute",
+            left: leftPct(h.coords.x),
+            top: topPct(h.coords.y),
+            width: `${(h.coords.w / wv) * 100}%`,
+            height: `${(h.coords.h / hv) * 100}%`,
+            cursor: "pointer",
+          }}
+        />
+      ))}
     </div>
   )
 }
