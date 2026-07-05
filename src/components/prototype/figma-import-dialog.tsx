@@ -97,7 +97,7 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
       setStep("review")
     } catch (e) {
       setError(msg(e) || "Não consegui ler esse protótipo.")
-      toast.error("Não consegui ler esse protótipo.")
+      toast.error(msg(e) || "Não consegui ler esse protótipo.")
     } finally {
       setBusy(false)
     }
@@ -119,7 +119,7 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
     } catch (e) {
       setError(msg(e) || "Falha na importação.")
       setStep("review")
-      toast.error("Falha na importação.")
+      toast.error(msg(e) || "Falha na importação.")
     } finally {
       setBusy(false)
     }
