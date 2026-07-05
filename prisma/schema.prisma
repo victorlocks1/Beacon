@@ -94,13 +94,14 @@ model Comment {
 }
 
 model Prototype {
-  id           String          @id @default(cuid())
-  studyId      String          @unique
-  study        Study           @relation(fields: [studyId], references: [id], onDelete: Cascade)
-  source       PrototypeSource
-  figmaFileKey String?
-  createdAt    DateTime        @default(now())
-  screens      Screen[]
+  id               String          @id @default(cuid())
+  studyId          String          @unique
+  study            Study           @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  source           PrototypeSource
+  figmaFileKey     String?
+  figmaStartNodeId String? // frame inicial do protótipo (formato "0:19236"), p/ o embed vivo
+  createdAt        DateTime        @default(now())
+  screens          Screen[]
 }
 
 enum PrototypeSource {
@@ -157,6 +158,7 @@ model Screen {
   name             String
   order            Int
   imageUrl         String
+  figmaNodeId      String? // id do frame no Figma ("0:19236"), p/ mapear eventos do embed → tela
   width            Float
   height           Float
   scroll           ScrollMode     @default(none)
@@ -311,7 +313,22 @@ model Session {
   deviceType String?
   results    MissionResult[]
   events     Event[]
+  figmaEvents FigmaEventLog[]
   answers    Answer[]
+}
+
+// Eventos crus da Embed API do Figma (protótipo vivo). Guardamos o payload
+// completo; as métricas são derivadas depois (fases 2/3).
+model FigmaEventLog {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type        String // INITIAL_LOAD | PRESENTED_NODE_CHANGED | MOUSE_PRESS_OR_RELEASE | NEW_STATE | ...
+  data        Json // payload cru do evento
+  clientTsMs  BigInt // timestamp do cliente (ms) — para tempos relativos
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
 }
 
 enum MissionOutcome {

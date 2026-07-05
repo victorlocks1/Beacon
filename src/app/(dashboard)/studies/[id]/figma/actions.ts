@@ -144,12 +144,13 @@ export async function figmaImportAction(
     (await prisma.prototype.create({
       data: { studyId: study.id, source: "figma", figmaFileKey: fileKey },
     }))
-  if (study.prototype) {
-    await prisma.prototype.update({
-      where: { id: proto.id },
-      data: { source: "figma", figmaFileKey: fileKey },
-    })
-  }
+  // Frame inicial do protótipo (p/ o embed vivo): a tela marcada como início,
+  // senão a primeira. Guardamos no formato do Figma ("0:19236").
+  const startNodeId = (screens.find((s) => s.isStart) ?? screens[0])?.figmaId ?? null
+  await prisma.prototype.update({
+    where: { id: proto.id },
+    data: { source: "figma", figmaFileKey: fileKey, figmaStartNodeId: startNodeId },
+  })
   const startOrder =
     study.prototype?.screens.length
       ? Math.max(...study.prototype.screens.map((s) => s.order)) + 1
@@ -165,6 +166,7 @@ export async function figmaImportAction(
         name: s.name,
         order: startOrder + i,
         imageUrl: publicUrls[s.figmaId],
+        figmaNodeId: s.figmaId, // mapeia eventos do embed (presentedNodeId) → tela
         width: s.width || 360,
         height: s.height || 800,
         scroll: s.scroll,

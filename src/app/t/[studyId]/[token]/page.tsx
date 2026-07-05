@@ -1,14 +1,19 @@
 import { prisma } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { TestRunner } from "@/components/test/test-runner"
+import { FigmaEmbedRunner } from "@/components/test/figma-embed-runner"
+import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { tt, type Lang } from "@/lib/i18n"
 
 export default async function TestRunPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ studyId: string; token: string }>
+  searchParams: Promise<{ live?: string }>
 }) {
   const { studyId, token } = await params
+  const { live } = await searchParams
 
   const testSession = await prisma.session.findUnique({
     where: { token },
@@ -52,6 +57,26 @@ export default async function TestRunPage({
 
   const study = testSession.study
   const screens = study.prototype?.screens ?? []
+
+  // ─── Fase 1: modo protótipo VIVO (embed do Figma) sob ?live=1 ───
+  // Não altera o fluxo padrão; serve para provar a captura de eventos.
+  const proto = study.prototype
+  const canLive =
+    live === "1" &&
+    proto?.source === "figma" &&
+    !!proto.figmaFileKey &&
+    !!proto.figmaStartNodeId &&
+    !!FIGMA_EMBED_CLIENT_ID
+  if (canLive) {
+    return (
+      <FigmaEmbedRunner
+        token={token}
+        fileKey={proto!.figmaFileKey!}
+        startNodeId={proto!.figmaStartNodeId}
+        deviceType={(study.deviceType ?? "mobile") as "desktop" | "tablet" | "mobile"}
+      />
+    )
+  }
 
   type Step =
     | {
