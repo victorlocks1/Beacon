@@ -234,6 +234,8 @@ export async function figmaImportAction(
           coords: r.coords,
           axis: r.axis,
           imageUrl,
+          // caixa da tira (alinha o overlay na escala da base). Só quando há tira.
+          ...(r.contentBox ? { contentBox: r.contentBox } : {}),
         },
       })
     }

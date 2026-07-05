@@ -76,6 +76,7 @@ export default async function PreviewPage({
             coords: r.coords as { x: number; y: number; w: number; h: number },
             axis: r.axis as "horizontal" | "vertical" | "both",
             imageUrl: r.imageUrl,
+            contentBox: r.contentBox as { x: number; y: number; w: number; h: number } | null,
           })),
         }))}
         mission={

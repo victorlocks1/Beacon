@@ -142,9 +142,10 @@ model ScrollRegion {
   screenId  String
   screen    Screen     @relation(fields: [screenId], references: [id], onDelete: Cascade)
   kind      RegionKind @default(scroll)
-  coords    Json // {x,y,w,h} normalizado sobre a tela base
+  coords    Json // {x,y,w,h} do viewport (o frame que corta), normalizado sobre a tela
   axis      ScrollAxis @default(horizontal)
   imageUrl  String? // tira (só para kind=scroll); fixed reaproveita a imagem da tela
+  contentBox Json? // {x,y,w,h} do CONTEÚDO rolável (a tira), normalizado sobre a tela; alinha a tira na escala da base
   createdAt DateTime   @default(now())
 }
 

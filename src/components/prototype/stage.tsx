@@ -23,6 +23,7 @@ export interface StageScrollRegion {
   coords: { x: number; y: number; w: number; h: number }
   axis: "horizontal" | "vertical" | "both"
   imageUrl: string | null
+  contentBox?: { x: number; y: number; w: number; h: number } | null
 }
 export interface StageScreen {
   id: string
@@ -261,8 +262,10 @@ export function PrototypeStage({
         </div>
       </div>
 
-      {/* Faixas fixas (barras de topo/rodapé que não rolam com a tela) */}
-      {baseScreen.scrollRegions
+      {/* Faixas fixas (barras de topo/rodapé): só fazem sentido quando a base
+          rola — se a tela não rola, a barra já está no lugar na própria imagem
+          e sobrepor de novo causaria duplicação. */}
+      {baseScreen.scroll !== "none" && baseScreen.scrollRegions
         ?.filter((r) => r.kind === "fixed")
         .map((r) => {
           const pinTop = r.coords.y + r.coords.h / 2 < 0.5
@@ -359,33 +362,115 @@ function RegionLayer({ regions }: { regions?: StageScrollRegion[] }) {
   if (!scrollRegions?.length) return null
   return (
     <>
-      {scrollRegions.map((r) => {
-        const horiz = r.axis === "horizontal" || r.axis === "both"
-        const vert = r.axis === "vertical" || r.axis === "both"
-        const imgStyle: React.CSSProperties =
-          r.axis === "horizontal"
-            ? { height: "100%", width: "auto", maxWidth: "none", display: "block" }
-            : r.axis === "vertical"
-              ? { width: "100%", height: "auto", display: "block" }
-              : { width: "auto", height: "auto", maxWidth: "none", display: "block" }
-        return (
-          <div
-            key={r.id}
-            className="absolute invisible-scroll bg-white"
-            style={{
-              left: `${r.coords.x * 100}%`,
-              top: `${r.coords.y * 100}%`,
-              width: `${r.coords.w * 100}%`,
-              height: `${r.coords.h * 100}%`,
-              overflowX: horiz ? "auto" : "hidden",
-              overflowY: vert ? "auto" : "hidden",
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={r.imageUrl ?? ""} alt="" draggable={false} className="select-none" style={imgStyle} />
-          </div>
-        )
-      })}
+      {scrollRegions.map((r) => (
+        <ScrollRegionView key={r.id} r={r} />
+      ))}
     </>
+  )
+}
+
+// Uma área de scroll interna. A tira (conteúdo maior que o viewport) é
+// posicionada via contentBox na MESMA escala da base — cobre exatamente o que a
+// base mostra (sem fantasma) e revela o resto ao rolar. Rola com roda/trackpad
+// e também clicando-segurando-arrastando.
+function ScrollRegionView({ r }: { r: StageScrollRegion }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const drag = useRef({ x: 0, y: 0, sl: 0, st: 0, active: false, moved: false })
+  const horiz = r.axis === "horizontal" || r.axis === "both"
+  const vert = r.axis === "vertical" || r.axis === "both"
+
+  function onPointerDown(e: React.PointerEvent) {
+    const el = ref.current
+    if (!el) return
+    drag.current = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop, active: true, moved: false }
+    try { el.setPointerCapture(e.pointerId) } catch {}
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    const el = ref.current
+    if (!el || !drag.current.active) return
+    const dx = e.clientX - drag.current.x
+    const dy = e.clientY - drag.current.y
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.current.moved = true
+    if (horiz) el.scrollLeft = drag.current.sl - dx
+    if (vert) el.scrollTop = drag.current.st - dy
+  }
+  function endDrag(e: React.PointerEvent) {
+    drag.current.active = false
+    try { ref.current?.releasePointerCapture(e.pointerId) } catch {}
+  }
+
+  const viewport: React.CSSProperties = {
+    left: `${r.coords.x * 100}%`,
+    top: `${r.coords.y * 100}%`,
+    width: `${r.coords.w * 100}%`,
+    height: `${r.coords.h * 100}%`,
+    overflowX: horiz ? "auto" : "hidden",
+    overflowY: vert ? "auto" : "hidden",
+  }
+  const cn = "absolute invisible-scroll bg-white cursor-grab active:cursor-grabbing " + (horiz ? "touch-pan-x " : "touch-pan-y ")
+
+  const cb = r.contentBox
+  if (cb && r.coords.w > 0 && r.coords.h > 0) {
+    // frações da tira relativas ao viewport (mesma escala da base)
+    const leftFrac = (cb.x - r.coords.x) / r.coords.w
+    const topFrac = (cb.y - r.coords.y) / r.coords.h
+    const wFrac = cb.w / r.coords.w
+    const hFrac = cb.h / r.coords.h
+    return (
+      <div
+        ref={ref}
+        className={cn}
+        style={viewport}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
+        {/* espaçador: define a extensão rolável (largura/altura da tira) */}
+        <div
+          style={{
+            width: `${Math.max(1, leftFrac + wFrac) * 100}%`,
+            height: `${Math.max(1, topFrac + hFrac) * 100}%`,
+          }}
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={r.imageUrl ?? ""}
+          alt=""
+          draggable={false}
+          className="select-none pointer-events-none"
+          style={{
+            position: "absolute",
+            left: `${leftFrac * 100}%`,
+            top: `${topFrac * 100}%`,
+            width: `${wFrac * 100}%`,
+            height: `${hFrac * 100}%`,
+            maxWidth: "none",
+          }}
+        />
+      </div>
+    )
+  }
+
+  // Legado (imports antigos sem contentBox): melhor esforço.
+  const imgStyle: React.CSSProperties =
+    horiz && !vert
+      ? { height: "100%", width: "auto", maxWidth: "none", display: "block" }
+      : vert && !horiz
+        ? { width: "100%", height: "auto", display: "block" }
+        : { width: "auto", height: "auto", maxWidth: "none", display: "block" }
+  return (
+    <div
+      ref={ref}
+      className={cn}
+      style={viewport}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={r.imageUrl ?? ""} alt="" draggable={false} className="select-none pointer-events-none" style={imgStyle} />
+    </div>
   )
 }

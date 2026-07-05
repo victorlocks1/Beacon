@@ -22,6 +22,9 @@ export interface ImportRegion {
   // Para scroll: nó do Figma cujo conteúdo transborda o viewport. É exportado em
   // tamanho cheio e vira a "tira" que realmente rola no teste. null p/ fixed.
   stripFigmaId?: string | null
+  // Caixa da tira (o conteúdo rolável) relativa à TELA, sem clamp (w pode > 1).
+  // Permite renderizar a tira na mesma escala/posição da base (sem fantasma).
+  contentBox?: { x: number; y: number; w: number; h: number } | null
 }
 export interface ImportScreen {
   figmaId: string
@@ -220,6 +223,19 @@ function relCoords(node: FigNode, screen: FigNode) {
   return { x, y, w, h }
 }
 
+// Como relCoords, mas SEM clamp — a tira transborda o frame (w/h podem passar de
+// 1 e x/y podem ser negativos). Usada para posicionar a tira na escala da base.
+function relCoordsRaw(box: Box | null | undefined, screen: FigNode) {
+  const s = screen.absoluteBoundingBox
+  if (!box || !s || !s.width || !s.height) return null
+  return {
+    x: (box.x - s.x) / s.width,
+    y: (box.y - s.y) / s.height,
+    w: box.width / s.width,
+    h: box.height / s.height,
+  }
+}
+
 // Coleta todos os descendentes (com bounding box) até uma profundidade sã.
 function collectDescendants(node: FigNode, out: FigNode[], depth = 0) {
   if (depth > 14) return
@@ -230,18 +246,14 @@ function collectDescendants(node: FigNode, out: FigNode[], depth = 0) {
 }
 
 type Box = { x: number; y: number; width: number; height: number }
-function overlap1D(a0: number, a1: number, b0: number, b1: number) {
-  return Math.max(0, Math.min(a1, b1) - Math.max(a0, b0))
-}
 
 // Decisão de scroll = a CONFIG do Figma ("Overflow" do frame → overflowDirection).
 // Horizontal/Vertical/Both ligam o scroll; a geometria serve só para achar a
-// "tira" (o descendente que transborda), exportada em tamanho cheio. Escolhemos
-// o descendente que melhor PREENCHE o frame no eixo perpendicular, para a tira
-// renderizar na mesma escala da base (sem fantasma/duplicação).
+// "tira" (o descendente que mais transborda), exportada em tamanho cheio. O
+// alinhamento correto no runtime vem do contentBox (a caixa da tira).
 function detectScrollRegion(frame: FigNode): {
   axis: "horizontal" | "vertical" | "both"
-  stripFigmaId: string
+  stripFigmaId: string | null
 } | null {
   const fb = frame.absoluteBoundingBox
   if (!SCREEN_TYPES.has(frame.type) || !fb || !fb.width || !fb.height) return null
@@ -256,36 +268,35 @@ function detectScrollRegion(frame: FigNode): {
 
   const fx1 = fb.x + fb.width
   const fy1 = fb.y + fb.height
-  const OVER = 1.02 // precisa transbordar ao menos 2% para termos o que rolar
+  const OVER = 1.02 // transborda ao menos 2% para valer como conteúdo rolável
 
+  // Tira = o descendente que MAIS transborda no eixo (o container do conteúdo).
+  // Sem restringir por posição/cobertura: o alinhamento correto vem do contentBox.
   let hStrip: FigNode | null = null
-  let hScore = 0
+  let hMax = fb.width * OVER
   let vStrip: FigNode | null = null
-  let vScore = 0
+  let vMax = fb.height * OVER
   for (const c of kids) {
     const cb = c.absoluteBoundingBox as Box | null | undefined
     if (!cb || !cb.width || !cb.height) continue
-
-    if (wantH && cb.x <= fb.x + fb.width * 0.2 && cb.x + cb.width > fx1 + fb.width * (OVER - 1)) {
-      const vCover = overlap1D(cb.y, cb.y + cb.height, fb.y, fy1) / fb.height
-      const score = cb.width * vCover * vCover // favorece quem preenche a altura
-      if (vCover >= 0.5 && score > hScore) { hScore = score; hStrip = c }
+    // só conta como transbordo se de fato ultrapassa a borda direita/inferior
+    if (wantH && cb.x + cb.width > fx1 + fb.width * (OVER - 1) && cb.width > hMax) {
+      hMax = cb.width
+      hStrip = c
     }
-    if (wantV && cb.y <= fb.y + fb.height * 0.2 && cb.y + cb.height > fy1 + fb.height * (OVER - 1)) {
-      const hCover = overlap1D(cb.x, cb.x + cb.width, fb.x, fx1) / fb.width
-      const score = cb.height * hCover * hCover
-      if (hCover >= 0.5 && score > vScore) { vScore = score; vStrip = c }
+    if (wantV && cb.y + cb.height > fy1 + fb.height * (OVER - 1) && cb.height > vMax) {
+      vMax = cb.height
+      vStrip = c
     }
   }
 
-  const horiz = wantH && hStrip != null
-  const vert = wantV && vStrip != null
-  // Sem uma tira que transborda de fato não há como rolar num export achatado —
-  // não criamos a região (evita o overlay duplicado/fantasma).
-  if (!horiz && !vert) return null
-  if (horiz && vert) return { axis: "both", stripFigmaId: (hStrip as FigNode).id }
-  if (horiz) return { axis: "horizontal", stripFigmaId: (hStrip as FigNode).id }
-  return { axis: "vertical", stripFigmaId: (vStrip as FigNode).id }
+  // O eixo é a CONFIG do Figma. A tira pode não ser achada (ex.: cards soltos sem
+  // um container único) → região criada sem tira (fica estática, sem fantasma).
+  const strip = wantH ? hStrip ?? vStrip : vStrip ?? hStrip
+  return {
+    axis: sc,
+    stripFigmaId: strip ? strip.id : null,
+  }
 }
 
 function overflowToScroll(dir?: string): ImportScreen["scroll"] {
@@ -366,11 +377,16 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
       if (det) {
         const coords = relCoords(n, screen)
         if (coords) {
+          const stripNode = det.stripFigmaId ? idx.byId[det.stripFigmaId] : undefined
+          const contentBox = stripNode
+            ? relCoordsRaw(stripNode.absoluteBoundingBox, screen)
+            : null
           regions.push({
             kind: "scroll",
             coords,
             axis: det.axis,
             stripFigmaId: det.stripFigmaId,
+            contentBox,
           })
         }
       }
