@@ -454,27 +454,43 @@ function ScrollRegionView({
     (horiz ? "touch-pan-x " : "touch-pan-y ")
 
   const pieces = r.pieces ?? []
-  // extensão do conteúdo rolável (união das peças), em coords da tela
-  const ext =
-    pieces.length > 0
-      ? {
-          x: Math.min(...pieces.map((p) => p.x)),
-          y: Math.min(...pieces.map((p) => p.y)),
-          x2: Math.max(...pieces.map((p) => p.x + p.w)),
-          y2: Math.max(...pieces.map((p) => p.y + p.h)),
-        }
-      : { x: r.coords.x, y: r.coords.y, x2: r.coords.x + r.coords.w, y2: r.coords.y + r.coords.h }
 
-  const rightFrac = Math.max(1, (ext.x2 - r.coords.x) / wv)
-  const bottomFrac = Math.max(1, (ext.y2 - r.coords.y) / hv)
-
-  // hotspots cujo centro cai dentro do conteúdo rolável → viram elementos que
-  // rolam junto e navegam. (coords sem clamp: cards rolados têm x/y reais.)
+  // Hotspots que pertencem à área rolável: no MESMO "band" transversal da região
+  // (ex.: mesma faixa Y no scroll horizontal) e além da borda inicial no eixo do
+  // scroll — SEM teto, porque o conteúdo rolado se estende para frente. Não uso
+  // as peças como fronteira (elas podem subestimar o conteúdo).
+  const tol = 0.02
   const regionHotspots = hotspots.filter((h) => {
     const cx = h.coords.x + h.coords.w / 2
     const cy = h.coords.y + h.coords.h / 2
-    return cx >= ext.x - 0.01 && cx <= ext.x2 + 0.01 && cy >= ext.y - 0.01 && cy <= ext.y2 + 0.01
+    if (horiz && !vert)
+      return cy >= r.coords.y - tol && cy <= r.coords.y + r.coords.h + tol && cx >= r.coords.x - tol
+    if (vert && !horiz)
+      return cx >= r.coords.x - tol && cx <= r.coords.x + r.coords.w + tol && cy >= r.coords.y - tol
+    return cx >= r.coords.x - tol && cy >= r.coords.y - tol
   })
+
+  // extensão rolável = união das PEÇAS e dos HOTSPOTS (cobre tudo que rola/clica)
+  const boxes = [
+    ...pieces.map((p) => ({ x: p.x, y: p.y, x2: p.x + p.w, y2: p.y + p.h })),
+    ...regionHotspots.map((h) => ({
+      x: h.coords.x,
+      y: h.coords.y,
+      x2: h.coords.x + h.coords.w,
+      y2: h.coords.y + h.coords.h,
+    })),
+  ]
+  const ext = boxes.length
+    ? {
+        x: Math.min(...boxes.map((b) => b.x)),
+        y: Math.min(...boxes.map((b) => b.y)),
+        x2: Math.max(...boxes.map((b) => b.x2)),
+        y2: Math.max(...boxes.map((b) => b.y2)),
+      }
+    : { x: r.coords.x, y: r.coords.y, x2: r.coords.x + r.coords.w, y2: r.coords.y + r.coords.h }
+
+  const rightFrac = Math.max(1, (ext.x2 - r.coords.x) / wv)
+  const bottomFrac = Math.max(1, (ext.y2 - r.coords.y) / hv)
 
   const leftPct = (v: number) => `${((v - r.coords.x) / wv) * 100}%`
   const topPct = (v: number) => `${((v - r.coords.y) / hv) * 100}%`
