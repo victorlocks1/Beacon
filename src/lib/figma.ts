@@ -19,6 +19,9 @@ export interface ImportRegion {
   kind: "fixed" | "scroll"
   coords: { x: number; y: number; w: number; h: number }
   axis: "horizontal" | "vertical" | "both"
+  // Para scroll: nó do Figma cujo conteúdo transborda o viewport. É exportado em
+  // tamanho cheio e vira a "tira" que realmente rola no teste. null p/ fixed.
+  stripFigmaId?: string | null
 }
 export interface ImportScreen {
   figmaId: string
@@ -173,6 +176,11 @@ export function screenIdOf(nodeId: string, idx: Index): string {
 
 const CLICK_TRIGGERS = new Set(["ON_CLICK", "ON_PRESS", "ON_TAP", "MOUSE_DOWN", "MOUSE_UP"])
 
+// Tipos de nó que podem ser uma "tela" (frame de topo do protótipo). Inclui
+// INSTANCE porque bottom sheets/modais às vezes são instâncias de componente —
+// sem isso, a sheet não é importada e a interação que a abre é descartada.
+const SCREEN_TYPES = new Set(["FRAME", "COMPONENT", "INSTANCE"])
+
 // edges de protótipo de UM nó (1 hotspot por nó: pega a 1ª ação mapeável)
 function edgeForNode(n: FigNode): { action: ImportAction; dest: string | null } | null {
   if (Array.isArray(n.interactions) && n.interactions.length) {
@@ -211,6 +219,34 @@ function relCoords(node: FigNode, screen: FigNode) {
   return { x, y, w, h }
 }
 
+// Dado um frame rolável (viewport), acha o nó-filho cujo conteúdo transborda no
+// eixo de scroll — é ele que exportamos em tamanho cheio para virar a "tira".
+// A exportação do Figma ignora o clip do pai, então pegamos o conteúdo inteiro.
+function scrollStripNode(
+  frame: FigNode,
+  axis: "horizontal" | "vertical" | "both"
+): string | null {
+  const kids = frame.children || []
+  const fb = frame.absoluteBoundingBox
+  if (!kids.length || !fb) return null
+  const horiz = axis === "horizontal" || axis === "both"
+  let best: FigNode | null = null
+  let bestExtent = 0
+  for (const c of kids) {
+    const cb = c.absoluteBoundingBox
+    if (!cb) continue
+    const extent = horiz ? cb.width : cb.height
+    const viewport = horiz ? fb.width : fb.height
+    if (extent > viewport * 1.01 && extent > bestExtent) {
+      best = c
+      bestExtent = extent
+    }
+  }
+  // Nenhum filho transborda sozinho, mas há um único container → use-o.
+  if (!best && kids.length === 1) best = kids[0]
+  return best?.id ?? null
+}
+
 function overflowToScroll(dir?: string): ImportScreen["scroll"] {
   switch (dir) {
     case "HORIZONTAL_SCROLLING":
@@ -241,9 +277,13 @@ function overlayPositionOf(
   const b = dest?.absoluteBoundingBox
   const s = screen.absoluteBoundingBox
   if (b && s && s.width && s.height) {
-    const fullWidth = b.width >= s.width * 0.9 // ocupa (quase) toda a largura
-    const shorterThanScreen = b.height < s.height * 0.9 // não cobre a tela toda
-    if (fullWidth && shorterThanScreen) return "bottom"
+    // Uma bottom sheet ocupa a largura toda (ancorada na base). Modais/diálogos
+    // centralizados têm margens laterais (largura menor que a tela). Então:
+    // largura cheia ⇒ bottom; caso contrário ⇒ center. Independe da ALTURA —
+    // sheets altas (quase tela cheia) também sobem de baixo. Antes exigíamos
+    // "mais baixa que a tela", o que jogava as sheets altas para "center".
+    const fullWidth = b.width >= s.width * 0.9
+    if (fullWidth) return "bottom"
   }
   return "center"
 }
@@ -260,13 +300,18 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
       if (edge) {
         const coords = relCoords(n, screen)
         if (coords) {
-          const dest = edge.dest ? idx.byId[edge.dest] : undefined
+          // Normaliza o destino para o FRAME DE TOPO (a "tela" que importamos e
+          // renderizamos). O destino cru de um overlay/navigate pode ser um nó
+          // aninhado; sem normalizar, ele nunca casa com um screenId no import
+          // e o hotspot é descartado (a interação "não funciona").
+          const destScreenId = edge.dest ? screenIdOf(edge.dest, idx) : null
+          const destNode = destScreenId ? idx.byId[destScreenId] : undefined
           hotspots.push({
             coords,
             action: edge.action,
             overlayPosition:
-              edge.action === "open_overlay" ? overlayPositionOf(dest, screen) : null,
-            destFigmaId: edge.dest,
+              edge.action === "open_overlay" ? overlayPositionOf(destNode, screen) : null,
+            destFigmaId: destScreenId,
           })
         }
       }
@@ -280,10 +325,12 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
         const coords = relCoords(n, screen)
         if (coords && (coords.w < 0.98 || coords.h < 0.98)) {
           const sc = overflowToScroll(n.overflowDirection)
+          const axis = sc === "none" ? "vertical" : sc
           regions.push({
             kind: "scroll",
             coords,
-            axis: sc === "none" ? "vertical" : sc,
+            axis,
+            stripFigmaId: scrollStripNode(n, axis),
           })
         }
       }
@@ -352,7 +399,7 @@ export async function collectImportPlan(
   // se o nó de entrada é um frame isolado, ele é semente
   for (const rid of entryRootIds) {
     const node = idx.byId[rid]
-    if (node && (node.type === "FRAME" || node.type === "COMPONENT")) seeds.add(rid)
+    if (node && SCREEN_TYPES.has(node.type)) seeds.add(rid)
   }
 
   // 3) Escopo ESTRITO ao link enviado: importamos apenas as telas dentro do
@@ -366,7 +413,7 @@ export async function collectImportPlan(
   const screens: ImportScreen[] = []
   for (const id of screenIds) {
     const node = idx.byId[id]
-    if (!node || (node.type !== "FRAME" && node.type !== "COMPONENT")) continue
+    if (!node || !SCREEN_TYPES.has(node.type)) continue
     const base = extractScreen(node, idx)
     // descarta hotspots navigate/overlay cujo destino ficou fora do conjunto final
     base.hotspots = base.hotspots.filter((h) => {

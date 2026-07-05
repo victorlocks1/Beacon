@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
+import { DeleteAllScreensButton } from "@/components/prototype/delete-all-screens-button"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { deleteScreenAction, moveScreenAction } from "./actions"
@@ -191,9 +192,14 @@ export default async function StudyPage({
 
         {/* ── Protótipo ── */}
         <TabsContent value="prototype">
-          <h2 className="text-title-medium text-on-surface mb-4">
-            {screens.length} {screens.length === 1 ? "tela" : "telas"}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-title-medium text-on-surface">
+              {screens.length} {screens.length === 1 ? "tela" : "telas"}
+            </h2>
+            {editable && screens.length > 0 && (
+              <DeleteAllScreensButton studyId={study.id} screenCount={screens.length} />
+            )}
+          </div>
           {screens.length === 0 ? (
             /* Sem telas: upload + importar do Figma */
             <div className="space-y-4">

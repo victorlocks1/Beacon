@@ -173,6 +173,36 @@ export async function figmaImportAction(
     idMap[s.figmaId] = created.id
   }
 
+  // 3b) tiras de scroll: exporta o CONTEÚDO rolável (nó que transborda o
+  //     viewport) em tamanho cheio e re-hospeda, para a região realmente rolar
+  //     no teste. Sem isso a região é detectada mas fica estática.
+  const stripIds = [
+    ...new Set(
+      screens.flatMap((s) =>
+        s.regions
+          .filter((r) => r.kind === "scroll" && r.stripFigmaId)
+          .map((r) => r.stripFigmaId as string)
+      )
+    ),
+  ]
+  const stripUrls: Record<string, string> = {}
+  if (stripIds.length) {
+    const stripExport = await figmaGetImages(token, fileKey, stripIds, {
+      scale: 2,
+      format: "png",
+    })
+    for (let i = 0; i < stripIds.length; i += 4) {
+      const batch = stripIds.slice(i, i + 4)
+      await Promise.all(
+        batch.map(async (id, j) => {
+          const src = stripExport[id]
+          if (!src) return
+          stripUrls[id] = await downloadAndUpload(studyId, src, 10000 + i + j)
+        })
+      )
+    }
+  }
+
   // 4) hotspots (resolve destino via idMap) + regiões
   let hotspotCount = 0
   for (const s of screens) {
@@ -194,13 +224,16 @@ export async function figmaImportAction(
       hotspotCount++
     }
     for (const r of s.regions) {
+      // fixed reaproveita a imagem da tela; scroll usa a tira exportada.
+      const imageUrl =
+        r.kind === "scroll" && r.stripFigmaId ? stripUrls[r.stripFigmaId] ?? null : null
       await prisma.scrollRegion.create({
         data: {
           screenId,
           kind: r.kind,
           coords: r.coords,
           axis: r.axis,
-          imageUrl: null, // fixed reaproveita a tela; scroll: usuário anexa a tira depois
+          imageUrl,
         },
       })
     }

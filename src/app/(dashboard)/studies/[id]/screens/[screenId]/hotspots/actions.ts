@@ -1,7 +1,7 @@
 "use server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
-import { supabase } from "@/lib/supabase"
+import { supabase, removeStorageByUrls } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -129,6 +129,15 @@ export async function saveScrollRegionsAction(
   regions: ScrollRegionInput[]
 ) {
   await assertOwnerEditable(studyId, screenId)
+
+  // Limpa do storage as tiras antigas que não serão reaproveitadas (o usuário
+  // trocou/removeu a tira) — evita órfãos no bucket.
+  const old = await prisma.scrollRegion.findMany({
+    where: { screenId },
+    select: { imageUrl: true },
+  })
+  const keep = new Set(regions.map((r) => r.imageUrl).filter(Boolean))
+  await removeStorageByUrls(old.map((r) => r.imageUrl).filter((u) => u && !keep.has(u)))
 
   await prisma.scrollRegion.deleteMany({ where: { screenId } })
   await Promise.all(

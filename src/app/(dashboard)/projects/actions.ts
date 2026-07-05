@@ -1,6 +1,7 @@
 "use server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { removeStorageByUrls } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -44,6 +45,25 @@ export async function archiveProjectAction(projectId: string, archived: boolean)
 
 export async function deleteProjectAction(projectId: string) {
   const ownerId = await requireUserId()
+
+  // valida posse antes de mexer no storage
+  const owned = await prisma.project.findUnique({
+    where: { id: projectId, ownerId },
+    select: { id: true },
+  })
+  if (!owned) return
+
+  // limpa o Storage (imagens de telas + tiras) de TODOS os estudos do projeto
+  // antes do cascade apagar as linhas — evita órfãos consumindo espaço.
+  const screens = await prisma.screen.findMany({
+    where: { prototype: { study: { projectId } } },
+    select: { imageUrl: true, scrollRegions: { select: { imageUrl: true } } },
+  })
+  await removeStorageByUrls([
+    ...screens.map((s) => s.imageUrl),
+    ...screens.flatMap((s) => s.scrollRegions.map((r) => r.imageUrl)),
+  ])
+
   // Cascade apaga os estudos do projeto (e tudo abaixo deles).
   await prisma.project.delete({ where: { id: projectId, ownerId } })
   revalidatePath("/projects")

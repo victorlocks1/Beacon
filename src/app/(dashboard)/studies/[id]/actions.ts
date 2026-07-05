@@ -1,7 +1,7 @@
 "use server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
-import { supabase } from "@/lib/supabase"
+import { supabase, removeStorageByUrls } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -180,13 +180,53 @@ export async function deleteScreenAction(studyId: string, screenId: string) {
   // Remove hotspots that apontam PARA esta tela antes de deletar
   await prisma.hotspot.deleteMany({ where: { targetScreenId: screenId } })
 
-  const url = new URL(screen.imageUrl)
-  const storagePath = url.pathname.split("/object/public/screens/")[1]
-  if (storagePath) {
-    await supabase.storage.from("screens").remove([storagePath])
-  }
+  // Limpa o storage: imagem da tela + tiras de scroll (evita órfãos no bucket).
+  const regions = await prisma.scrollRegion.findMany({
+    where: { screenId },
+    select: { imageUrl: true },
+  })
+  await removeStorageByUrls([screen.imageUrl, ...regions.map((r) => r.imageUrl)])
 
   await prisma.screen.delete({ where: { id: screenId } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+// Exclui TODAS as telas do protótipo de uma vez (e limpa o storage). Bloqueia se
+// alguma tela estiver em uso por missão — o usuário remove as missões antes.
+export async function deleteAllScreensAction(studyId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId)
+
+  const prototypeId = study.prototype?.id
+  if (!prototypeId) return
+
+  const screens = await prisma.screen.findMany({
+    where: { prototypeId },
+    select: {
+      imageUrl: true,
+      scrollRegions: { select: { imageUrl: true } },
+      missionStarts: { select: { id: true } },
+      missionGoals: { select: { id: true } },
+      pathSteps: { select: { id: true } },
+    },
+  })
+  if (!screens.length) return
+
+  const usedInMission = screens.some(
+    (s) => s.missionStarts.length > 0 || s.missionGoals.length > 0 || s.pathSteps.length > 0
+  )
+  if (usedInMission) {
+    redirect(
+      `/studies/${studyId}?error=${encodeURIComponent("Há telas usadas em missões. Exclua as missões antes de limpar todas as telas.")}`
+    )
+  }
+
+  await removeStorageByUrls([
+    ...screens.map((s) => s.imageUrl),
+    ...screens.flatMap((s) => s.scrollRegions.map((r) => r.imageUrl)),
+  ])
+
+  await prisma.screen.deleteMany({ where: { prototypeId } })
   revalidatePath(`/studies/${studyId}`)
 }
 
