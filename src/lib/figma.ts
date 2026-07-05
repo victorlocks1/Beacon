@@ -89,11 +89,24 @@ function safeUrl(s: string): URL | null {
 // ---------------------------------------------------------------------------
 // REST helpers
 // ---------------------------------------------------------------------------
-async function figmaApi<T>(token: string, path: string): Promise<T> {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// Chama a REST API do Figma com retry/backoff em 429 (rate limit) e 5xx.
+// Respeita o header Retry-After quando presente. Evita falhar o import por um
+// limite temporário — importante porque reimportamos bastante.
+async function figmaApi<T>(token: string, path: string, attempt = 0): Promise<T> {
   const res = await fetch(`${FIGMA_API}${path}`, {
     headers: { "X-Figma-Token": token },
     cache: "no-store",
   })
+
+  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+    const retryAfter = Number(res.headers.get("retry-after"))
+    const waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(10000, 1000 * 2 ** attempt)
+    await sleep(waitMs)
+    return figmaApi(token, path, attempt + 1)
+  }
+
   if (!res.ok) {
     let detail = ""
     try {
@@ -101,6 +114,11 @@ async function figmaApi<T>(token: string, path: string): Promise<T> {
       detail = body?.err || body?.message || ""
     } catch {
       /* ignore */
+    }
+    if (res.status === 429) {
+      throw new Error(
+        "Figma limitou as requisições (429). Aguarde 1-2 minutos e importe de novo."
+      )
     }
     throw new Error(`Figma API ${res.status}${detail ? `: ${detail}` : ""}`)
   }
