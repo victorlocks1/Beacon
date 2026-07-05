@@ -60,12 +60,15 @@ export default function FigmaEmbedTest() {
       /* ignore */
     }
 
+    // embed-host DEVE ser o domínio (bate com "Allowed embed origins" do app).
+    const host = typeof window !== "undefined" ? window.location.host : "beacon-usability.vercel.app"
+
     // Com client-id → Embed Kit 2.0 (embed.figma.com): é a versão que EMITE os
     // eventos (PRESENTED_NODE_CHANGED, MOUSE_PRESS_OR_RELEASE, etc.).
     if (clientId.trim() && key) {
       const src = new URL(`https://embed.figma.com/proto/${key}/beacon`)
       if (nodeId) src.searchParams.set("node-id", nodeId)
-      src.searchParams.set("embed-host", "beacon")
+      src.searchParams.set("embed-host", host)
       src.searchParams.set("client-id", clientId.trim())
       src.searchParams.set("scaling", "scale-down")
       src.searchParams.set("content-scaling", "fixed")
