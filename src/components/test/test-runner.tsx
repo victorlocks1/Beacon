@@ -283,23 +283,48 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
       </div>
     )
   } else {
-    // ─────────── Missão (intro apagada / execução) ───────────
+    // ─────────── Missão (tela dividida: tarefa | protótipo) ───────────
     content = (
-      <div className="min-h-screen bg-surface-container flex flex-col md:flex-row md:items-start gap-6 p-4 md:p-6">
-        <aside className="w-full md:w-80 shrink-0 md:sticky md:top-6">
-          <MissionCard
-            label={s.stepOf(stepIndex + 1, steps.length)}
-            task={step.mission.task}
-            description={step.mission.description}
-            started={started}
-            startLabel={s.startTask}
-            onStart={startTask}
-            giveUpLabel={s.giveUp}
-            onGiveUp={() => completeMission("gave_up", topRef.current)}
-          />
-        </aside>
+      <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
+        {/* Metade esquerda: a tarefa (sem card) */}
+        <div className="flex flex-col justify-center px-6 py-10 md:px-12 lg:px-16 bg-surface">
+          <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
+            <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
+              <ClipboardList className="h-4 w-4" />
+              {s.stepOf(stepIndex + 1, steps.length)}
+            </div>
 
-        <div className="flex-1 flex justify-center w-full">
+            <div className="space-y-3">
+              <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
+              {step.mission.description && (
+                <p className="text-body-large text-on-surface-variant">
+                  {step.mission.description}
+                </p>
+              )}
+            </div>
+
+            {!started ? (
+              <Button onClick={startTask} className="h-12 px-6" size="lg">
+                <Play className="h-4 w-4 mr-2" />
+                {s.startTask}
+              </Button>
+            ) : (
+              // Sempre visível durante a tarefa (desde a 1ª tela), mesmo sem clique.
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2 text-on-surface-variant"
+                onClick={() => completeMission("gave_up", topRef.current)}
+              >
+                <Flag className="h-3.5 w-3.5 mr-1.5" />
+                {s.giveUp}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Metade direita: o protótipo */}
+        <div className="flex items-center justify-center px-6 py-10 md:px-12 bg-surface-container overflow-auto">
           <div
             className={cn(
               "transition-opacity duration-300",
@@ -333,57 +358,3 @@ export function TestRunner({ token, lang, deviceType, screens, steps }: Props) {
   )
 }
 
-// ════════════ Card da missão (coluna esquerda) ════════════
-function MissionCard({
-  label,
-  task,
-  description,
-  started,
-  startLabel,
-  onStart,
-  giveUpLabel,
-  onGiveUp,
-}: {
-  label: string
-  task: string
-  description: string | null
-  started: boolean
-  startLabel: string
-  onStart: () => void
-  giveUpLabel: string
-  onGiveUp: () => void
-}) {
-  return (
-    <div className="rounded-3xl bg-surface-container-low border border-outline-variant p-6">
-      <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
-        <ClipboardList className="h-4 w-4" />
-        {label}
-      </div>
-
-      <div className="space-y-2 mt-4">
-        <h2 className="text-title-large text-on-surface">{task}</h2>
-        {description && (
-          <p className="text-body-medium text-on-surface-variant">{description}</p>
-        )}
-      </div>
-
-      {!started ? (
-        <Button onClick={onStart} className="w-full h-12 mt-6" size="lg">
-          <Play className="h-4 w-4 mr-2" />
-          {startLabel}
-        </Button>
-      ) : (
-        // Sempre visível durante a tarefa (desde a 1ª tela), mesmo sem clique.
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-2 mt-4 text-on-surface-variant"
-          onClick={onGiveUp}
-        >
-          <Flag className="h-3.5 w-3.5 mr-1.5" />
-          {giveUpLabel}
-        </Button>
-      )}
-    </div>
-  )
-}
