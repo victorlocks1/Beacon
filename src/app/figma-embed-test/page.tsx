@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 // eventos (navegação/clique/posição) pela Embed API. Página isolada, sem auth.
 export default function FigmaEmbedTest() {
   const [url, setUrl] = useState("")
+  const [clientId, setClientId] = useState("")
   const [embed, setEmbed] = useState("")
   const [events, setEvents] = useState<{ t: string; type: string; body: string }[]>([])
   const counter = useRef(0)
@@ -35,29 +36,39 @@ export default function FigmaEmbedTest() {
     setEvents([])
     counter.current = 0
 
-    // Converte QUALQUER link do Figma (design/file/proto) para o modo PROTÓTIPO,
-    // igual o Maze faz — senão o embed abre o arquivo inteiro (todas as telas).
-    let target = clean
+    const key = clean.match(/figma\.com\/(?:proto|design|file|board)\/([A-Za-z0-9_-]+)/)?.[1]
+    let nodeId = ""
     try {
-      const key = clean.match(/figma\.com\/(?:proto|design|file|board)\/([A-Za-z0-9_-]+)/)?.[1]
       const u = new URL(clean)
-      const nodeId =
-        u.searchParams.get("node-id") ||
-        u.searchParams.get("starting-point-node-id") ||
-        ""
-      if (key) {
-        const proto = new URL(`https://www.figma.com/proto/${key}/embed`)
-        if (nodeId) proto.searchParams.set("node-id", nodeId)
-        proto.searchParams.set("scaling", "scale-down")
-        proto.searchParams.set("content-scaling", "fixed")
-        proto.searchParams.set("hide-ui", "1") // UI limpa (só o protótipo), como no Maze
-        target = proto.toString()
-      }
+      nodeId = u.searchParams.get("node-id") || u.searchParams.get("starting-point-node-id") || ""
     } catch {
-      /* usa o link cru */
+      /* ignore */
     }
 
-    // embed_host habilita a Embed API (postMessage) do Figma
+    // Com client-id → Embed Kit 2.0 (embed.figma.com): é a versão que EMITE os
+    // eventos (PRESENTED_NODE_CHANGED, MOUSE_PRESS_OR_RELEASE, etc.).
+    if (clientId.trim() && key) {
+      const src = new URL(`https://embed.figma.com/proto/${key}/beacon`)
+      if (nodeId) src.searchParams.set("node-id", nodeId)
+      src.searchParams.set("embed-host", "beacon")
+      src.searchParams.set("client-id", clientId.trim())
+      src.searchParams.set("scaling", "scale-down")
+      src.searchParams.set("content-scaling", "fixed")
+      src.searchParams.set("hide-ui", "1")
+      setEmbed(src.toString())
+      return
+    }
+
+    // Sem client-id → embed antigo (só renderiza, geralmente NÃO emite eventos).
+    let target = clean
+    if (key) {
+      const proto = new URL(`https://www.figma.com/proto/${key}/embed`)
+      if (nodeId) proto.searchParams.set("node-id", nodeId)
+      proto.searchParams.set("scaling", "scale-down")
+      proto.searchParams.set("content-scaling", "fixed")
+      proto.searchParams.set("hide-ui", "1")
+      target = proto.toString()
+    }
     setEmbed(`https://www.figma.com/embed?embed_host=beacon&url=${encodeURIComponent(target)}`)
   }
 
@@ -76,7 +87,15 @@ export default function FigmaEmbedTest() {
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.figma.com/proto/…"
+            placeholder="Link do protótipo (https://www.figma.com/proto/…)"
+            style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #333", background: "#161617", color: "#eee" }}
+          />
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <input
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder="client-id do app Figma (necessário para EVENTOS)"
             style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #333", background: "#161617", color: "#eee" }}
           />
           <button
@@ -86,6 +105,10 @@ export default function FigmaEmbedTest() {
             Carregar
           </button>
         </div>
+        <p style={{ color: "#777", fontSize: 12, marginTop: 6 }}>
+          Sem client-id o protótipo só renderiza (sem eventos). Com client-id (Embed Kit 2.0) os
+          eventos passam a aparecer. Veja abaixo como criar o app.
+        </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 420px", gap: 16, marginTop: 20, alignItems: "start" }}>
           <div style={{ border: "1px solid #222", borderRadius: 12, overflow: "hidden", background: "#000", aspectRatio: "9 / 16" }}>
