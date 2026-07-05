@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui/toast"
 import { Check, CornerDownRight, Loader2, MessageSquarePlus, Trash2, X } from "lucide-react"
 import {
   addCommentAction,
@@ -65,34 +66,54 @@ export function CommentsBoard({
     if (selection?.kind !== "new" || !draft.trim()) return
     const { screenId, x, y } = selection
     startTransition(async () => {
-      await addCommentAction(studyId, { screenId, xNorm: x, yNorm: y, body: draft })
-      setDraft("")
-      setSelection(null)
-      router.refresh()
+      try {
+        await addCommentAction(studyId, { screenId, xNorm: x, yNorm: y, body: draft })
+        setDraft("")
+        setSelection(null)
+        router.refresh()
+        toast.success("Comentário adicionado")
+      } catch {
+        toast.error("Não foi possível concluir. Tente novamente.")
+      }
     })
   }
 
   function submitReply() {
     if (!active || !reply.trim()) return
     startTransition(async () => {
-      await replyCommentAction(studyId, active.id, reply)
-      setReply("")
-      router.refresh()
+      try {
+        await replyCommentAction(studyId, active.id, reply)
+        setReply("")
+        router.refresh()
+        toast.success("Resposta enviada")
+      } catch {
+        toast.error("Não foi possível concluir. Tente novamente.")
+      }
     })
   }
 
   function toggleResolve(c: BoardComment) {
     startTransition(async () => {
-      await resolveCommentAction(studyId, c.id, !c.resolved)
-      router.refresh()
+      try {
+        await resolveCommentAction(studyId, c.id, !c.resolved)
+        router.refresh()
+        toast.success(!c.resolved ? "Comentário resolvido" : "Comentário reaberto")
+      } catch {
+        toast.error("Não foi possível concluir. Tente novamente.")
+      }
     })
   }
 
   function remove(commentId: string) {
     startTransition(async () => {
-      await deleteCommentAction(studyId, commentId)
-      if (selection?.kind === "thread" && selection.commentId === commentId) setSelection(null)
-      router.refresh()
+      try {
+        await deleteCommentAction(studyId, commentId)
+        if (selection?.kind === "thread" && selection.commentId === commentId) setSelection(null)
+        router.refresh()
+        toast.success("Comentário excluído")
+      } catch {
+        toast.error("Não foi possível concluir. Tente novamente.")
+      }
     })
   }
 

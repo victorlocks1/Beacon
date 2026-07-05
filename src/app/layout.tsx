@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Roboto, Roboto_Flex } from "next/font/google"
 import "./globals.css"
+import { Toaster } from "@/components/ui/toast"
 
 // Roboto — tipo padrão do Material 3
 const roboto = Roboto({
@@ -28,7 +29,10 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${roboto.variable} ${robotoFlex.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        <Toaster />
+      </body>
     </html>
   )
 }

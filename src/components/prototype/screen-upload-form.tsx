@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Upload, Loader2, ImagePlus } from "lucide-react"
 import { uploadScreensAction } from "@/app/(dashboard)/studies/[id]/actions"
+import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 
 // Extrai imagens do clipboard tanto de arquivos copiados quanto de
@@ -69,9 +70,11 @@ export function ScreenUploadForm({ studyId }: { studyId: string }) {
         )
 
         await uploadScreensAction(studyId, formData)
+        toast.success(`${arr.length} tela(s) enviada(s)`)
       } catch (err) {
         console.error("Falha no upload de telas:", err)
         setError("Não foi possível enviar a imagem. Tente novamente.")
+        toast.error("Falha no upload das telas.")
       } finally {
         setUploading(false)
       }

@@ -7,11 +7,23 @@ import { Separator } from "@/components/ui/separator"
 import { GripVertical, Pencil, Trash2, Target, Route } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { QuestionDialog } from "@/components/question/question-dialog"
+import { toast } from "@/components/ui/toast"
 import {
   deleteMissionAction,
   deleteQuestionAction,
   reorderBlocksAction,
 } from "@/app/(dashboard)/studies/[id]/actions"
+
+// Deixa o NEXT_REDIRECT (ex.: bloqueio de estudo ao vivo) propagar sem virar toast de erro.
+function isRedirect(e: unknown) {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "digest" in e &&
+    typeof (e as { digest?: unknown }).digest === "string" &&
+    (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  )
+}
 
 const qTypeLabel: Record<string, string> = {
   open: "Pergunta aberta",
@@ -55,6 +67,30 @@ export function SequenceList({
   const [items, setItems] = useState(blocks)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
+
+  function handleDeleteMission(missionId: string) {
+    startTransition(async () => {
+      try {
+        await deleteMissionAction(studyId, missionId)
+        toast.success("Missão excluída")
+      } catch (e) {
+        if (isRedirect(e)) throw e
+        toast.error("Não foi possível excluir.")
+      }
+    })
+  }
+
+  function handleDeleteQuestion(questionId: string) {
+    startTransition(async () => {
+      try {
+        await deleteQuestionAction(studyId, questionId)
+        toast.success("Pergunta excluída")
+      } catch (e) {
+        if (isRedirect(e)) throw e
+        toast.error("Não foi possível excluir.")
+      }
+    })
+  }
 
   // Ressincroniza quando o conjunto/ordem muda no servidor (add/remove/reorder)
   const signature = blocks.map((b) => b.id).join(",")
@@ -146,17 +182,16 @@ export function SequenceList({
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Link>
-                      <form action={deleteMissionAction.bind(null, studyId, block.missionId)}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          type="submit"
-                          className="text-muted-foreground hover:text-red-500"
-                          title="Excluir missão"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </form>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        type="button"
+                        onClick={() => handleDeleteMission(block.missionId)}
+                        className="text-muted-foreground hover:text-red-500"
+                        title="Excluir missão"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -211,17 +246,16 @@ export function SequenceList({
                         options: block.options,
                       }}
                     />
-                    <form action={deleteQuestionAction.bind(null, studyId, block.questionId)}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        type="submit"
-                        className="text-muted-foreground hover:text-red-500"
-                        title="Excluir pergunta"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </form>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      onClick={() => handleDeleteQuestion(block.questionId)}
+                      className="text-muted-foreground hover:text-red-500"
+                      title="Excluir pergunta"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 )}
               </div>

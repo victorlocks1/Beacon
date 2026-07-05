@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { ShareDialog, type ShareMember } from "@/components/study/share-dialog"
+import { toast } from "@/components/ui/toast"
 import {
   publishStudyAction,
   closeStudyAction,
@@ -87,7 +88,16 @@ export function StudyHeaderActions({
         <Button
           disabled={pending || !canPublish}
           title={canPublish ? undefined : "Adicione telas e uma missão primeiro"}
-          onClick={() => startTransition(() => publishStudyAction(studyId))}
+          onClick={() =>
+            startTransition(async () => {
+              try {
+                await publishStudyAction(studyId)
+                toast.success("Estudo publicado")
+              } catch {
+                toast.error("Não foi possível concluir. Tente novamente.")
+              }
+            })
+          }
         >
           {pending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Rocket className="h-4 w-4 mr-2" />}
           Publicar
@@ -103,7 +113,16 @@ export function StudyHeaderActions({
         <Button
           variant="outline"
           disabled={pending}
-          onClick={() => startTransition(() => reopenStudyAction(studyId))}
+          onClick={() =>
+            startTransition(async () => {
+              try {
+                await reopenStudyAction(studyId)
+                toast.success("Teste reaberto")
+              } catch {
+                toast.error("Não foi possível concluir. Tente novamente.")
+              }
+            })
+          }
         >
           {pending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCw className="h-4 w-4 mr-2" />}
           Reabrir
@@ -135,7 +154,16 @@ export function StudyHeaderActions({
               </DropdownMenuItem>
               <DropdownMenuItem
                 variant="destructive"
-                onClick={() => startTransition(() => closeStudyAction(studyId))}
+                onClick={() =>
+                  startTransition(async () => {
+                    try {
+                      await closeStudyAction(studyId)
+                      toast.success("Teste encerrado")
+                    } catch {
+                      toast.error("Não foi possível concluir. Tente novamente.")
+                    }
+                  })
+                }
               >
                 <Lock className="h-4 w-4" />
                 Encerrar teste

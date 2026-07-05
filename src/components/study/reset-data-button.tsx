@@ -15,6 +15,7 @@ import {
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Trash2, Loader2 } from "lucide-react"
+import { toast } from "@/components/ui/toast"
 import { resetStudyDataAction } from "@/app/(dashboard)/studies/[id]/actions"
 
 export function ResetDataButton({
@@ -34,6 +35,9 @@ export function ResetDataButton({
       await resetStudyDataAction(studyId)
       setOpen(false)
       router.refresh()
+      toast.success("Dados do estudo limpos")
+    } catch {
+      toast.error("Não foi possível limpar os dados.")
     } finally {
       setBusy(false)
     }

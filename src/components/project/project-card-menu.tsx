@@ -36,6 +36,7 @@ import {
   Loader2,
   X,
 } from "lucide-react"
+import { toast } from "@/components/ui/toast"
 import {
   renameProjectAction,
   archiveProjectAction,
@@ -76,7 +77,12 @@ export function ProjectCardMenu({
           <DropdownMenuItem
             onClick={() =>
               startTransition(async () => {
-                await archiveProjectAction(projectId, !archived)
+                try {
+                  await archiveProjectAction(projectId, !archived)
+                  toast.success(!archived ? "Projeto arquivado" : "Projeto desarquivado")
+                } catch {
+                  toast.error("Não foi possível concluir. Tente novamente.")
+                }
               })
             }
           >
@@ -112,8 +118,13 @@ export function ProjectCardMenu({
             </div>
             <form
               action={async (fd) => {
-                await renameProjectAction(projectId, fd)
-                setRenameOpen(false)
+                try {
+                  await renameProjectAction(projectId, fd)
+                  setRenameOpen(false)
+                  toast.success("Projeto renomeado")
+                } catch {
+                  toast.error("Não foi possível concluir. Tente novamente.")
+                }
               }}
               className="space-y-6"
             >
@@ -141,9 +152,14 @@ export function ProjectCardMenu({
               disabled={busy}
               onClick={() =>
                 startTransition(async () => {
-                  await deleteProjectAction(projectId)
-                  setDeleteOpen(false)
-                  router.refresh()
+                  try {
+                    await deleteProjectAction(projectId)
+                    setDeleteOpen(false)
+                    router.refresh()
+                    toast.success("Projeto excluído")
+                  } catch {
+                    toast.error("Não foi possível concluir. Tente novamente.")
+                  }
                 })
               }
             >

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { M3TextField } from "@/components/ui/m3-text-field"
 import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui/toast"
 import { Users, X, Loader2, Copy, Check, Trash2 } from "lucide-react"
 import {
   enableShareAction,
@@ -48,7 +49,14 @@ export function ShareDialog({
   // Garante o link ao abrir (gera o código na 1ª vez)
   useEffect(() => {
     if (open && !code) {
-      enableShareAction(studyId).then((r) => setCode(r.code)).catch(() => {})
+      enableShareAction(studyId)
+        .then((r) => {
+          setCode(r.code)
+          toast.success("Link de compartilhamento ativado")
+        })
+        .catch(() => {
+          toast.error("Não foi possível gerar o link.")
+        })
     }
   }, [open, code, studyId])
 
@@ -65,21 +73,32 @@ export function ShareDialog({
   function addMember() {
     setMsg(null)
     startTransition(async () => {
-      const res = await addMemberByEmailAction(studyId, email)
-      if (res.ok) {
-        setMsg({ ok: true, text: `${res.name} adicionado(a).` })
-        setEmail("")
-        router.refresh()
-      } else {
-        setMsg({ ok: false, text: res.error })
+      try {
+        const res = await addMemberByEmailAction(studyId, email)
+        if (res.ok) {
+          setMsg({ ok: true, text: `${res.name} adicionado(a).` })
+          setEmail("")
+          router.refresh()
+          toast.success("Membro adicionado")
+        } else {
+          setMsg({ ok: false, text: res.error })
+          toast.error(res.error)
+        }
+      } catch {
+        toast.error("Não foi possível adicionar o membro.")
       }
     })
   }
 
   function remove(userId: string) {
     startTransition(async () => {
-      await removeMemberAction(studyId, userId)
-      router.refresh()
+      try {
+        await removeMemberAction(studyId, userId)
+        router.refresh()
+        toast.success("Membro removido")
+      } catch {
+        toast.error("Não foi possível remover.")
+      }
     })
   }
 

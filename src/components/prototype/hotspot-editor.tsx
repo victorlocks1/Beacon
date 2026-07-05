@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Trash2, Save, Loader2, Upload, Check } from "lucide-react"
+import { toast } from "@/components/ui/toast"
 import { deviceMaxWidth, type DeviceType, type ScrollMode } from "@/lib/device"
 import { cn } from "@/lib/utils"
 
@@ -225,6 +226,10 @@ export function HotspotEditor({
       )
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
+      toast.success("Áreas clicáveis salvas")
+    } catch (err) {
+      console.error("Falha ao salvar áreas clicáveis:", err)
+      toast.error("Não foi possível salvar.")
     } finally {
       setSaving(false)
     }

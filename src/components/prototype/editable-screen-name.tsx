@@ -1,6 +1,7 @@
 "use client"
 import { useState, useRef } from "react"
 import { updateScreenNameAction } from "@/app/(dashboard)/studies/[id]/actions"
+import { toast } from "@/components/ui/toast"
 import { Pencil } from "lucide-react"
 
 interface Props {
@@ -20,7 +21,13 @@ export function EditableScreenName({ screenId, studyId, initialName }: Props) {
     setName(trimmed)
     setSaved(trimmed)
     setEditing(false)
-    await updateScreenNameAction(studyId, screenId, trimmed)
+    try {
+      await updateScreenNameAction(studyId, screenId, trimmed)
+      toast.success("Tela renomeada")
+    } catch (err) {
+      console.error("Falha ao renomear tela:", err)
+      toast.error("Não foi possível renomear.")
+    }
   }
 
   if (editing) {

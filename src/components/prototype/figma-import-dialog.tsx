@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { M3TextField } from "@/components/ui/m3-text-field"
+import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import {
   X,
@@ -75,8 +76,10 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
     try {
       await saveFigmaTokenAction(token)
       setStep("url")
+      toast.success("Figma conectado")
     } catch (e) {
       setError(msg(e) || "Token inválido. Confira e tente de novo.")
+      toast.error("Não foi possível conectar ao Figma.")
     } finally {
       setBusy(false)
     }
@@ -94,6 +97,7 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
       setStep("review")
     } catch (e) {
       setError(msg(e) || "Não consegui ler esse protótipo.")
+      toast.error("Não consegui ler esse protótipo.")
     } finally {
       setBusy(false)
     }
@@ -111,9 +115,11 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
       setResult(res)
       setStep("done")
       router.refresh()
+      toast.success(`${res.screens} tela(s) importada(s)`)
     } catch (e) {
       setError(msg(e) || "Falha na importação.")
       setStep("review")
+      toast.error("Falha na importação.")
     } finally {
       setBusy(false)
     }

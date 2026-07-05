@@ -23,10 +23,22 @@ import {
   Star,
   ToggleRight,
 } from "lucide-react"
+import { toast } from "@/components/ui/toast"
 import {
   createQuestionAction,
   updateQuestionAction,
 } from "@/app/(dashboard)/studies/[id]/actions"
+
+// Deixa o NEXT_REDIRECT (ex.: bloqueio de estudo ao vivo) propagar sem virar toast de erro.
+function isRedirect(e: unknown) {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "digest" in e &&
+    typeof (e as { digest?: unknown }).digest === "string" &&
+    (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  )
+}
 
 type QType = "open" | "choice" | "rating" | "binary"
 
@@ -106,13 +118,20 @@ export function QuestionDialog({
       return
     }
     startTransition(async () => {
-      if (variant === "edit" && questionId && studyId) {
-        await updateQuestionAction(studyId, questionId, input)
-      } else if (studyId) {
-        await createQuestionAction(studyId, input)
+      try {
+        if (variant === "edit" && questionId && studyId) {
+          await updateQuestionAction(studyId, questionId, input)
+          toast.success("Pergunta atualizada")
+        } else if (studyId) {
+          await createQuestionAction(studyId, input)
+          toast.success("Pergunta criada")
+        }
+        setOpen(false)
+        router.refresh()
+      } catch (e) {
+        if (isRedirect(e)) throw e
+        toast.error("Não foi possível salvar a pergunta.")
       }
-      setOpen(false)
-      router.refresh()
     })
   }
 

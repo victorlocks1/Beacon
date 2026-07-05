@@ -12,8 +12,20 @@ import {
 import { M3TextField } from "@/components/ui/m3-text-field"
 import { Textarea } from "@/components/ui/textarea"
 import { updateWelcomeAction } from "@/app/(dashboard)/studies/[id]/actions"
+import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { Pencil, X, Loader2 } from "lucide-react"
+
+// Deixa o NEXT_REDIRECT (ex.: bloqueio de estudo ao vivo) propagar sem virar toast de erro.
+function isRedirect(e: unknown) {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "digest" in e &&
+    typeof (e as { digest?: unknown }).digest === "string" &&
+    (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  )
+}
 
 export function WelcomeDialog({
   studyId,
@@ -36,9 +48,15 @@ export function WelcomeDialog({
 
   function save() {
     startTransition(async () => {
-      await updateWelcomeAction(studyId, { title: t, message: m })
-      setOpen(false)
-      router.refresh()
+      try {
+        await updateWelcomeAction(studyId, { title: t, message: m })
+        toast.success("Boas-vindas salvas")
+        setOpen(false)
+        router.refresh()
+      } catch (e) {
+        if (isRedirect(e)) throw e
+        toast.error("Não foi possível salvar.")
+      }
     })
   }
 

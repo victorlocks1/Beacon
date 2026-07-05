@@ -1,6 +1,7 @@
 "use client"
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/toast"
 import {
   publishStudyAction,
   closeStudyAction,
@@ -51,7 +52,16 @@ export function PublishBar({ studyId, status, canPublish }: Props) {
       <Button
         disabled={pending || !canPublish}
         title={canPublish ? undefined : "Adicione telas e uma missão primeiro"}
-        onClick={() => startTransition(() => publishStudyAction(studyId))}
+        onClick={() =>
+          startTransition(async () => {
+            try {
+              await publishStudyAction(studyId)
+              toast.success("Estudo publicado")
+            } catch {
+              toast.error("Não foi possível concluir. Tente novamente.")
+            }
+          })
+        }
       >
         {pending ? (
           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -77,7 +87,16 @@ export function PublishBar({ studyId, status, canPublish }: Props) {
         <Button
           variant="ghost"
           disabled={pending}
-          onClick={() => startTransition(() => closeStudyAction(studyId))}
+          onClick={() =>
+            startTransition(async () => {
+              try {
+                await closeStudyAction(studyId)
+                toast.success("Teste encerrado")
+              } catch {
+                toast.error("Não foi possível concluir. Tente novamente.")
+              }
+            })
+          }
         >
           <Lock className="h-4 w-4 mr-2" />
           Encerrar
@@ -91,7 +110,16 @@ export function PublishBar({ studyId, status, canPublish }: Props) {
     <Button
       variant="outline"
       disabled={pending}
-      onClick={() => startTransition(() => reopenStudyAction(studyId))}
+      onClick={() =>
+        startTransition(async () => {
+          try {
+            await reopenStudyAction(studyId)
+            toast.success("Teste reaberto")
+          } catch {
+            toast.error("Não foi possível concluir. Tente novamente.")
+          }
+        })
+      }
     >
       {pending ? (
         <Loader2 className="h-4 w-4 mr-2 animate-spin" />

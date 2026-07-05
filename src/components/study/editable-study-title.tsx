@@ -1,7 +1,19 @@
 "use client"
 import { useState } from "react"
 import { updateStudyTitleAction } from "@/app/(dashboard)/studies/[id]/actions"
+import { toast } from "@/components/ui/toast"
 import { Pencil } from "lucide-react"
+
+// Deixa o NEXT_REDIRECT (ex.: bloqueio de estudo ao vivo) propagar sem virar toast de erro.
+function isRedirect(e: unknown) {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "digest" in e &&
+    typeof (e as { digest?: unknown }).digest === "string" &&
+    (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  )
+}
 
 export function EditableStudyTitle({
   studyId,
@@ -21,7 +33,13 @@ export function EditableStudyTitle({
     setEditing(false)
     const fd = new FormData()
     fd.set("title", trimmed)
-    await updateStudyTitleAction(studyId, fd)
+    try {
+      await updateStudyTitleAction(studyId, fd)
+      toast.success("Título atualizado")
+    } catch (e) {
+      if (isRedirect(e)) throw e
+      toast.error("Não foi possível renomear.")
+    }
   }
 
   if (editing) {
