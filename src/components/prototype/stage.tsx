@@ -506,9 +506,9 @@ function ScrollRegionView({
                 position: "absolute",
                 left: leftPct(p.x),
                 top: topPct(p.y),
-                ...(vert && !horiz
-                  ? { height: `${(p.h / hv) * 100}%`, width: "auto" }
-                  : { width: `${(p.w / wv) * 100}%`, height: "auto" }),
+                // preenche a caixa EXATA da peça (que bate com o que a base mostra)
+                width: `${(p.w / wv) * 100}%`,
+                height: `${(p.h / hv) * 100}%`,
                 maxWidth: "none",
               }}
             />
