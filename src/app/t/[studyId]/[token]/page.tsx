@@ -61,11 +61,12 @@ export default async function TestRunPage({
   // ─── Fase 1: modo protótipo VIVO (embed do Figma) sob ?live=1 ───
   // Não altera o fluxo padrão; serve para provar a captura de eventos.
   const proto = study.prototype
+  // Não exige o frame inicial: sem ele, o Figma começa no ponto de início padrão
+  // do protótipo (destrava o teste do modo vivo sem depender de reimportar).
   const canLive =
     live === "1" &&
     proto?.source === "figma" &&
     !!proto.figmaFileKey &&
-    !!proto.figmaStartNodeId &&
     !!FIGMA_EMBED_CLIENT_ID
   if (canLive) {
     return (
