@@ -100,10 +100,12 @@ async function figmaApi<T>(token: string, path: string, attempt = 0): Promise<T>
     cache: "no-store",
   })
 
-  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+  if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+    // Espera curta e CAPADA (inclui o Retry-After) — melhor falhar rápido com a
+    // mensagem clara do que deixar o usuário no spinner por minutos.
     const retryAfter = Number(res.headers.get("retry-after"))
-    const waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(10000, 1000 * 2 ** attempt)
-    await sleep(waitMs)
+    const base = retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt
+    await sleep(Math.min(6000, base))
     return figmaApi(token, path, attempt + 1)
   }
 
