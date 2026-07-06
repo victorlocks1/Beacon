@@ -23,6 +23,7 @@ import {
 import {
   getFigmaConnectionAction,
   saveFigmaTokenAction,
+  disconnectFigmaAction,
   figmaInspectAction,
   figmaLiveImportAction,
 } from "@/app/(dashboard)/studies/[id]/figma/actions"
@@ -231,8 +232,31 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
             {/* 2) URL */}
             {step === "url" && (
               <div className="space-y-5">
-                <div className="flex items-center gap-2 text-body-small text-emerald-700">
-                  <Check className="h-4 w-4" /> Figma conectado
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-body-small text-emerald-700">
+                    <Check className="h-4 w-4" /> Figma conectado
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true)
+                      setError(null)
+                      try {
+                        await disconnectFigmaAction()
+                        setToken("")
+                        setUrl("")
+                        setStep("connect")
+                      } catch {
+                        setError("Não foi possível desconectar.")
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                    className="text-body-small text-on-surface-variant underline hover:text-on-surface disabled:opacity-50"
+                  >
+                    Trocar token
+                  </button>
                 </div>
                 <M3TextField
                   label="Link do Figma (página ou protótipo)"
