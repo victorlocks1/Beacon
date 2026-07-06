@@ -67,26 +67,38 @@ export async function disconnectFigmaAction(): Promise<void> {
 }
 
 // ── Inspeção (etapa de revisão) ─────────────────────────────────────────────
-export async function figmaInspectAction(
-  studyId: string,
-  url: string
-): Promise<{ fileKey: string; screens: ImportScreen[] }> {
-  const { userId } = await getOwnedEditableStudy(studyId)
-  const token = await getDecryptedToken(userId)
-  const { fileKey, nodeId } = parseFigmaUrl(url)
-  const screens = await collectImportPlan(token, fileKey, nodeId)
-  if (!screens.length) {
-    throw new Error("Nenhuma tela com protótipo encontrada nesse link.")
+// Erros de controle de fluxo do Next (redirect/notFound) precisam propagar.
+function isNextControlFlow(e: unknown): boolean {
+  const digest = (e as { digest?: unknown })?.digest
+  return typeof digest === "string" && (digest.startsWith("NEXT_REDIRECT") || digest === "NEXT_NOT_FOUND")
+}
+
+type InspectResult =
+  | { ok: true; fileKey: string; screens: ImportScreen[] }
+  | { ok: false; error: string }
+
+export async function figmaInspectAction(studyId: string, url: string): Promise<InspectResult> {
+  try {
+    const { userId } = await getOwnedEditableStudy(studyId)
+    const token = await getDecryptedToken(userId)
+    const { fileKey, nodeId } = parseFigmaUrl(url)
+    const screens = await collectImportPlan(token, fileKey, nodeId)
+    if (!screens.length) {
+      return { ok: false, error: "Nenhuma tela com protótipo encontrada nesse link." }
+    }
+    // miniaturas para a revisão
+    const thumbs = await figmaGetImages(
+      token,
+      fileKey,
+      screens.map((s) => s.figmaId),
+      { scale: 1, format: "png" }
+    )
+    for (const s of screens) s.thumbUrl = thumbs[s.figmaId]
+    return { ok: true, fileKey, screens }
+  } catch (e) {
+    if (isNextControlFlow(e)) throw e
+    return { ok: false, error: e instanceof Error ? e.message : "Falha ao ler o protótipo." }
   }
-  // miniaturas para a revisão
-  const thumbs = await figmaGetImages(
-    token,
-    fileKey,
-    screens.map((s) => s.figmaId),
-    { scale: 1, format: "png" }
-  )
-  for (const s of screens) s.thumbUrl = thumbs[s.figmaId]
-  return { fileKey, screens }
 }
 
 // ── Importação ──────────────────────────────────────────────────────────────
@@ -106,7 +118,25 @@ async function downloadAndUpload(
   return supabase.storage.from("screens").getPublicUrl(path).data.publicUrl
 }
 
+type ImportResult =
+  | { ok: true; screens: number; hotspots: number }
+  | { ok: false; error: string }
+
 export async function figmaImportAction(
+  studyId: string,
+  fileKey: string,
+  selected: ImportScreen[]
+): Promise<ImportResult> {
+  try {
+    const r = await figmaImportImpl(studyId, fileKey, selected)
+    return { ok: true, ...r }
+  } catch (e) {
+    if (isNextControlFlow(e)) throw e
+    return { ok: false, error: e instanceof Error ? e.message : "Falha na importação." }
+  }
+}
+
+async function figmaImportImpl(
   studyId: string,
   fileKey: string,
   selected: ImportScreen[]

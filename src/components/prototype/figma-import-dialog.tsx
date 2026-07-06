@@ -90,6 +90,11 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
     setError(null)
     try {
       const res = await figmaInspectAction(studyId, url)
+      if (!res.ok) {
+        setError(res.error)
+        toast.error(res.error)
+        return
+      }
       setFileKey(res.fileKey)
       setScreens(res.screens)
       setSelected(new Set(res.screens.map((s) => s.figmaId)))
@@ -112,7 +117,13 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
         .filter((s) => selected.has(s.figmaId))
         .map((s) => ({ ...s, isStart: s.figmaId === startId }))
       const res = await figmaImportAction(studyId, fileKey, chosen)
-      setResult(res)
+      if (!res.ok) {
+        setError(res.error)
+        setStep("review")
+        toast.error(res.error)
+        return
+      }
+      setResult({ screens: res.screens, hotspots: res.hotspots })
       setStep("done")
       router.refresh()
       toast.success(`${res.screens} tela(s) importada(s)`)
