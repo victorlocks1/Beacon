@@ -24,7 +24,7 @@ import {
   getFigmaConnectionAction,
   saveFigmaTokenAction,
   figmaInspectAction,
-  figmaImportAction,
+  figmaLiveImportAction,
 } from "@/app/(dashboard)/studies/[id]/figma/actions"
 import type { ImportScreen } from "@/lib/figma"
 
@@ -116,7 +116,9 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
       const chosen = screens
         .filter((s) => selected.has(s.figmaId))
         .map((s) => ({ ...s, isStart: s.figmaId === startId }))
-      const res = await figmaImportAction(studyId, fileKey, chosen)
+      // Import leve (modo ao vivo): grava o mapa de frames sem baixar imagens
+      // → não bate no rate limit do Figma. O embed vivo renderiza.
+      const res = await figmaLiveImportAction(studyId, fileKey, chosen)
       if (!res.ok) {
         setError(res.error)
         setStep("review")

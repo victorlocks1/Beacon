@@ -141,6 +141,60 @@ export async function figmaImportAction(
   }
 }
 
+// Import LEVE (modo ao vivo): grava só o mapa de frames (node-id, nome, tamanho)
+// a partir dos dados JÁ inspecionados. NÃO baixa imagem nem hotspots → nenhuma
+// chamada ao endpoint de imagens do Figma (não bate no rate limit). O embed vivo
+// renderiza; as imagens do heatmap são buscadas depois, sob demanda.
+export async function figmaLiveImportAction(
+  studyId: string,
+  fileKey: string,
+  selected: ImportScreen[]
+): Promise<ImportResult> {
+  try {
+    if (!selected.length) return { ok: false, error: "Nenhuma tela selecionada." }
+    const { study } = await getOwnedEditableStudy(studyId)
+
+    const screens = [...selected].sort((a, b) => Number(b.isStart) - Number(a.isStart))
+    const startNodeId = (screens.find((s) => s.isStart) ?? screens[0])?.figmaId ?? null
+
+    const proto =
+      study.prototype ??
+      (await prisma.prototype.create({
+        data: { studyId: study.id, source: "figma", figmaFileKey: fileKey },
+      }))
+    await prisma.prototype.update({
+      where: { id: proto.id },
+      data: { source: "figma", figmaFileKey: fileKey, figmaStartNodeId: startNodeId },
+    })
+
+    const startOrder = study.prototype?.screens.length
+      ? Math.max(...study.prototype.screens.map((s) => s.order)) + 1
+      : 0
+
+    for (let i = 0; i < screens.length; i++) {
+      const s = screens[i]
+      await prisma.screen.create({
+        data: {
+          prototypeId: proto.id,
+          name: s.name,
+          order: startOrder + i,
+          imageUrl: "", // sem imagem no import leve; embed vivo não usa
+          figmaNodeId: s.figmaId,
+          width: s.width || 360,
+          height: s.height || 800,
+          scroll: s.scroll,
+        },
+      })
+    }
+
+    revalidatePath(`/studies/${studyId}`)
+    return { ok: true, screens: screens.length, hotspots: 0 }
+  } catch (e) {
+    if (isNextControlFlow(e)) throw e
+    return { ok: false, error: e instanceof Error ? e.message : "Falha na importação." }
+  }
+}
+
 async function figmaImportImpl(
   studyId: string,
   fileKey: string,
