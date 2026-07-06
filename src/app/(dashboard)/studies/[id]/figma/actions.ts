@@ -86,14 +86,19 @@ export async function figmaInspectAction(studyId: string, url: string): Promise<
     if (!screens.length) {
       return { ok: false, error: "Nenhuma tela com protótipo encontrada nesse link." }
     }
-    // miniaturas para a revisão
-    const thumbs = await figmaGetImages(
-      token,
-      fileKey,
-      screens.map((s) => s.figmaId),
-      { scale: 1, format: "png" }
-    )
-    for (const s of screens) s.thumbUrl = thumbs[s.figmaId]
+    // miniaturas para a revisão — opcional. Se o Figma limitar (429) só nas
+    // imagens, seguimos sem preview em vez de travar todo o inspecionar.
+    try {
+      const thumbs = await figmaGetImages(
+        token,
+        fileKey,
+        screens.map((s) => s.figmaId),
+        { scale: 1, format: "png" }
+      )
+      for (const s of screens) s.thumbUrl = thumbs[s.figmaId]
+    } catch {
+      /* sem miniaturas desta vez */
+    }
     return { ok: true, fileKey, screens }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
