@@ -174,7 +174,7 @@ export default async function ResultsOverviewPage({
                     <Link
                       key={mission.id}
                       href={`/studies/${id}/results/${mission.id}`}
-                      className="block border border-outline-variant rounded-2xl p-6 bg-surface-container-low transition-shadow hover:elevation-2"
+                      className="block border border-black/10 rounded-2xl p-6 bg-white transition-shadow hover:elevation-2"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
