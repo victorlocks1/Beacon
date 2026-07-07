@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db"
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 
-export async function startSessionAction(studyId: string) {
+export async function startSessionAction(studyId: string, live?: boolean) {
   const study = await prisma.study.findUnique({ where: { id: studyId } })
   if (!study || study.status !== "live") {
     redirect(`/t/${studyId}`)
@@ -20,5 +20,6 @@ export async function startSessionAction(studyId: string) {
     },
   })
 
-  redirect(`/t/${studyId}/${newSession.token}`)
+  // preserva o modo ao vivo através do redirect (link único de teste)
+  redirect(`/t/${studyId}/${newSession.token}${live ? "?live=1" : ""}`)
 }

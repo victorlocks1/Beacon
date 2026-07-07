@@ -6,10 +6,13 @@ import { tt, type Lang } from "@/lib/i18n"
 
 export default async function TestEntryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ studyId: string }>
+  searchParams: Promise<{ live?: string }>
 }) {
   const { studyId } = await params
+  const { live } = await searchParams
 
   const study = await prisma.study.findUnique({
     where: { id: studyId },
@@ -34,7 +37,7 @@ export default async function TestEntryPage({
   }
 
   const missionCount = study.blocks.length
-  const start = startSessionAction.bind(null, studyId)
+  const start = startSessionAction.bind(null, studyId, live === "1")
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
