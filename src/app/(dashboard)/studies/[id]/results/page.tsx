@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, Users } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
 import { ResetDataButton } from "@/components/study/reset-data-button"
 import { MetricInfo } from "@/components/results/metric-info"
-import { LoadFigmaImagesButton } from "@/components/results/load-figma-images-button"
+import { FigmaImagesAutoLoad } from "@/components/results/load-figma-images-button"
 
 export default async function ResultsOverviewPage({
   params,
@@ -144,7 +144,7 @@ export default async function ResultsOverviewPage({
           {study._count.sessions} sessão(ões) · {finishedSessions} concluída(s)
         </Badge>
         {screensMissingImage > 0 && (
-          <LoadFigmaImagesButton studyId={id} pending={screensMissingImage} />
+          <FigmaImagesAutoLoad studyId={id} pending={screensMissingImage} />
         )}
         <ResetDataButton studyId={id} sessionCount={study._count.sessions} />
       </div>

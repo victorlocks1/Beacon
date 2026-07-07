@@ -1,39 +1,34 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Loader2, ImageDown } from "lucide-react"
-import { toast } from "@/components/ui/toast"
+import { Loader2 } from "lucide-react"
 import { loadFigmaImagesAction } from "@/app/(dashboard)/studies/[id]/figma/actions"
 
-// Carrega as imagens das telas (fundo do heatmap) sob demanda. O import ao vivo
-// não baixa imagens; este botão busca as que faltam quando o dono quer ver o
-// heatmap com o fundo.
-export function LoadFigmaImagesButton({ studyId, pending }: { studyId: string; pending: number }) {
+// Carrega automaticamente as imagens das telas (fundo do heatmap) que faltam.
+// O import ao vivo não baixa imagens; aqui elas são buscadas sob demanda na
+// primeira vez que os resultados são abertos, e ficam salvas (não busca de novo).
+export function FigmaImagesAutoLoad({ studyId, pending }: { studyId: string; pending: number }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const fired = useRef(false)
 
-  async function run() {
+  useEffect(() => {
+    if (pending <= 0 || fired.current) return
+    fired.current = true
     setBusy(true)
-    try {
-      const res = await loadFigmaImagesAction(studyId)
-      if (!res.ok) {
-        toast.error(res.error)
-      } else {
-        toast.success(`${res.loaded} imagem(ns) carregada(s)`)
-        router.refresh()
-      }
-    } catch {
-      toast.error("Não foi possível carregar as imagens.")
-    } finally {
-      setBusy(false)
-    }
-  }
+    loadFigmaImagesAction(studyId)
+      .then((res) => {
+        // só atualiza se algo foi carregado (evita loop quando o Figma limita)
+        if (res.ok && res.loaded > 0) router.refresh()
+      })
+      .catch(() => {})
+      .finally(() => setBusy(false))
+  }, [pending, studyId, router])
 
+  if (!busy) return null
   return (
-    <Button variant="outline" size="sm" onClick={run} disabled={busy} className="gap-1.5">
-      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageDown className="h-3.5 w-3.5" />}
-      Carregar imagens ({pending})
-    </Button>
+    <span className="inline-flex items-center gap-1.5 text-body-small text-on-surface-variant">
+      <Loader2 className="h-3.5 w-3.5 animate-spin" /> carregando imagens das telas…
+    </span>
   )
 }

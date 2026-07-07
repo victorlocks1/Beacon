@@ -9,6 +9,7 @@ import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath } from "@/lib/path"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 import { MetricInfo } from "@/components/results/metric-info"
+import { FigmaImagesAutoLoad } from "@/components/results/load-figma-images-button"
 
 const outcomeBucket: Record<string, "direct" | "indirect" | "unfinished"> = {
   direct: "direct",
@@ -61,6 +62,8 @@ export default async function MissionResultsPage({
     | "mobile"
   const screens = study.prototype?.screens ?? []
   const screenById = new Map(screens.map((s) => [s.id, s]))
+  // telas do Figma ainda sem imagem (import ao vivo) → auto-carrega o fundo
+  const screensMissingImage = screens.filter((sc) => !sc.imageUrl).length
 
   const results = await prisma.missionResult.findMany({
     where: { missionId, session: { studyId: id } },
@@ -256,10 +259,13 @@ export default async function MissionResultsPage({
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-label-medium text-on-surface-variant">RESULTADOS DA MISSÃO</p>
           <h1 className="text-headline-small text-on-surface truncate">{mission.task}</h1>
         </div>
+        {screensMissingImage > 0 && (
+          <FigmaImagesAutoLoad studyId={id} pending={screensMissingImage} />
+        )}
       </div>
 
       {startedSessionIds.size === 0 ? (
