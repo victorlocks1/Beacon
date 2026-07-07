@@ -151,11 +151,14 @@ export default async function TestRunPage({
       }
     }
     const goalsByMission: Record<string, string[]> = {}
+    const startNodeByMission: Record<string, string | null> = {}
     for (const st of testSteps) {
       if (st.kind === "mission") {
         goalsByMission[st.mission.id] = st.mission.goalScreenIds
           .map((gid) => screenToNode[gid])
           .filter((n): n is string => !!n)
+        // frame de partida da missão (node-id do Figma), p/ o embed abrir ali
+        startNodeByMission[st.mission.id] = screenToNode[st.mission.startScreenId] ?? null
       }
     }
     return (
@@ -167,6 +170,7 @@ export default async function TestRunPage({
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
         goalsByMission={goalsByMission}
+        startNodeByMission={startNodeByMission}
         screenByNode={screenByNode}
       />
     )

@@ -44,6 +44,7 @@ export function FigmaFlowRunner({
   steps,
   welcome,
   goalsByMission,
+  startNodeByMission,
   screenByNode,
 }: {
   token: string
@@ -52,6 +53,7 @@ export function FigmaFlowRunner({
   steps: Step[]
   welcome: WelcomeInfo | null
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
+  startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
 }) {
   const s = tt(lang)
@@ -67,8 +69,12 @@ export function FigmaFlowRunner({
   const mission = step?.kind === "mission" ? step.mission : null
   const isLastStep = stepIndex === steps.length - 1
 
+  // node-id do Figma onde a missão atual começa (null → frame padrão do protótipo)
+  const currentStartNode = mission ? startNodeByMission[mission.id] ?? null : null
+
   // refs lidos pelo listener de eventos (que é montado uma vez)
   const missionRef = useRef<string | null>(null)
+  const startNodeRef = useRef<string | null>(null)
   const startedRef = useRef(false)
   const completedRef = useRef(false)
   const startTimeRef = useRef(0)
@@ -123,11 +129,12 @@ export function FigmaFlowRunner({
     }
   }, [token])
 
-  // monta a URL do embed uma vez (host real p/ bater com o Allowed origin)
+  // Cada missão abre no seu frame de partida. Ao trocar de missão o embed
+  // recarrega ali (reset limpo entre tarefas). host real p/ o Allowed origin.
   useEffect(() => {
-    setEmbedSrc(figmaEmbedUrl({ fileKey, startNodeId: null, host: window.location.host }))
+    setEmbedSrc(figmaEmbedUrl({ fileKey, startNodeId: currentStartNode, host: window.location.host }))
     epochRef.current = now()
-  }, [fileKey])
+  }, [fileKey, currentStartNode])
 
   const advance = useCallback(() => {
     if (isLastStep) {
@@ -247,7 +254,12 @@ export function FigmaFlowRunner({
             })
           }
           const goals = goalsByMission[missionId] ?? []
-          if (nodeId && goals.includes(nodeId)) completeMission("reached")
+          if (nodeId && goals.includes(nodeId)) {
+            // não conclui de imediato se o objetivo é a própria tela inicial
+            // (evita "sucesso" no primeiro frame antes de qualquer navegação)
+            const atStart = startNodeRef.current === nodeId && pathRef.current.length <= 1
+            if (!atStart) completeMission("reached")
+          }
         }
       }
     }
@@ -283,6 +295,7 @@ export function FigmaFlowRunner({
     misclickCountRef.current = 0
     pathRef.current = mission.startScreenId ? [mission.startScreenId] : []
     missionRef.current = mission.id
+    startNodeRef.current = currentStartNode
     startedRef.current = true
     // navigate inicial: marca o início da tarefa na tela inicial e persiste já
     // (permite distinguir "iniciou e sumiu" = perdida de "nunca iniciou").
