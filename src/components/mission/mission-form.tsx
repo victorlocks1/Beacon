@@ -145,23 +145,6 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="description" className="text-title-small text-on-surface">
-            Cenário <span className="text-on-surface-variant font-normal">(opcional)</span>
-          </Label>
-          <Textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ex.: Você quer comprar um tênis azul. Como faria isso neste app?"
-            rows={3}
-            className="rounded-lg border-outline bg-transparent text-base focus-visible:border-primary min-h-28"
-          />
-          <p className="text-body-small text-on-surface-variant px-1">
-            O contexto que aparece antes da tarefa.
-          </p>
-        </div>
-
         <div className="space-y-1.5">
           <M3TextField
             label="Tarefa"
@@ -172,6 +155,20 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
           <p className="text-body-small text-on-surface-variant px-1">
             Ex.: “Adicione um item ao carrinho”.
           </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="description" className="text-title-small text-on-surface">
+            Descrição <span className="text-on-surface-variant font-normal">(opcional)</span>
+          </Label>
+          <Textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Ex.: Você quer comprar um tênis azul. Como faria isso neste app?"
+            rows={3}
+            className="rounded-lg border-outline bg-transparent text-base focus-visible:border-primary min-h-28"
+          />
         </div>
 
         <div className="space-y-2">
