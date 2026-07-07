@@ -12,6 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PathRecorder } from "@/components/mission/path-recorder"
+import { FigmaPathRecorder } from "@/components/mission/figma-path-recorder"
+import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { QuestionDialog, type QuestionInput } from "@/components/question/question-dialog"
 import { createMissionAction, updateMissionAction } from "@/app/(dashboard)/studies/[id]/actions"
 import { cn } from "@/lib/utils"
@@ -43,6 +45,7 @@ interface Screen {
   width: number
   height: number
   scroll: "none" | "vertical" | "horizontal" | "both"
+  figmaNodeId?: string | null
   hotspots: Hotspot[]
   scrollRegions?: {
     id: string
@@ -67,11 +70,14 @@ interface Props {
   studyId: string
   deviceType: DeviceType
   screens: Screen[]
+  figmaFileKey?: string | null // presente => protótipo vivo do Figma (grava caminho no embed)
   missionId?: string // presente => modo edição
   initial?: MissionInitial
 }
 
-export function MissionForm({ studyId, deviceType, screens, missionId, initial }: Props) {
+export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missionId, initial }: Props) {
+  // Estudos do Figma gravam o caminho no protótipo vivo (embed); manuais usam o player de imagem.
+  const canEmbed = !!figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
   const isEdit = !!missionId
   const [task, setTask] = useState(initial?.task ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
@@ -245,13 +251,28 @@ export function MissionForm({ studyId, deviceType, screens, missionId, initial }
         ) : (
           <div className="space-y-2 pt-1">
             <Label className="text-title-small text-on-surface">Caminho(s) esperado(s)</Label>
-            <PathRecorder
-              screens={screens}
-              startScreenId={startScreenId || null}
-              deviceType={deviceType}
-              paths={paths}
-              onChange={setPaths}
-            />
+            {canEmbed ? (
+              <FigmaPathRecorder
+                fileKey={figmaFileKey!}
+                screens={screens.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  order: s.order,
+                  figmaNodeId: s.figmaNodeId ?? null,
+                }))}
+                startScreenId={startScreenId || null}
+                paths={paths}
+                onChange={setPaths}
+              />
+            ) : (
+              <PathRecorder
+                screens={screens}
+                startScreenId={startScreenId || null}
+                deviceType={deviceType}
+                paths={paths}
+                onChange={setPaths}
+              />
+            )}
           </div>
         )}
       </section>

@@ -72,6 +72,7 @@ export default async function EditMissionPage({
         missionId={missionId}
         initial={initial}
         deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+        figmaFileKey={study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null}
         screens={screens.map((s) => ({
           id: s.id,
           name: s.name,
@@ -80,6 +81,7 @@ export default async function EditMissionPage({
           width: s.width,
           height: s.height,
           scroll: s.scroll as "none" | "vertical" | "horizontal" | "both",
+          figmaNodeId: s.figmaNodeId,
           hotspots: s.hotspots.map((h) => ({
             id: h.id,
             coords: h.coords as { x: number; y: number; w: number; h: number },
