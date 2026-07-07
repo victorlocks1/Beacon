@@ -375,12 +375,12 @@ export function TestRunner({
             </div>
 
             <div className="space-y-3">
+              <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
               {step.mission.description && (
                 <p className="text-body-large text-on-surface-variant">
                   {step.mission.description}
                 </p>
               )}
-              <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
             </div>
 
             {preview ? (
