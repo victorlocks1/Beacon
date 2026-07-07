@@ -105,17 +105,18 @@ export default async function ResultsOverviewPage({
     const resultBySession = new Map(rs.map((r) => [r.sessionId, r]))
     const started = startedByMission.get(missionId) ?? new Set<string>()
 
-    // Classificação por sessão (exclusão em ordem): concluída → declarada →
-    // perdida (encerrada sem resultado) → em aberto. As três taxas somam 100%
-    // sobre as ENCERRADAS — a perdida agora está no denominador (antes inflava).
-    let completed = 0, declared = 0, lost = 0
+    // Sucesso = "direct" (tela-alvo, ou caminho exato seguido fielmente).
+    // "indirect" (chegou fora do caminho exato) NÃO é sucesso, mas segue no
+    // denominador — assim a taxa de conclusão reflete o caminho exato.
+    let completed = 0, indirect = 0, declared = 0, lost = 0
     for (const sid of started) {
       const r = resultBySession.get(sid)
-      if (r && (r.outcome === "direct" || r.outcome === "indirect")) completed++
+      if (r && r.outcome === "direct") completed++
+      else if (r && r.outcome === "indirect") indirect++
       else if (r && r.outcome === "given_up") declared++
       else if (sessionEnded.get(sid)) lost++
     }
-    const ended = completed + declared + lost
+    const ended = completed + indirect + declared + lost
 
     const totalClicks = rs.reduce((a, r) => a + r.clickCount, 0)
     const totalMisclicks = rs.reduce((a, r) => a + r.misclickCount, 0)
@@ -195,7 +196,7 @@ export default async function ResultsOverviewPage({
                           <Stat
                             label="Conclusão"
                             value={formatPct(s.completionRate)}
-                            info="Participantes que chegaram na tela-objetivo, sobre as sessões encerradas (concluídas + desistências + perdidas)."
+                            info="Sucesso da tarefa sobre as sessões encerradas. No critério de caminho exato, só conta quem seguiu FIELMENTE o caminho definido — chegar na tela final por outro caminho não conta como conclusão (veja 'Caminho indireto' no detalhe da missão)."
                           />
                           <Stat
                             label="Perdida"

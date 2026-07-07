@@ -105,22 +105,29 @@ export default async function MissionResultsPage({
   const startedSessionIds = new Set(events.map((e) => e.sessionId))
   const resultBySession = new Map(results.map((r) => [r.sessionId, r]))
 
-  type TaskState = "completed" | "declared" | "lost" | "open"
+  // Sucesso = "direct" (tela-alvo alcançada OU, no caminho exato, caminho seguido
+  // fielmente). "indirect" (chegou na tela final por outro caminho) NÃO é sucesso
+  // no caminho exato — vira sua própria categoria, mas segue no denominador.
+  type TaskState = "completed" | "indirect" | "declared" | "lost" | "open"
   const stateBySession = new Map<string, TaskState>()
   for (const sid of startedSessionIds) {
     const r = resultBySession.get(sid)
-    if (r && (r.outcome === "direct" || r.outcome === "indirect")) stateBySession.set(sid, "completed")
+    if (r && r.outcome === "direct") stateBySession.set(sid, "completed")
+    else if (r && r.outcome === "indirect") stateBySession.set(sid, "indirect")
     else if (r && r.outcome === "given_up") stateBySession.set(sid, "declared")
     else if (sessionEnded.get(sid)) stateBySession.set(sid, "lost")
     else stateBySession.set(sid, "open")
   }
-  const counts = { completed: 0, declared: 0, lost: 0, open: 0 }
+  const counts = { completed: 0, indirect: 0, declared: 0, lost: 0, open: 0 }
   for (const st of stateBySession.values()) counts[st]++
-  // As três taxas somam 100% sobre as sessões ENCERRADAS (concluída+declarada+perdida)
-  const ended = counts.completed + counts.declared + counts.lost
+  // As taxas somam 100% sobre as sessões ENCERRADAS (concluída + indireta +
+  // declarada + perdida).
+  const ended = counts.completed + counts.indirect + counts.declared + counts.lost
   const completionRate = ended ? (counts.completed / ended) * 100 : 0
+  const indirectRate = ended ? (counts.indirect / ended) * 100 : 0
   const declaredRate = ended ? (counts.declared / ended) * 100 : 0
   const lostRate = ended ? (counts.lost / ended) * 100 : 0
+  const isPath = mission.successType === "path"
 
   // Esforço (sobre quem tem resultado registrado)
   const withResult = results.length
@@ -289,15 +296,27 @@ export default async function MissionResultsPage({
         </div>
       ) : (
         <div className="space-y-8">
-          {/* Desfecho — as três taxas somam 100% das sessões encerradas */}
+          {/* Desfecho — as taxas somam 100% das sessões encerradas */}
           <div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className={"grid gap-3 " + (isPath ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3")}>
               <Kpi
                 label="Conclusão"
                 value={formatPct(completionRate)}
                 sub={`${counts.completed} de ${ended}`}
-                info="Percentual de participantes que chegaram na tela-objetivo da tarefa. Denominador = sessões encerradas (concluídas + desistências + perdidas). As três taxas somam 100%."
+                info={
+                  isPath
+                    ? "Sucesso no caminho exato: participantes que seguiram FIELMENTE o caminho esperado até a tela final. Chegar por outro caminho conta como 'Caminho indireto', não como conclusão. Denominador = sessões encerradas."
+                    : "Percentual de participantes que chegaram na tela-objetivo da tarefa. Denominador = sessões encerradas (concluídas + desistências + perdidas)."
+                }
               />
+              {isPath && (
+                <Kpi
+                  label="Caminho indireto"
+                  value={formatPct(indirectRate)}
+                  sub={`${counts.indirect} de ${ended}`}
+                  info="Chegou na tela final, mas NÃO pelo caminho exato definido. No caminho exato isso não conta como sucesso."
+                />
+              )}
               <Kpi
                 label="Desistência declarada"
                 value={formatPct(declaredRate)}
