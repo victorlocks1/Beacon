@@ -401,35 +401,43 @@ export function FigmaFlowRunner({
     // Missão: tarefa à esquerda, protótipo VIVO à direita
     content = (
       <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
-        <div className="flex flex-col justify-center px-6 py-10 md:px-12 lg:px-16 bg-surface">
-          <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
-            <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
-              <ClipboardList className="h-4 w-4" />
-              {s.stepOf(stepIndex + 1, steps.length)}
-            </div>
-            <div className="space-y-3">
-              <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
-              {step.mission.description && (
-                <p className="text-body-large text-on-surface-variant">{step.mission.description}</p>
+        <div className="flex flex-col px-6 py-10 md:px-12 lg:px-16 bg-surface">
+          {/* Conteúdo da tarefa — centralizado */}
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
+              <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
+                <ClipboardList className="h-4 w-4" />
+                {s.stepOf(stepIndex + 1, steps.length)}
+              </div>
+              <div className="space-y-3">
+                <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
+                {step.mission.description && (
+                  <p className="text-body-large text-on-surface-variant">{step.mission.description}</p>
+                )}
+              </div>
+              {!taskStarted && (
+                <Button onClick={startTask} className="h-12 px-6" size="lg">
+                  <Play className="h-4 w-4 mr-2" />
+                  {s.startTask}
+                </Button>
               )}
             </div>
-            {!taskStarted ? (
-              <Button onClick={startTask} className="h-12 px-6" size="lg">
-                <Play className="h-4 w-4 mr-2" />
-                {s.startTask}
-              </Button>
-            ) : (
+          </div>
+
+          {/* Desistir — no rodapé do painel, mesmo tamanho do "Iniciar tarefa" */}
+          {taskStarted && (
+            <div className="w-full max-w-md md:ml-auto md:mr-8 pt-6">
               <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-2 text-on-surface-variant"
+                variant="outline"
+                size="lg"
+                className="h-12 px-6"
                 onClick={() => completeMission("gave_up")}
               >
-                <Flag className="h-3.5 w-3.5 mr-1.5" />
+                <Flag className="h-4 w-4 mr-2" />
                 {s.giveUp}
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-center p-2 md:p-3 bg-surface-container overflow-hidden md:h-screen">
