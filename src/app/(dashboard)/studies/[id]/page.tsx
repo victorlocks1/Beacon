@@ -195,14 +195,16 @@ export default async function StudyPage({
                     key={screen.id}
                     className="flex items-center gap-4 border border-outline-variant rounded-2xl p-4 bg-surface-container-low"
                   >
-                    {/* Thumbnail */}
-                    <div className="relative w-20 h-14 rounded overflow-hidden bg-muted shrink-0">
-                      <Image
-                        src={screen.imageUrl}
-                        alt={screen.name}
-                        fill
-                        className="object-cover"
-                      />
+                    {/* Thumbnail — no import ao vivo a tela não tem imagem (o
+                        embed renderiza); mostra um placeholder em vez de quebrar. */}
+                    <div className="relative w-20 h-14 rounded overflow-hidden bg-surface-container-high shrink-0 flex items-center justify-center">
+                      {screen.imageUrl ? (
+                        <Image src={screen.imageUrl} alt={screen.name} fill className="object-cover" />
+                      ) : (
+                        <span className="text-[10px] text-on-surface-variant text-center px-1 leading-tight">
+                          Figma ao vivo
+                        </span>
+                      )}
                     </div>
 
                     {/* Info */}
