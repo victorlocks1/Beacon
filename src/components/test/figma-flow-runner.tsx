@@ -432,10 +432,10 @@ export function FigmaFlowRunner({
           </div>
         </div>
 
-        <div className="flex items-center justify-center p-4 md:p-6 bg-surface-container overflow-hidden md:h-screen">
+        <div className="flex items-center justify-center p-2 md:p-3 bg-surface-container overflow-hidden md:h-screen">
           <div
             className={
-              "bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[80vh] max-h-[900px] max-w-full " +
+              "bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[94vh] max-w-full " +
               (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
             }
             aria-hidden={!taskStarted}
