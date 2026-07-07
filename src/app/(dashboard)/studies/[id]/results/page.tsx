@@ -5,6 +5,7 @@ import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Users } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatPct } from "@/lib/format"
 import { ResetDataButton } from "@/components/study/reset-data-button"
 import { MetricInfo } from "@/components/results/metric-info"
@@ -94,6 +95,10 @@ export default async function ResultsOverviewPage({
     const bo = b.block?.order ?? b.mission?.block.order ?? 0
     return ao - bo || a.order - b.order
   })
+  // Livres = criadas fora de missão (têm bloco próprio); as demais pertencem a
+  // uma missão e aparecem agrupadas dentro dela.
+  const freeQuestions = questions.filter((q) => !q.missionId)
+  const questionsOfMission = (missionId: string) => questions.filter((q) => q.missionId === missionId)
 
   function statsFor(missionId: string) {
     const rs = results.filter((r) => r.missionId === missionId)
@@ -149,74 +154,99 @@ export default async function ResultsOverviewPage({
         <ResetDataButton studyId={id} sessionCount={study._count.sessions} />
       </div>
 
-      {missions.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
-          Nenhuma missão neste study.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {missions.map((mission, index) => {
-            const s = statsFor(mission.id)
-            return (
-              <Link
-                key={mission.id}
-                href={`/studies/${id}/results/${mission.id}`}
-                className="block border border-outline-variant rounded-2xl p-6 bg-surface-container-low transition-shadow hover:elevation-2"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-label-medium text-on-surface-variant mb-1">
-                      MISSÃO {index + 1}
-                    </p>
-                    <h2 className="text-title-medium text-on-surface truncate">{mission.task}</h2>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-on-surface-variant shrink-0 mt-1" />
-                </div>
+      <Tabs defaultValue="missions">
+        <TabsList className="mb-6">
+          <TabsTrigger value="missions">Missões ({missions.length})</TabsTrigger>
+          <TabsTrigger value="questions">Perguntas ({freeQuestions.length})</TabsTrigger>
+        </TabsList>
 
-                {s.started === 0 ? (
-                  <p className="text-body-medium text-on-surface-variant mt-4">
-                    Ainda sem respostas.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-4 gap-3 mt-6">
-                    <Stat
-                      label="Conclusão"
-                      value={formatPct(s.completionRate)}
-                      info="Participantes que chegaram na tela-objetivo, sobre as sessões encerradas (concluídas + desistências + perdidas)."
-                    />
-                    <Stat
-                      label="Perdida"
-                      value={formatPct(s.lostRate)}
-                      info="Abandono silencioso: iniciou a tarefa mas não concluiu nem desistiu, e a sessão foi encerrada (fim do teste ou inatividade > 30 min)."
-                    />
-                    <Stat
-                      label="Misclick"
-                      value={formatPct(s.misclickRate)}
-                      info="Percentual de cliques fora de uma área clicável (erro de alvo), sobre o total de cliques."
-                    />
-                    <Stat
-                      label="Duração méd."
-                      value={formatDuration(s.avgDuration)}
-                      info="Tempo médio da tarefa (início até concluir/desistir), só das sessões com resultado."
-                    />
-                  </div>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      )}
+        {/* ── Missões (cada uma com suas perguntas de acompanhamento) ── */}
+        <TabsContent value="missions">
+          {missions.length === 0 ? (
+            <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
+              Nenhuma missão neste study.
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {missions.map((mission, index) => {
+                const s = statsFor(mission.id)
+                const mq = questionsOfMission(mission.id)
+                return (
+                  <div key={mission.id} className="space-y-3">
+                    <Link
+                      href={`/studies/${id}/results/${mission.id}`}
+                      className="block border border-outline-variant rounded-2xl p-6 bg-surface-container-low transition-shadow hover:elevation-2"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-label-medium text-on-surface-variant mb-1">
+                            MISSÃO {index + 1}
+                          </p>
+                          <h2 className="text-title-medium text-on-surface truncate">{mission.task}</h2>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-on-surface-variant shrink-0 mt-1" />
+                      </div>
 
-      {questions.length > 0 && (
-        <div className="mt-10">
-          <h2 className="text-title-medium text-on-surface mb-4">Perguntas</h2>
-          <div className="space-y-4">
-            {questions.map((q, i) => (
-              <QuestionResultCard key={q.id} studyId={id} index={i} question={q} />
-            ))}
-          </div>
-        </div>
-      )}
+                      {s.started === 0 ? (
+                        <p className="text-body-medium text-on-surface-variant mt-4">
+                          Ainda sem respostas.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-4 gap-3 mt-6">
+                          <Stat
+                            label="Conclusão"
+                            value={formatPct(s.completionRate)}
+                            info="Participantes que chegaram na tela-objetivo, sobre as sessões encerradas (concluídas + desistências + perdidas)."
+                          />
+                          <Stat
+                            label="Perdida"
+                            value={formatPct(s.lostRate)}
+                            info="Abandono silencioso: iniciou a tarefa mas não concluiu nem desistiu, e a sessão foi encerrada (fim do teste ou inatividade > 30 min)."
+                          />
+                          <Stat
+                            label="Misclick"
+                            value={formatPct(s.misclickRate)}
+                            info="Percentual de cliques fora de uma área clicável (erro de alvo), sobre o total de cliques."
+                          />
+                          <Stat
+                            label="Duração méd."
+                            value={formatDuration(s.avgDuration)}
+                            info="Tempo médio da tarefa (início até concluir/desistir), só das sessões com resultado."
+                          />
+                        </div>
+                      )}
+                    </Link>
+
+                    {/* Perguntas de acompanhamento desta missão */}
+                    {mq.length > 0 && (
+                      <div className="ml-4 border-l-2 border-outline-variant pl-4 space-y-3">
+                        {mq.map((q, i) => (
+                          <QuestionResultCard key={q.id} studyId={id} index={i} question={q} hideMissionRef />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Perguntas livres (criadas fora de missão) ── */}
+        <TabsContent value="questions">
+          {freeQuestions.length === 0 ? (
+            <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
+              Nenhuma pergunta avulsa. Perguntas criadas dentro de uma missão aparecem na aba Missões.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {freeQuestions.map((q, i) => (
+                <QuestionResultCard key={q.id} studyId={id} index={i} question={q} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
@@ -241,10 +271,12 @@ function QuestionResultCard({
   studyId,
   index,
   question,
+  hideMissionRef = false,
 }: {
   studyId: string
   index: number
   question: QuestionWithAnswers
+  hideMissionRef?: boolean
 }) {
   const answers = question.answers
   const options = (question.options as string[] | null) ?? []
@@ -254,7 +286,7 @@ function QuestionResultCard({
       <div className="min-w-0">
         <p className="text-label-medium text-on-surface-variant mb-1">
           PERGUNTA {index + 1} · {qTypeLabel[question.type]}
-          {question.mission ? ` · sobre “${question.mission.task}”` : ""}
+          {!hideMissionRef && question.mission ? ` · sobre “${question.mission.task}”` : ""}
         </p>
         <h3 className="text-title-medium text-on-surface">{question.title}</h3>
       </div>
