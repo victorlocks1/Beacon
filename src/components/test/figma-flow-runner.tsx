@@ -1,7 +1,7 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock, Loader2 } from "lucide-react"
+import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock } from "lucide-react"
 import { figmaEmbedUrl, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
@@ -38,6 +38,9 @@ const VALID = new Set<string>(FIGMA_EVENT_TYPES)
 // Zoom no embed para cortar a moldura (device frame) do Figma. 1 = sem recorte;
 // >1 amplia e o overflow-hidden do quadro corta a borda preta. Ajuste fino aqui.
 const FRAME_CROP = 1.2
+// Fração do excesso vertical cortada do TOPO (o resto sai de baixo). 0.5 =
+// centralizado; menor = corta menos o topo (evita comer o topo do protótipo).
+const FRAME_CROP_TOP = 0.22
 
 // Runner do protótipo VIVO do Figma no fluxo completo: boas-vindas → tarefas
 // (painel + embed) → perguntas → obrigado. Captura os eventos da Embed API
@@ -165,7 +168,7 @@ export function FigmaFlowRunner({
   }, [isLastStep, token])
 
   const completeMission = useCallback(
-    async (signal: "reached" | "gave_up") => {
+    (signal: "reached" | "gave_up") => {
       if (!missionRef.current || completedRef.current) return
       completedRef.current = true
       const missionId = missionRef.current
@@ -181,27 +184,24 @@ export function FigmaFlowRunner({
           timestampMs: Math.round(now() - startTimeRef.current),
         })
       }
-      await flush()
-      try {
-        await fetch("/api/t/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token,
-            missionId,
-            signal,
-            path: pathRef.current,
-            durationMs: Math.round(now() - startTimeRef.current),
-            misclickCount: misclickCountRef.current,
-            clickCount: clickCountRef.current,
-          }),
-          keepalive: true,
-        })
-      } catch {
-        /* segue */
-      }
-      // mostra a tela de conclusão (feedback + botão continuar) antes de avançar
+      // feedback IMEDIATO (não espera a rede) — ao alcançar o objetivo o sucesso
+      // aparece na hora; a persistência acontece em segundo plano.
       setCompletion(signal)
+      flush()
+      fetch("/api/t/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          missionId,
+          signal,
+          path: pathRef.current,
+          durationMs: Math.round(now() - startTimeRef.current),
+          misclickCount: misclickCountRef.current,
+          clickCount: clickCountRef.current,
+        }),
+        keepalive: true,
+      }).catch(() => {})
     },
     [flush, token]
   )
@@ -513,18 +513,27 @@ export function FigmaFlowRunner({
                     width: `${FRAME_CROP * 100}%`,
                     height: `${FRAME_CROP * 100}%`,
                     left: `${-(FRAME_CROP - 1) * 50}%`,
-                    top: `${-(FRAME_CROP - 1) * 50}%`,
+                    top: `${-(FRAME_CROP - 1) * FRAME_CROP_TOP * 100}%`,
                     border: "none",
                     display: "block",
                   }}
                 />
               )}
 
-              {/* Loader amigável enquanto o Figma não termina de carregar */}
+              {/* Loader amigável (barrinha que enche) enquanto o Figma carrega */}
               {!embedLoaded && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface-container-low">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-surface-container-low px-10">
+                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <ClipboardCheck className="h-6 w-6" />
+                  </div>
+                  <div className="w-full max-w-[200px] h-2 rounded-full bg-surface-container-high overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ animation: "beaconFill 3.2s cubic-bezier(0.22,1,0.36,1) forwards" }}
+                    />
+                  </div>
                   <span className="text-body-small text-on-surface-variant">{s.loadingPrototype}</span>
+                  <style>{`@keyframes beaconFill{0%{width:6%}55%{width:64%}100%{width:92%}}`}</style>
                 </div>
               )}
             </div>
