@@ -31,12 +31,14 @@ export function WelcomeDialog({
   studyId,
   title,
   message,
+  howItWorks,
   defaultTitle,
   defaultMessage,
 }: {
   studyId: string
   title: string | null
   message: string | null
+  howItWorks: string | null
   defaultTitle: string
   defaultMessage: string
 }) {
@@ -44,12 +46,13 @@ export function WelcomeDialog({
   const [open, setOpen] = useState(false)
   const [t, setT] = useState(title ?? "")
   const [m, setM] = useState(message ?? "")
+  const [hiw, setHiw] = useState(howItWorks ?? "")
   const [pending, startTransition] = useTransition()
 
   function save() {
     startTransition(async () => {
       try {
-        await updateWelcomeAction(studyId, { title: t, message: m })
+        await updateWelcomeAction(studyId, { title: t, message: m, howItWorks: hiw })
         toast.success("Boas-vindas salvas")
         setOpen(false)
         router.refresh()
@@ -68,6 +71,7 @@ export function WelcomeDialog({
         if (v) {
           setT(title ?? "")
           setM(message ?? "")
+          setHiw(howItWorks ?? "")
         }
       }}
     >
@@ -117,6 +121,19 @@ export function WelcomeDialog({
                 className="rounded-lg min-h-28"
               />
               <p className="text-body-small text-on-surface-variant px-1">Mensagem de boas-vindas.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Textarea
+                value={hiw}
+                onChange={(e) => setHiw(e.target.value)}
+                placeholder="Ex.: Você verá telas do app. Toque nos elementos como faria no dia a dia; se travar, use “Não consegui”."
+                className="rounded-lg min-h-28"
+              />
+              <p className="text-body-small text-on-surface-variant px-1">
+                Como funciona — exibido numa tela extra, depois das boas-vindas e antes das tarefas.
+                Deixe em branco para não mostrar.
+              </p>
             </div>
 
             <Button onClick={save} disabled={pending} className="w-full h-12">

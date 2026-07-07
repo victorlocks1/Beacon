@@ -7,6 +7,7 @@ import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
 import { PrototypeStage, type StageScreen, type StageInteraction } from "@/components/prototype/stage"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
+import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
 import { tt, type Lang } from "@/lib/i18n"
 
 interface Mission {
@@ -37,6 +38,8 @@ interface Props {
   preview?: boolean
   // Quando presente, mostra a tela de boas-vindas antes dos passos.
   welcome?: WelcomeInfo | null
+  // "Como funciona": tela extra após as boas-vindas, antes das tarefas.
+  howItWorks?: string | null
 }
 
 interface BufferedEvent {
@@ -58,10 +61,12 @@ export function TestRunner({
   steps,
   preview = false,
   welcome = null,
+  howItWorks = null,
 }: Props) {
   const s = tt(lang)
   const [stepIndex, setStepIndex] = useState(0)
   const [flowStarted, setFlowStarted] = useState(!welcome) // sem welcome → já começa
+  const [introDone, setIntroDone] = useState(!howItWorks) // tela "Como funciona"
   const [taskStarted, setTaskStarted] = useState(false) // subfase da missão
   const [toast, setToast] = useState<string | null>(null) // "Tarefa X concluída"
   const [finished, setFinished] = useState(false)
@@ -331,6 +336,9 @@ export function TestRunner({
         </div>
       </div>
     )
+  } else if (howItWorks && !introDone) {
+    // ─────────── Como funciona (após boas-vindas) ───────────
+    content = <HowItWorksScreen text={howItWorks} lang={lang} onContinue={() => setIntroDone(true)} />
   } else if (finished || !step) {
     // ─────────── Fim ───────────
     content = (

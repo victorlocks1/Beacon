@@ -215,6 +215,7 @@ export default async function ReviewPage({
                   message: study.welcomeMessage ?? "",
                   taskCount: missionCount,
                 }}
+                howItWorks={study.howItWorks}
                 deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
                 screens={screens.map((s) => ({
                   id: s.id,

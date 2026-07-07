@@ -297,6 +297,7 @@ export default async function StudyPage({
                       studyId={study.id}
                       title={study.welcomeTitle}
                       message={study.welcomeMessage}
+                      howItWorks={study.howItWorks}
                       defaultTitle={s.welcomeTitle}
                       defaultMessage={s.welcomeIntro}
                     />

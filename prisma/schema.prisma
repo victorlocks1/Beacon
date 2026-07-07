@@ -44,6 +44,8 @@ model Study {
   // Boas-vindas customizáveis do testador (nulo = usa o padrão do idioma)
   welcomeTitle   String?
   welcomeMessage String?
+  // "Como funciona": tela extra exibida após as boas-vindas, antes das tarefas
+  howItWorks     String?
   // Código de compartilhamento (link) para o time interno entrar como membro
   shareCode  String?     @unique
   createdAt  DateTime    @default(now())

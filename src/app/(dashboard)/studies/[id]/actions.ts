@@ -48,7 +48,7 @@ export async function resetStudyDataAction(studyId: string) {
 
 export async function updateWelcomeAction(
   studyId: string,
-  input: { title: string; message: string }
+  input: { title: string; message: string; howItWorks: string }
 ) {
   const { study } = await getStudyOrThrow(studyId)
   await prisma.study.update({
@@ -56,6 +56,7 @@ export async function updateWelcomeAction(
     data: {
       welcomeTitle: input.title.trim() || null,
       welcomeMessage: input.message.trim() || null,
+      howItWorks: input.howItWorks.trim() || null,
     },
   })
   revalidatePath(`/studies/${studyId}`)

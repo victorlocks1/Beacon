@@ -10,6 +10,7 @@ export const tester = {
       `Você verá ${n === 1 ? "uma tarefa" : `${n} tarefas`} e deverá clicar pela interface para realizá-${n === 1 ? "la" : "las"}.`,
     anonymous: "Leva poucos minutos. Seus cliques são registrados de forma anônima.",
     start: "Começar",
+    howItWorksTitle: "Como funciona",
     startTask: "Iniciar tarefa",
     unavailableTitle: "Teste indisponível",
     unavailableBody:
@@ -39,6 +40,7 @@ export const tester = {
       `Verás ${n === 1 ? "una tarea" : `${n} tareas`} y deberás hacer clic por la interfaz para realizar${n === 1 ? "la" : "las"}.`,
     anonymous: "Toma pocos minutos. Tus clics se registran de forma anónima.",
     start: "Empezar",
+    howItWorksTitle: "Cómo funciona",
     startTask: "Iniciar tarea",
     unavailableTitle: "Prueba no disponible",
     unavailableBody:

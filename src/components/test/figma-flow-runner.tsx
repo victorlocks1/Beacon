@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock } from "lucide-react"
 import { figmaEmbedUrl, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
+import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
 import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 
@@ -43,6 +44,7 @@ export function FigmaFlowRunner({
   fileKey,
   steps,
   welcome,
+  howItWorks,
   goalsByMission,
   startNodeByMission,
   screenByNode,
@@ -52,6 +54,7 @@ export function FigmaFlowRunner({
   fileKey: string
   steps: Step[]
   welcome: WelcomeInfo | null
+  howItWorks: string | null
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
@@ -59,6 +62,7 @@ export function FigmaFlowRunner({
   const s = tt(lang)
   const [stepIndex, setStepIndex] = useState(0)
   const [flowStarted, setFlowStarted] = useState(!welcome)
+  const [introDone, setIntroDone] = useState(!howItWorks) // tela "Como funciona"
   const [taskStarted, setTaskStarted] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [finished, setFinished] = useState(false)
@@ -370,6 +374,8 @@ export function FigmaFlowRunner({
         </div>
       </div>
     )
+  } else if (howItWorks && !introDone) {
+    content = <HowItWorksScreen text={howItWorks} lang={lang} onContinue={() => setIntroDone(true)} />
   } else if (finished || !step) {
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
