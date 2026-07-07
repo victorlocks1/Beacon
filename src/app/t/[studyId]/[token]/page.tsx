@@ -141,12 +141,12 @@ export default async function TestRunPage({
   // ─── Protótipo VIVO do Figma (embed) é o padrão para estudos do Figma ───
   const canEmbed = proto?.source === "figma" && !!proto.figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
   if (canEmbed) {
-    // mapeia figmaNodeId → screenId e monta os objetivos (node-ids) por missão
-    const nodeToScreen: Record<string, string> = {}
+    // mapeia figmaNodeId → tela (id + tamanho) e monta os objetivos por missão
+    const screenByNode: Record<string, { id: string; w: number; h: number }> = {}
     const screenToNode: Record<string, string> = {}
     for (const sc of screens) {
       if (sc.figmaNodeId) {
-        nodeToScreen[sc.figmaNodeId] = sc.id
+        screenByNode[sc.figmaNodeId] = { id: sc.id, w: sc.width, h: sc.height }
         screenToNode[sc.id] = sc.figmaNodeId
       }
     }
@@ -170,7 +170,7 @@ export default async function TestRunPage({
           taskCount: testSteps.filter((st) => st.kind === "mission").length,
         }}
         goalsByMission={goalsByMission}
-        nodeToScreen={nodeToScreen}
+        screenByNode={screenByNode}
       />
     )
   }

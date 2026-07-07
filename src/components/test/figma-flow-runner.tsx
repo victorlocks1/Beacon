@@ -20,6 +20,18 @@ interface BufferedEvent {
   missionId: string | null
 }
 
+// Evento no NOSSO modelo (o mesmo que o fluxo por imagem grava), derivado dos
+// eventos do Figma — assim os relatórios existentes funcionam sem mudança.
+interface OurEvent {
+  missionId: string
+  screenId: string
+  type: "click" | "navigate" | "misclick" | "give_up" | "end"
+  xNorm: number
+  yNorm: number
+  targetScreenId?: string | null
+  timestampMs: number
+}
+
 const VALID = new Set<string>(FIGMA_EVENT_TYPES)
 
 // Runner do protótipo VIVO do Figma no fluxo completo: boas-vindas → tarefas
@@ -32,7 +44,7 @@ export function FigmaFlowRunner({
   steps,
   welcome,
   goalsByMission,
-  nodeToScreen,
+  screenByNode,
 }: {
   token: string
   lang: Lang
@@ -40,7 +52,7 @@ export function FigmaFlowRunner({
   steps: Step[]
   welcome: WelcomeInfo | null
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
-  nodeToScreen: Record<string, string> // figmaNodeId → screenId (p/ o caminho)
+  screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
 }) {
   const s = tt(lang)
   const [stepIndex, setStepIndex] = useState(0)
@@ -64,9 +76,13 @@ export function FigmaFlowRunner({
   const clickCountRef = useRef(0)
   const misclickCountRef = useRef(0)
   const bufferRef = useRef<BufferedEvent[]>([])
+  // eventos traduzidos p/ o nosso modelo (alimentam TODOS os relatórios)
+  const ourBufferRef = useRef<OurEvent[]>([])
   const epochRef = useRef(0)
 
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now())
+
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -75,18 +91,35 @@ export function FigmaFlowRunner({
   }, [])
 
   const flush = useCallback(async () => {
-    if (bufferRef.current.length === 0) return
-    const events = bufferRef.current
-    bufferRef.current = []
-    try {
-      await fetch("/api/t/figma-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, events }),
-        keepalive: true,
-      })
-    } catch {
-      bufferRef.current = [...events, ...bufferRef.current]
+    // 1) eventos crus do Figma
+    if (bufferRef.current.length > 0) {
+      const events = bufferRef.current
+      bufferRef.current = []
+      try {
+        await fetch("/api/t/figma-events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, events }),
+          keepalive: true,
+        })
+      } catch {
+        bufferRef.current = [...events, ...bufferRef.current]
+      }
+    }
+    // 2) eventos traduzidos p/ o nosso modelo (relatórios)
+    if (ourBufferRef.current.length > 0) {
+      const events = ourBufferRef.current
+      ourBufferRef.current = []
+      try {
+        await fetch("/api/t/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, events }),
+          keepalive: true,
+        })
+      } catch {
+        ourBufferRef.current = [...events, ...ourBufferRef.current]
+      }
     }
   }, [token])
 
@@ -117,6 +150,18 @@ export function FigmaFlowRunner({
       if (!missionRef.current || completedRef.current) return
       completedRef.current = true
       const missionId = missionRef.current
+      // evento de fim/desistência na última tela vista (p/ tela de abandono)
+      const lastScreen = pathRef.current[pathRef.current.length - 1]
+      if (lastScreen) {
+        ourBufferRef.current.push({
+          missionId,
+          screenId: lastScreen,
+          type: signal === "gave_up" ? "give_up" : "end",
+          xNorm: 0,
+          yNorm: 0,
+          timestampMs: Math.round(now() - startTimeRef.current),
+        })
+      }
       await flush()
       try {
         await fetch("/api/t/complete", {
@@ -160,22 +205,49 @@ export function FigmaFlowRunner({
         missionId: startedRef.current ? missionRef.current : null,
       })
 
-      if (!startedRef.current) return
+      if (!startedRef.current || !missionRef.current) return
+      const missionId = missionRef.current
+      const ts = Math.round(now() - startTimeRef.current)
 
       if (d.type === "MOUSE_PRESS_OR_RELEASE") {
         clickCountRef.current += 1
-        if (d.data?.handled === false) misclickCountRef.current += 1
+        const handled = d.data?.handled !== false
+        if (!handled) misclickCountRef.current += 1
+        // posição do clique na tela atual (best-effort: relativo ao frame rolável)
+        const scr = screenByNode[d.data?.presentedNodeId as string]
+        if (scr) {
+          const pos =
+            (d.data?.nearestScrollingFrameMousePosition as { x: number; y: number } | null) ??
+            (d.data?.targetNodeMousePosition as { x: number; y: number } | null) ?? { x: 0, y: 0 }
+          ourBufferRef.current.push({
+            missionId,
+            screenId: scr.id,
+            type: handled ? "click" : "misclick",
+            xNorm: clamp01((pos.x ?? 0) / (scr.w || 1)),
+            yNorm: clamp01((pos.y ?? 0) / (scr.h || 1)),
+            timestampMs: ts,
+          })
+        }
       }
 
       if (d.type === "PRESENTED_NODE_CHANGED") {
         const nodeId = d.data?.presentedNodeId as string | undefined
-        if (nodeId) {
-          const screenId = nodeToScreen[nodeId]
-          if (screenId && pathRef.current[pathRef.current.length - 1] !== screenId) {
-            pathRef.current.push(screenId)
+        const scr = nodeId ? screenByNode[nodeId] : undefined
+        if (scr) {
+          if (pathRef.current[pathRef.current.length - 1] !== scr.id) {
+            pathRef.current.push(scr.id)
+            ourBufferRef.current.push({
+              missionId,
+              screenId: scr.id,
+              type: "navigate",
+              targetScreenId: scr.id,
+              xNorm: 0,
+              yNorm: 0,
+              timestampMs: ts,
+            })
           }
-          const goals = missionRef.current ? goalsByMission[missionRef.current] ?? [] : []
-          if (goals.includes(nodeId)) completeMission("reached")
+          const goals = goalsByMission[missionId] ?? []
+          if (nodeId && goals.includes(nodeId)) completeMission("reached")
         }
       }
     }
@@ -212,6 +284,20 @@ export function FigmaFlowRunner({
     pathRef.current = mission.startScreenId ? [mission.startScreenId] : []
     missionRef.current = mission.id
     startedRef.current = true
+    // navigate inicial: marca o início da tarefa na tela inicial e persiste já
+    // (permite distinguir "iniciou e sumiu" = perdida de "nunca iniciou").
+    if (mission.startScreenId) {
+      ourBufferRef.current.push({
+        missionId: mission.id,
+        screenId: mission.startScreenId,
+        type: "navigate",
+        targetScreenId: mission.startScreenId,
+        xNorm: 0,
+        yNorm: 0,
+        timestampMs: 0,
+      })
+    }
+    flush()
     setTaskStarted(true)
   }
 
