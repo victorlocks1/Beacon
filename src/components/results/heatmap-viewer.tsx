@@ -21,9 +21,10 @@ interface ScreenData {
   order: number
   imageUrl: string
   points: Point[]
+  firstClickPoints?: Point[] // primeiro toque de cada participante (modo "first click")
 }
 
-type Mode = "heatmap" | "clicks" | "image"
+type Mode = "heatmap" | "clicks" | "firstclick" | "image"
 
 function ramp(t: number): [number, number, number] {
   const stops: [number, number, number][] = [
@@ -58,12 +59,16 @@ export function HeatmapViewer({
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const screen = screens.find((s) => s.id === selectedId) ?? screens[0]
+  // pontos ativos conforme o modo (todos os cliques × primeiro toque)
+  const activePoints =
+    mode === "firstclick" ? screen?.firstClickPoints ?? [] : screen?.points ?? []
 
   useEffect(() => {
-    if (mode !== "heatmap" || !screen) return
+    if ((mode !== "heatmap" && mode !== "firstclick") || !screen) return
     const img = imgRef.current
     const canvas = canvasRef.current
     if (!img || !canvas) return
+    const pts = mode === "firstclick" ? screen.firstClickPoints ?? [] : screen.points
 
     function draw() {
       const w = img!.clientWidth
@@ -76,7 +81,7 @@ export function HeatmapViewer({
       ctx.clearRect(0, 0, w, h)
 
       const radius = Math.max(18, w * 0.05)
-      for (const p of screen!.points) {
+      for (const p of pts) {
         const x = p.x * w
         const y = p.y * h
         const g = ctx.createRadialGradient(x, y, 0, x, y, radius)
@@ -118,6 +123,7 @@ export function HeatmapViewer({
 
   const clickCount = screen.points.filter((p) => p.type === "click").length
   const misclickCount = screen.points.filter((p) => p.type === "misclick").length
+  const firstClickCount = (screen.firstClickPoints ?? []).length
 
   return (
     <div className="space-y-3">
@@ -145,18 +151,24 @@ export function HeatmapViewer({
 
         {/* Toggle de modo */}
         <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-lg">
-          {(["heatmap", "clicks", "image"] as Mode[]).map((m) => (
+          {(["heatmap", "clicks", "firstclick", "image"] as Mode[]).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
               className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                 mode === m
                   ? "bg-background shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {m === "heatmap" ? "Heatmap" : m === "clicks" ? "Clicks" : "Imagem"}
+              {m === "heatmap"
+                ? "Heatmap"
+                : m === "clicks"
+                  ? "Clicks"
+                  : m === "firstclick"
+                    ? "First click"
+                    : "Imagem"}
             </button>
           ))}
         </div>
@@ -175,7 +187,7 @@ export function HeatmapViewer({
           className="w-full h-auto block"
         />
 
-        {mode === "heatmap" && (
+        {(mode === "heatmap" || mode === "firstclick") && (
           <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
@@ -201,14 +213,23 @@ export function HeatmapViewer({
 
       {/* Legenda */}
       <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-          {clickCount} clique(s) em hotspot
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-          {misclickCount} misclick(s)
-        </span>
+        {mode === "firstclick" ? (
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+            {firstClickCount} primeiro(s) clique(s)
+          </span>
+        ) : (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+              {clickCount} clique(s) em hotspot
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+              {misclickCount} misclick(s)
+            </span>
+          </>
+        )}
       </div>
     </div>
   )

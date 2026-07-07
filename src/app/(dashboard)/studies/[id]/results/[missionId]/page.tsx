@@ -10,6 +10,7 @@ import { reconstructPath } from "@/lib/path"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FigmaImagesAutoLoad } from "@/components/results/load-figma-images-button"
 
 const outcomeBucket: Record<string, "direct" | "indirect" | "unfinished"> = {
@@ -148,9 +149,6 @@ export default async function MissionResultsPage({
     arr.push({ x: fc.x, y: fc.y, type: "click" })
     firstClickByScreen.set(fc.screenId, arr)
   }
-  const firstClickScreens = screens
-    .filter((s) => firstClickByScreen.has(s.id))
-    .map((s) => ({ id: s.id, name: s.name, order: s.order, imageUrl: s.imageUrl, points: firstClickByScreen.get(s.id)! }))
 
   // ── Tempo até o 1º toque: média só de quem clicou; reporta quantos nunca clicaram ──
   const firstTaps = [...firstClickBySession.values()].map((fc) => fc.tMs)
@@ -189,6 +187,7 @@ export default async function MissionResultsPage({
       order: s.order,
       imageUrl: s.imageUrl,
       points: pointsByScreen.get(s.id)!,
+      firstClickPoints: firstClickByScreen.get(s.id) ?? [],
     }))
 
   // ── Caminho por sessão (computado uma vez) ──
@@ -270,20 +269,17 @@ export default async function MissionResultsPage({
         )}
       </div>
 
-      {/* Perguntas desta missão (respostas dadas logo após a tarefa) */}
-      {mission.questions.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-title-large text-on-surface mb-4">
-            Perguntas da missão ({mission.questions.length})
-          </h2>
-          <div className="space-y-4">
-            {mission.questions.map((q, i) => (
-              <QuestionResultCard key={q.id} studyId={id} index={i} question={q} hideMissionRef />
-            ))}
-          </div>
-        </section>
-      )}
+      <Tabs defaultValue="geral">
+        {mission.questions.length > 0 && (
+          <TabsList className="mb-6">
+            <TabsTrigger value="geral">Geral</TabsTrigger>
+            <TabsTrigger value="questions">
+              Perguntas realizadas ({mission.questions.length})
+            </TabsTrigger>
+          </TabsList>
+        )}
 
+        <TabsContent value="geral">
       {startedSessionIds.size === 0 ? (
         <div className="text-center py-24 border border-outline-variant rounded-3xl bg-surface-container-low">
           <p className="text-title-medium text-on-surface">Ainda sem respostas</p>
@@ -348,20 +344,6 @@ export default async function MissionResultsPage({
             />
           </div>
 
-          {/* Primeiro clique isolado */}
-          <section>
-            <h2 className="text-title-large text-on-surface mb-1">Primeiro clique</h2>
-            <p className="text-body-small text-on-surface-variant mb-4">
-              O primeiríssimo toque de cada participante na tarefa (1 por pessoa). Revela o modelo
-              mental antes de qualquer correção de rota.
-            </p>
-            {firstClickScreens.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Ninguém clicou ainda.</p>
-            ) : (
-              <HeatmapViewer screens={firstClickScreens} deviceType={deviceType} />
-            )}
-          </section>
-
           {/* Tela do abandono */}
           {(giveUpRows.length > 0 || lostRows.length > 0) && (
             <section>
@@ -404,9 +386,13 @@ export default async function MissionResultsPage({
             </section>
           )}
 
-          {/* Heatmap geral */}
+          {/* Heatmap geral (com opção de "first click" no seletor) */}
           <section>
-            <h2 className="text-title-large text-on-surface mb-4">Heatmap por tela (todos os cliques)</h2>
+            <h2 className="text-title-large text-on-surface mb-1">Heatmap por tela</h2>
+            <p className="text-body-small text-on-surface-variant mb-4">
+              Alterne entre todos os cliques, só cliques, o primeiro toque de cada participante
+              (first click) e a imagem da tela.
+            </p>
             {heatmapScreens.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nenhum clique registrado nas telas.
@@ -483,6 +469,18 @@ export default async function MissionResultsPage({
           </section>
         </div>
       )}
+        </TabsContent>
+
+        {mission.questions.length > 0 && (
+          <TabsContent value="questions">
+            <div className="space-y-4">
+              {mission.questions.map((q, i) => (
+                <QuestionResultCard key={q.id} studyId={id} index={i} question={q} hideMissionRef />
+              ))}
+            </div>
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   )
 }
