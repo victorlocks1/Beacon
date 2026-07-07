@@ -145,18 +145,6 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
           </p>
         </div>
 
-        <div className="space-y-1.5">
-          <M3TextField
-            label="Tarefa"
-            value={task}
-            onChange={(e) => setTask(e.target.value)}
-            required
-          />
-          <p className="text-body-small text-on-surface-variant px-1">
-            Ex.: “Adicione um item ao carrinho”.
-          </p>
-        </div>
-
         <div className="space-y-2">
           <Label htmlFor="description" className="text-title-small text-on-surface">
             Cenário <span className="text-on-surface-variant font-normal">(opcional)</span>
@@ -169,6 +157,21 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
             rows={3}
             className="rounded-lg border-outline bg-transparent text-base focus-visible:border-primary min-h-28"
           />
+          <p className="text-body-small text-on-surface-variant px-1">
+            O contexto que aparece antes da tarefa.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <M3TextField
+            label="Tarefa"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            required
+          />
+          <p className="text-body-small text-on-surface-variant px-1">
+            Ex.: “Adicione um item ao carrinho”.
+          </p>
         </div>
 
         <div className="space-y-2">
