@@ -15,11 +15,10 @@ import { SubmitButton } from "@/components/submit-button"
 import { MissionSavedToast } from "@/components/study/mission-saved-toast"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
-import { deleteScreenAction, moveScreenAction } from "./actions"
+import { deleteScreenAction, moveScreenAction, addSusBlockAction } from "./actions"
 import { QuestionDialog } from "@/components/question/question-dialog"
 import { SequenceList, type SeqBlock } from "@/components/study/sequence-list"
 import { WelcomeDialog } from "@/components/study/welcome-dialog"
-import { SusToggle } from "@/components/study/sus-toggle"
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import {
@@ -29,6 +28,7 @@ import {
   Plus,
   ChevronUp,
   ChevronDown,
+  ClipboardCheck,
 } from "lucide-react"
 
 export default async function StudyPage({
@@ -115,9 +115,13 @@ export default async function StudyPage({
           options: (q.options as string[] | null) ?? [],
         }
       }
+      if (b.type === "sus") {
+        return { id: b.id, kind: "sus" }
+      }
       return null
     })
     .filter((b): b is SeqBlock => b !== null)
+  const hasSus = seqBlocks.some((b) => b.kind === "sus")
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
   const editable = study.status !== "live"
@@ -324,6 +328,12 @@ export default async function StudyPage({
             </div>
             {editable && (
               <div className="flex items-center gap-2 shrink-0">
+                <form action={addSusBlockAction.bind(null, study.id)}>
+                  <SubmitButton variant="outline" fullWidth={false} disabled={hasSus}>
+                    <ClipboardCheck className="h-4 w-4 mr-2" />
+                    {hasSus ? "SUS adicionado" : "Adicionar SUS"}
+                  </SubmitButton>
+                </form>
                 <QuestionDialog studyId={study.id} variant="create" />
                 {screens.length > 0 ? (
                   <Link href={`/studies/${study.id}/missions/new`} className={buttonVariants()}>
@@ -357,7 +367,6 @@ export default async function StudyPage({
                 </p>
               )}
               <SequenceList studyId={study.id} editable={editable} blocks={seqBlocks} />
-              <SusToggle studyId={study.id} enabled={study.susEnabled} editable={editable} />
             </>
           )}
         </TabsContent>

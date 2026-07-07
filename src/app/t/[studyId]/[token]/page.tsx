@@ -78,6 +78,7 @@ export default async function TestRunPage({
           options: string[]
         }
       }
+    | { kind: "sus" }
 
   const toQuestionStep = (q: {
     id: string
@@ -130,6 +131,9 @@ export default async function TestRunPage({
     if (b.type === "question" && b.question) {
       return [toQuestionStep(b.question)]
     }
+    if (b.type === "sus") {
+      return [{ kind: "sus" }]
+    }
     return []
   })
 
@@ -170,7 +174,6 @@ export default async function TestRunPage({
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
         howItWorks={study.howItWorks}
-        susEnabled={study.susEnabled}
         goalsByMission={goalsByMission}
         startNodeByMission={startNodeByMission}
         screenByNode={screenByNode}

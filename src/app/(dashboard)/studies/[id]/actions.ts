@@ -62,9 +62,31 @@ export async function updateWelcomeAction(
   revalidatePath(`/studies/${studyId}`)
 }
 
-export async function toggleSusAction(studyId: string, enabled: boolean) {
+// Adiciona o bloco SUS na sequência (só um por estudo). O SUS é fixo: 10
+// afirmações padrão exibidas ao testador na posição escolhida.
+export async function addSusBlockAction(studyId: string) {
   const { study } = await getStudyOrThrow(studyId)
-  await prisma.study.update({ where: { id: study.id }, data: { susEnabled: enabled } })
+  blockIfLive(study, studyId, "missions")
+  const existing = await prisma.block.findFirst({
+    where: { studyId: study.id, type: "sus" },
+    select: { id: true },
+  })
+  if (existing) return // já existe
+  await prisma.block.create({
+    data: { studyId: study.id, type: "sus", order: await nextBlockOrder(study.id) },
+  })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+export async function deleteSusBlockAction(studyId: string, blockId: string) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+  const b = await prisma.block.findFirst({
+    where: { id: blockId, studyId: study.id, type: "sus" },
+    select: { id: true },
+  })
+  if (!b) return
+  await prisma.block.delete({ where: { id: b.id } })
   revalidatePath(`/studies/${studyId}`)
 }
 

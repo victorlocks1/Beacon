@@ -8,6 +8,7 @@ import { dedupeConsecutive } from "@/lib/path"
 import { PrototypeStage, type StageScreen, type StageInteraction } from "@/components/prototype/stage"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
+import { SusView } from "@/components/test/sus-view"
 import { tt, type Lang } from "@/lib/i18n"
 
 interface Mission {
@@ -21,6 +22,7 @@ interface Mission {
 export type Step =
   | { kind: "mission"; mission: Mission }
   | { kind: "question"; question: StepQuestion }
+  | { kind: "sus" }
 
 interface WelcomeInfo {
   title: string
@@ -300,6 +302,18 @@ export function TestRunner({
     advance()
   }
 
+  function submitSus(values: number[]) {
+    if (!preview) {
+      fetch("/api/t/sus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, values }),
+        keepalive: true,
+      }).catch(() => {})
+    }
+    advance()
+  }
+
   // No preview/revisão o protótipo já fica interativo (sem "Iniciar tarefa").
   const started = preview || taskStarted
   let content: React.ReactNode
@@ -362,6 +376,9 @@ export function TestRunner({
         />
       </div>
     )
+  } else if (step.kind === "sus") {
+    // ─────────── SUS ───────────
+    content = <SusView lang={lang} onSubmit={submitSus} />
   } else {
     // ─────────── Missão (tela dividida: tarefa | protótipo) ───────────
     content = (

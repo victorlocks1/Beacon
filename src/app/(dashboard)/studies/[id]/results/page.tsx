@@ -52,8 +52,9 @@ export default async function ResultsOverviewPage({
     where: { studyId: id, finishedAt: { not: null } },
   })
 
-  // SUS — média das notas (0..100) das respostas do questionário.
-  const susResponses = study.susEnabled
+  // SUS — só se o estudo tem um bloco SUS na sequência.
+  const hasSus = (await prisma.block.count({ where: { studyId: id, type: "sus" } })) > 0
+  const susResponses = hasSus
     ? await prisma.susResponse.findMany({
         where: { session: { studyId: id } },
         select: { score: true },
@@ -167,7 +168,7 @@ export default async function ResultsOverviewPage({
         <ResetDataButton studyId={id} sessionCount={study._count.sessions} />
       </div>
 
-      {study.susEnabled && <SusSummary avg={susAvg} count={susResponses.length} />}
+      {hasSus && <SusSummary avg={susAvg} count={susResponses.length} />}
 
       <Tabs defaultValue="missions">
         <TabsList className="mb-6">

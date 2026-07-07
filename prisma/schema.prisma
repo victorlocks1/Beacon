@@ -46,8 +46,6 @@ model Study {
   welcomeMessage String?
   // "Como funciona": tela extra exibida após as boas-vindas, antes das tarefas
   howItWorks     String?
-  // Questionário SUS (System Usability Scale) ao final do teste
-  susEnabled     Boolean     @default(false)
   // Código de compartilhamento (link) para o time interno entrar como membro
   shareCode  String?     @unique
   createdAt  DateTime    @default(now())
@@ -221,6 +219,7 @@ model Block {
 enum BlockType {
   mission
   question
+  sus
 }
 
 enum QuestionType {

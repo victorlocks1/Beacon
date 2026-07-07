@@ -38,10 +38,10 @@ const VALID = new Set<string>(FIGMA_EVENT_TYPES)
 
 // Zoom no embed para cortar a moldura (device frame) do Figma. 1 = sem recorte;
 // >1 amplia e o overflow-hidden do quadro corta a borda preta. Ajuste fino aqui.
-const FRAME_CROP = 1.2
+const FRAME_CROP = 1.3
 // Fração do excesso vertical cortada do TOPO (o resto sai de baixo). 0.5 =
 // centralizado; menor = corta menos o topo (evita comer o topo do protótipo).
-const FRAME_CROP_TOP = 0.22
+const FRAME_CROP_TOP = 0.32
 
 // Runner do protótipo VIVO do Figma no fluxo completo: boas-vindas → tarefas
 // (painel + embed) → perguntas → obrigado. Captura os eventos da Embed API
@@ -53,7 +53,6 @@ export function FigmaFlowRunner({
   steps,
   welcome,
   howItWorks,
-  susEnabled,
   goalsByMission,
   startNodeByMission,
   screenByNode,
@@ -64,7 +63,6 @@ export function FigmaFlowRunner({
   steps: Step[]
   welcome: WelcomeInfo | null
   howItWorks: string | null
-  susEnabled: boolean
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
@@ -78,8 +76,6 @@ export function FigmaFlowRunner({
   const [embedLoaded, setEmbedLoaded] = useState(false) // protótipo do Figma pronto
   // conclusão da tarefa (feedback + botão continuar) antes de seguir
   const [completion, setCompletion] = useState<null | "reached" | "gave_up">(null)
-  const [showSus, setShowSus] = useState(false) // questionário SUS ao final
-  const susDoneRef = useRef(false)
   const [finished, setFinished] = useState(false)
   const [embedSrc, setEmbedSrc] = useState<string | null>(null)
 
@@ -168,15 +164,13 @@ export function FigmaFlowRunner({
 
   const advance = useCallback(() => {
     if (isLastStep) {
-      // Ao fim da sequência, o SUS (se ativado) vem antes do agradecimento.
-      if (susEnabled && !susDoneRef.current) setShowSus(true)
-      else finishFlow()
+      finishFlow()
     } else {
       setStepIndex((i) => i + 1)
       setTaskStarted(false)
       startedRef.current = false
     }
-  }, [isLastStep, susEnabled, finishFlow])
+  }, [isLastStep, finishFlow])
 
   const completeMission = useCallback(
     (signal: "reached" | "gave_up") => {
@@ -195,9 +189,10 @@ export function FigmaFlowRunner({
           timestampMs: Math.round(now() - startTimeRef.current),
         })
       }
-      // feedback IMEDIATO (não espera a rede) — ao alcançar o objetivo o sucesso
-      // aparece na hora; a persistência acontece em segundo plano.
-      setCompletion(signal)
+      // No sucesso, dá um respiro (~1,2s) entre o clique-objetivo e o feedback,
+      // para não trocar de tela bruscamente. Na desistência, imediato.
+      if (signal === "reached") setTimeout(() => setCompletion("reached"), 1200)
+      else setCompletion("gave_up")
       flush()
       fetch("/api/t/complete", {
         method: "POST",
@@ -378,9 +373,7 @@ export function FigmaFlowRunner({
       body: JSON.stringify({ token, values }),
       keepalive: true,
     }).catch(() => {})
-    susDoneRef.current = true
-    setShowSus(false)
-    finishFlow()
+    advance()
   }
 
   // ─────────── Render ───────────
@@ -417,8 +410,6 @@ export function FigmaFlowRunner({
     )
   } else if (howItWorks && !introDone) {
     content = <HowItWorksScreen text={howItWorks} lang={lang} onContinue={() => setIntroDone(true)} />
-  } else if (showSus) {
-    content = <SusView lang={lang} onSubmit={submitSus} />
   } else if (finished || !step) {
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
@@ -440,6 +431,8 @@ export function FigmaFlowRunner({
         />
       </div>
     )
+  } else if (step.kind === "sus") {
+    content = <SusView lang={lang} onSubmit={submitSus} />
   } else {
     // Missão: tarefa à esquerda, protótipo VIVO à direita. Ao concluir, o painel
     // esquerdo vira o feedback (com botão continuar) e o protótipo some.
@@ -498,13 +491,17 @@ export function FigmaFlowRunner({
             </div>
           </div>
 
-          {/* Desistir — só após o 1º clique (aparece com fade suave) */}
-          {!completion && taskStarted && interacted && (
-            <div className="w-full max-w-md md:ml-auto md:mr-8 pt-6 animate-in fade-in duration-700">
+          {/* Desistir — espaço já reservado ao iniciar a tarefa; só aparece (fade)
+              após o 1º clique, sem empurrar o texto da tarefa. */}
+          {!completion && taskStarted && (
+            <div className="w-full max-w-md md:ml-auto md:mr-8 pt-6">
               <Button
                 variant="outline"
                 size="lg"
-                className="h-12 px-6"
+                className={
+                  "h-12 px-6 transition-opacity duration-700 " +
+                  (interacted ? "opacity-100" : "opacity-0 pointer-events-none")
+                }
                 onClick={() => completeMission("gave_up")}
               >
                 <Flag className="h-4 w-4 mr-2" />

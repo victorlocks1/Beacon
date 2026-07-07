@@ -11,8 +11,10 @@ import { toast } from "@/components/ui/toast"
 import {
   deleteMissionAction,
   deleteQuestionAction,
+  deleteSusBlockAction,
   reorderBlocksAction,
 } from "@/app/(dashboard)/studies/[id]/actions"
+import { ClipboardCheck } from "lucide-react"
 
 // Deixa o NEXT_REDIRECT (ex.: bloqueio de estudo ao vivo) propagar sem virar toast de erro.
 function isRedirect(e: unknown) {
@@ -54,6 +56,10 @@ export type SeqBlock =
       required: boolean
       options: string[]
     }
+  | {
+      id: string
+      kind: "sus"
+    }
 
 export function SequenceList({
   studyId,
@@ -85,6 +91,18 @@ export function SequenceList({
       try {
         await deleteQuestionAction(studyId, questionId)
         toast.success("Pergunta excluída")
+      } catch (e) {
+        if (isRedirect(e)) throw e
+        toast.error("Não foi possível excluir.")
+      }
+    })
+  }
+
+  function handleDeleteSus(blockId: string) {
+    startTransition(async () => {
+      try {
+        await deleteSusBlockAction(studyId, blockId)
+        toast.success("SUS removido")
       } catch (e) {
         if (isRedirect(e)) throw e
         toast.error("Não foi possível excluir.")
@@ -213,6 +231,34 @@ export function SequenceList({
                   )}
                 </div>
               </>
+            ) : block.kind === "sus" ? (
+              <div className="flex items-start gap-3">
+                {handle}
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                  <ClipboardCheck className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-label-medium text-on-surface-variant mb-1">
+                    PASSO {index + 1} · SUS
+                  </p>
+                  <h3 className="text-title-medium text-on-surface">Questionário SUS</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    10 afirmações padrão (escala 1–5), não editáveis. Vira uma nota de 0 a 100.
+                  </p>
+                </div>
+                {editable && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    onClick={() => handleDeleteSus(block.id)}
+                    className="text-muted-foreground hover:text-red-500 shrink-0"
+                    title="Remover SUS"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="flex items-start gap-3">
                 {handle}
