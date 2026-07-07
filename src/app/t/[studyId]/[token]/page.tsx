@@ -1,19 +1,16 @@
 import { prisma } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { TestRunner } from "@/components/test/test-runner"
-import { FigmaEmbedRunner } from "@/components/test/figma-embed-runner"
+import { FigmaFlowRunner } from "@/components/test/figma-flow-runner"
 import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { tt, type Lang } from "@/lib/i18n"
 
 export default async function TestRunPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ studyId: string; token: string }>
-  searchParams: Promise<{ live?: string }>
 }) {
   const { studyId, token } = await params
-  const { live } = await searchParams
 
   const testSession = await prisma.session.findUnique({
     where: { token },
@@ -57,27 +54,7 @@ export default async function TestRunPage({
 
   const study = testSession.study
   const screens = study.prototype?.screens ?? []
-
-  // ─── Fase 1: modo protótipo VIVO (embed do Figma) sob ?live=1 ───
-  // Não altera o fluxo padrão; serve para provar a captura de eventos.
   const proto = study.prototype
-  // Não exige o frame inicial: sem ele, o Figma começa no ponto de início padrão
-  // do protótipo (destrava o teste do modo vivo sem depender de reimportar).
-  const canLive =
-    live === "1" &&
-    proto?.source === "figma" &&
-    !!proto.figmaFileKey &&
-    !!FIGMA_EMBED_CLIENT_ID
-  if (canLive) {
-    return (
-      <FigmaEmbedRunner
-        token={token}
-        fileKey={proto!.figmaFileKey!}
-        startNodeId={proto!.figmaStartNodeId}
-        deviceType={(study.deviceType ?? "mobile") as "desktop" | "tablet" | "mobile"}
-      />
-    )
-  }
 
   type Step =
     | {
@@ -159,6 +136,43 @@ export default async function TestRunPage({
   const hasMission = testSteps.some((st) => st.kind === "mission")
   if (testSteps.length === 0 || (hasMission && screens.length === 0)) {
     return <ThankYou lang={lang} />
+  }
+
+  // ─── Protótipo VIVO do Figma (embed) é o padrão para estudos do Figma ───
+  const canEmbed = proto?.source === "figma" && !!proto.figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
+  if (canEmbed) {
+    // mapeia figmaNodeId → screenId e monta os objetivos (node-ids) por missão
+    const nodeToScreen: Record<string, string> = {}
+    const screenToNode: Record<string, string> = {}
+    for (const sc of screens) {
+      if (sc.figmaNodeId) {
+        nodeToScreen[sc.figmaNodeId] = sc.id
+        screenToNode[sc.id] = sc.figmaNodeId
+      }
+    }
+    const goalsByMission: Record<string, string[]> = {}
+    for (const st of testSteps) {
+      if (st.kind === "mission") {
+        goalsByMission[st.mission.id] = st.mission.goalScreenIds
+          .map((gid) => screenToNode[gid])
+          .filter((n): n is string => !!n)
+      }
+    }
+    return (
+      <FigmaFlowRunner
+        token={token}
+        lang={lang}
+        fileKey={proto!.figmaFileKey!}
+        steps={testSteps}
+        welcome={{
+          title: study.welcomeTitle ?? "",
+          message: study.welcomeMessage ?? "",
+          taskCount: testSteps.filter((st) => st.kind === "mission").length,
+        }}
+        goalsByMission={goalsByMission}
+        nodeToScreen={nodeToScreen}
+      />
+    )
   }
 
   return (

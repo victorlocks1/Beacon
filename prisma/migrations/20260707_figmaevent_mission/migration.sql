@@ -1,0 +1,1 @@
+ALTER TABLE "FigmaEventLog" ADD COLUMN IF NOT EXISTS "missionId" TEXT;

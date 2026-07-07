@@ -323,6 +323,7 @@ model FigmaEventLog {
   id          String   @id @default(cuid())
   sessionId   String
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  missionId   String? // tarefa ativa quando o evento aconteceu (para atribuir métricas)
   type        String // INITIAL_LOAD | PRESENTED_NODE_CHANGED | MOUSE_PRESS_OR_RELEASE | NEW_STATE | ...
   data        Json // payload cru do evento
   clientTsMs  BigInt // timestamp do cliente (ms) — para tempos relativos

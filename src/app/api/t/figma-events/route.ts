@@ -7,6 +7,7 @@ interface IncomingEvent {
   type: string
   data: unknown
   clientTsMs: number
+  missionId?: string | null
 }
 
 // Recebe os eventos crus da Embed API do Figma (protótipo vivo) e os grava.
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     .slice(0, 2000)
     .map((e) => ({
       sessionId: session.id,
+      missionId: e.missionId ?? null,
       type: e.type,
       data: (e.data ?? {}) as object,
       clientTsMs: BigInt(Math.round(Number(e.clientTsMs) || 0)),
