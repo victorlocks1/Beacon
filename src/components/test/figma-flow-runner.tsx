@@ -1,7 +1,7 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock } from "lucide-react"
+import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock, Loader2 } from "lucide-react"
 import { figmaEmbedUrl, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
@@ -68,7 +68,9 @@ export function FigmaFlowRunner({
   const [flowStarted, setFlowStarted] = useState(!welcome)
   const [introDone, setIntroDone] = useState(!howItWorks) // tela "Como funciona"
   const [taskStarted, setTaskStarted] = useState(false)
-  // tela de conclusão da tarefa (feedback + botão continuar) antes de seguir
+  const [interacted, setInteracted] = useState(false) // já houve o 1º clique na tarefa
+  const [embedLoaded, setEmbedLoaded] = useState(false) // protótipo do Figma pronto
+  // conclusão da tarefa (feedback + botão continuar) antes de seguir
   const [completion, setCompletion] = useState<null | "reached" | "gave_up">(null)
   const [finished, setFinished] = useState(false)
   const [embedSrc, setEmbedSrc] = useState<string | null>(null)
@@ -86,6 +88,7 @@ export function FigmaFlowRunner({
   const startedRef = useRef(false)
   const completedRef = useRef(false)
   const startTimeRef = useRef(0)
+  const interactedRef = useRef(false) // guarda p/ marcar o 1º clique uma vez
   const pathRef = useRef<string[]>([]) // caminho em screenIds
   const clickCountRef = useRef(0)
   const misclickCountRef = useRef(0)
@@ -135,10 +138,14 @@ export function FigmaFlowRunner({
   // recarrega ali (reset limpo entre tarefas). host real p/ o Allowed origin.
   useEffect(() => {
     // testador: sem as dicas azuis do Figma (não entregar a área clicável)
+    setEmbedLoaded(false) // volta o loader ao (re)carregar o embed
     setEmbedSrc(
       figmaEmbedUrl({ fileKey, startNodeId: currentStartNode, host: window.location.host, hotspotHints: false })
     )
     epochRef.current = now()
+    // rede de segurança: se o INITIAL_LOAD não chegar, esconde o loader mesmo assim
+    const t = setTimeout(() => setEmbedLoaded(true), 10000)
+    return () => clearTimeout(t)
   }, [fileKey, currentStartNode])
 
   const advance = useCallback(() => {
@@ -220,12 +227,20 @@ export function FigmaFlowRunner({
         missionId: startedRef.current ? missionRef.current : null,
       })
 
+      // protótipo pronto → esconde o loader
+      if (d.type === "INITIAL_LOAD") setEmbedLoaded(true)
+
       if (!startedRef.current || !missionRef.current) return
       const missionId = missionRef.current
       const ts = Math.round(now() - startTimeRef.current)
 
       if (d.type === "MOUSE_PRESS_OR_RELEASE") {
         clickCountRef.current += 1
+        // 1º clique da tarefa → revela o "Não consegui" (com fade suave)
+        if (!interactedRef.current) {
+          interactedRef.current = true
+          setInteracted(true)
+        }
         const handled = d.data?.handled !== false
         if (!handled) misclickCountRef.current += 1
         // posição do clique na tela atual (best-effort: relativo ao frame rolável)
@@ -301,6 +316,8 @@ export function FigmaFlowRunner({
     startTimeRef.current = now()
     clickCountRef.current = 0
     misclickCountRef.current = 0
+    interactedRef.current = false
+    setInteracted(false)
     pathRef.current = mission.startScreenId ? [mission.startScreenId] : []
     missionRef.current = mission.id
     startNodeRef.current = currentStartNode
@@ -377,33 +394,6 @@ export function FigmaFlowRunner({
     )
   } else if (howItWorks && !introDone) {
     content = <HowItWorksScreen text={howItWorks} lang={lang} onContinue={() => setIntroDone(true)} />
-  } else if (completion) {
-    const reached = completion === "reached"
-    content = (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
-        <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-10 space-y-8 text-center">
-          <div className="space-y-3">
-            <div
-              className={
-                "inline-flex h-14 w-14 items-center justify-center rounded-2xl mb-1 " +
-                (reached ? "bg-emerald-600 text-white" : "bg-surface-container-high text-on-surface-variant")
-              }
-            >
-              {reached ? <Check className="h-7 w-7" /> : <Flag className="h-7 w-7" />}
-            </div>
-            <h1 className="text-headline-small text-on-surface">
-              {reached ? s.taskDoneTitle : s.taskGaveUpTitle}
-            </h1>
-            <p className="text-body-medium text-on-surface-variant">
-              {reached ? s.taskDoneBody : s.taskGaveUpBody}
-            </p>
-          </div>
-          <Button onClick={continueFromCompletion} className="w-full h-12" size="lg">
-            {s.continue}
-          </Button>
-        </div>
-      </div>
-    )
   } else if (finished || !step) {
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
@@ -426,35 +416,66 @@ export function FigmaFlowRunner({
       </div>
     )
   } else {
-    // Missão: tarefa à esquerda, protótipo VIVO à direita
+    // Missão: tarefa à esquerda, protótipo VIVO à direita. Ao concluir, o painel
+    // esquerdo vira o feedback (com botão continuar) e o protótipo some.
+    const reached = completion === "reached"
     content = (
       <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
         <div className="flex flex-col px-6 py-10 md:px-12 lg:px-16 bg-surface">
-          {/* Conteúdo da tarefa — centralizado */}
+          {/* Conteúdo — centralizado */}
           <div className="flex-1 flex flex-col justify-center">
             <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
-              <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
-                <ClipboardList className="h-4 w-4" />
-                {s.stepOf(stepIndex + 1, steps.length)}
-              </div>
-              <div className="space-y-3">
-                <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
-                {step.mission.description && (
-                  <p className="text-body-large text-on-surface-variant">{step.mission.description}</p>
-                )}
-              </div>
-              {!taskStarted && (
-                <Button onClick={startTask} className="h-12 px-6" size="lg">
-                  <Play className="h-4 w-4 mr-2" />
-                  {s.startTask}
-                </Button>
+              {completion ? (
+                /* Feedback de conclusão no lugar do texto da tarefa */
+                <>
+                  <div
+                    className={
+                      "inline-flex h-14 w-14 items-center justify-center rounded-2xl " +
+                      (reached
+                        ? "bg-emerald-600 text-white"
+                        : "bg-surface-container-high text-on-surface-variant")
+                    }
+                  >
+                    {reached ? <Check className="h-7 w-7" /> : <Flag className="h-7 w-7" />}
+                  </div>
+                  <div className="space-y-2">
+                    <h1 className="text-headline-medium text-on-surface">
+                      {reached ? s.taskDoneTitle : s.taskGaveUpTitle}
+                    </h1>
+                    <p className="text-body-large text-on-surface-variant">
+                      {reached ? s.taskDoneBody : s.taskGaveUpBody}
+                    </p>
+                  </div>
+                  <Button onClick={continueFromCompletion} className="h-12 px-6" size="lg">
+                    {s.continue}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
+                    <ClipboardList className="h-4 w-4" />
+                    {s.stepOf(stepIndex + 1, steps.length)}
+                  </div>
+                  <div className="space-y-3">
+                    <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
+                    {step.mission.description && (
+                      <p className="text-body-large text-on-surface-variant">{step.mission.description}</p>
+                    )}
+                  </div>
+                  {!taskStarted && (
+                    <Button onClick={startTask} className="h-12 px-6" size="lg">
+                      <Play className="h-4 w-4 mr-2" />
+                      {s.startTask}
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          {/* Desistir — no rodapé do painel, mesmo tamanho do "Iniciar tarefa" */}
-          {taskStarted && (
-            <div className="w-full max-w-md md:ml-auto md:mr-8 pt-6">
+          {/* Desistir — só após o 1º clique (aparece com fade suave) */}
+          {!completion && taskStarted && interacted && (
+            <div className="w-full max-w-md md:ml-auto md:mr-8 pt-6 animate-in fade-in duration-700">
               <Button
                 variant="outline"
                 size="lg"
@@ -468,35 +489,46 @@ export function FigmaFlowRunner({
           )}
         </div>
 
+        {/* Protótipo — some ao concluir a tarefa */}
         <div className="flex items-center justify-center p-2 md:p-3 bg-surface-container overflow-hidden md:h-screen">
-          <div
-            className={
-              "relative bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[94vh] max-w-full " +
-              (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
-            }
-            aria-hidden={!taskStarted}
-          >
-            {embedSrc && (
-              /* Recorte da moldura do Figma: o iframe fica maior que o quadro e
-                 centralizado, e o overflow-hidden do quadro corta a borda preta
-                 do device frame. FRAME_CROP=1 desliga o recorte. */
-              <iframe
-                title="Protótipo"
-                src={embedSrc}
-                allowFullScreen
-                loading="eager"
-                style={{
-                  position: "absolute",
-                  width: `${FRAME_CROP * 100}%`,
-                  height: `${FRAME_CROP * 100}%`,
-                  left: `${-(FRAME_CROP - 1) * 50}%`,
-                  top: `${-(FRAME_CROP - 1) * 50}%`,
-                  border: "none",
-                  display: "block",
-                }}
-              />
-            )}
-          </div>
+          {!completion && (
+            <div
+              className={
+                "relative bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[88vh] max-w-full " +
+                (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
+              }
+              aria-hidden={!taskStarted}
+            >
+              {embedSrc && (
+                /* Recorte da moldura do Figma: o iframe fica maior que o quadro e
+                   centralizado, e o overflow-hidden do quadro corta a borda preta
+                   do device frame. FRAME_CROP=1 desliga o recorte. */
+                <iframe
+                  title="Protótipo"
+                  src={embedSrc}
+                  allowFullScreen
+                  loading="eager"
+                  style={{
+                    position: "absolute",
+                    width: `${FRAME_CROP * 100}%`,
+                    height: `${FRAME_CROP * 100}%`,
+                    left: `${-(FRAME_CROP - 1) * 50}%`,
+                    top: `${-(FRAME_CROP - 1) * 50}%`,
+                    border: "none",
+                    display: "block",
+                  }}
+                />
+              )}
+
+              {/* Loader amigável enquanto o Figma não termina de carregar */}
+              {!embedLoaded && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface-container-low">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <span className="text-body-small text-on-surface-variant">{s.loadingPrototype}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     )
