@@ -47,12 +47,15 @@ export function FigmaEmbedRunner({
     }
   }, [token])
 
-  // Monta a URL de embed no cliente (usa o host real p/ bater com o Allowed origin)
+  // Monta a URL de embed no cliente (usa o host real p/ bater com o Allowed origin).
+  // Fase 1: NÃO forçamos node-id — deixamos o Figma abrir no ponto de início do
+  // protótipo (evita o "snippet not found" quando o frame inicial detectado erra).
   useEffect(() => {
+    void startNodeId
     setSrc(
       figmaEmbedUrl({
         fileKey,
-        startNodeId,
+        startNodeId: null,
         host: window.location.host,
       })
     )
