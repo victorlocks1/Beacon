@@ -62,6 +62,12 @@ export async function updateWelcomeAction(
   revalidatePath(`/studies/${studyId}`)
 }
 
+export async function toggleSusAction(studyId: string, enabled: boolean) {
+  const { study } = await getStudyOrThrow(studyId)
+  await prisma.study.update({ where: { id: study.id }, data: { susEnabled: enabled } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
 export async function publishStudyAction(studyId: string) {
   const { study } = await getStudyOrThrow(studyId)
 

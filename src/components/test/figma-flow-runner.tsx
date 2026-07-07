@@ -5,6 +5,7 @@ import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Cl
 import { figmaEmbedUrl, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
+import { SusView } from "@/components/test/sus-view"
 import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 
@@ -52,6 +53,7 @@ export function FigmaFlowRunner({
   steps,
   welcome,
   howItWorks,
+  susEnabled,
   goalsByMission,
   startNodeByMission,
   screenByNode,
@@ -62,6 +64,7 @@ export function FigmaFlowRunner({
   steps: Step[]
   welcome: WelcomeInfo | null
   howItWorks: string | null
+  susEnabled: boolean
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
@@ -75,6 +78,8 @@ export function FigmaFlowRunner({
   const [embedLoaded, setEmbedLoaded] = useState(false) // protótipo do Figma pronto
   // conclusão da tarefa (feedback + botão continuar) antes de seguir
   const [completion, setCompletion] = useState<null | "reached" | "gave_up">(null)
+  const [showSus, setShowSus] = useState(false) // questionário SUS ao final
+  const susDoneRef = useRef(false)
   const [finished, setFinished] = useState(false)
   const [embedSrc, setEmbedSrc] = useState<string | null>(null)
 
@@ -151,21 +156,27 @@ export function FigmaFlowRunner({
     return () => clearTimeout(t)
   }, [fileKey, currentStartNode])
 
+  const finishFlow = useCallback(() => {
+    setFinished(true)
+    fetch("/api/t/finish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+      keepalive: true,
+    }).catch(() => {})
+  }, [token])
+
   const advance = useCallback(() => {
     if (isLastStep) {
-      setFinished(true)
-      fetch("/api/t/finish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-        keepalive: true,
-      }).catch(() => {})
+      // Ao fim da sequência, o SUS (se ativado) vem antes do agradecimento.
+      if (susEnabled && !susDoneRef.current) setShowSus(true)
+      else finishFlow()
     } else {
       setStepIndex((i) => i + 1)
       setTaskStarted(false)
       startedRef.current = false
     }
-  }, [isLastStep, token])
+  }, [isLastStep, susEnabled, finishFlow])
 
   const completeMission = useCallback(
     (signal: "reached" | "gave_up") => {
@@ -360,6 +371,18 @@ export function FigmaFlowRunner({
     advance()
   }
 
+  function submitSus(values: number[]) {
+    fetch("/api/t/sus", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, values }),
+      keepalive: true,
+    }).catch(() => {})
+    susDoneRef.current = true
+    setShowSus(false)
+    finishFlow()
+  }
+
   // ─────────── Render ───────────
   let content: React.ReactNode
 
@@ -394,6 +417,8 @@ export function FigmaFlowRunner({
     )
   } else if (howItWorks && !introDone) {
     content = <HowItWorksScreen text={howItWorks} lang={lang} onContinue={() => setIntroDone(true)} />
+  } else if (showSus) {
+    content = <SusView lang={lang} onSubmit={submitSus} />
   } else if (finished || !step) {
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">

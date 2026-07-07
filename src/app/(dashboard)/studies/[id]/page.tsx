@@ -19,6 +19,7 @@ import { deleteScreenAction, moveScreenAction } from "./actions"
 import { QuestionDialog } from "@/components/question/question-dialog"
 import { SequenceList, type SeqBlock } from "@/components/study/sequence-list"
 import { WelcomeDialog } from "@/components/study/welcome-dialog"
+import { SusToggle } from "@/components/study/sus-toggle"
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import {
@@ -356,6 +357,7 @@ export default async function StudyPage({
                 </p>
               )}
               <SequenceList studyId={study.id} editable={editable} blocks={seqBlocks} />
+              <SusToggle studyId={study.id} enabled={study.susEnabled} editable={editable} />
             </>
           )}
         </TabsContent>

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatPct } from "@/lib/format"
+import { susVerdict, SUS_THRESHOLD } from "@/lib/sus"
 import { ResetDataButton } from "@/components/study/reset-data-button"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
@@ -50,6 +51,17 @@ export default async function ResultsOverviewPage({
   const finishedSessions = await prisma.session.count({
     where: { studyId: id, finishedAt: { not: null } },
   })
+
+  // SUS — média das notas (0..100) das respostas do questionário.
+  const susResponses = study.susEnabled
+    ? await prisma.susResponse.findMany({
+        where: { session: { studyId: id } },
+        select: { score: true },
+      })
+    : []
+  const susAvg = susResponses.length
+    ? Math.round((susResponses.reduce((a, r) => a + r.score, 0) / susResponses.length) * 10) / 10
+    : 0
 
   // Sessões encerradas de fato (finishedAt OU inativas além do timeout) — mesma
   // regra da página de detalhe. Necessário para o denominador correto da taxa de
@@ -155,6 +167,8 @@ export default async function ResultsOverviewPage({
         <ResetDataButton studyId={id} sessionCount={study._count.sessions} />
       </div>
 
+      {study.susEnabled && <SusSummary avg={susAvg} count={susResponses.length} />}
+
       <Tabs defaultValue="missions">
         <TabsList className="mb-6">
           <TabsTrigger value="missions">Missões ({missions.length})</TabsTrigger>
@@ -237,6 +251,54 @@ export default async function ResultsOverviewPage({
           )}
         </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+function SusSummary({ avg, count }: { avg: number; count: number }) {
+  const v = susVerdict(avg, "pt")
+  const barW = Math.max(0, Math.min(100, avg))
+  return (
+    <div className="mb-6 rounded-3xl border border-outline-variant bg-surface-container-low p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-label-medium text-on-surface-variant flex items-center gap-1">
+            SUS · SYSTEM USABILITY SCALE
+            <MetricInfo text="Nota 0–100 de usabilidade percebida (System Usability Scale). Média das respostas das 10 afirmações padrão. Corte interno: acima de 70 é uma boa nota. Cálculo: ímpares (v-1) + pares (5-v), somados × 2,5." />
+          </p>
+          {count === 0 ? (
+            <p className="text-title-medium text-on-surface mt-1">Ainda sem respostas do SUS.</p>
+          ) : (
+            <div className="flex items-baseline gap-3 mt-1">
+              <span className="text-headline-large text-on-surface">{avg}</span>
+              <span className="text-body-medium text-on-surface-variant">/ 100 · {count} resposta(s)</span>
+            </div>
+          )}
+        </div>
+        {count > 0 && (
+          <div className="text-right">
+            <span
+              className={
+                "inline-block px-3 py-1.5 rounded-full text-title-small " +
+                (v.good ? "bg-emerald-600/10 text-emerald-700" : "bg-error/10 text-error")
+              }
+            >
+              {v.label}
+            </span>
+            <p className="text-body-small text-on-surface-variant mt-1">
+              {v.good ? `Acima do corte (${SUS_THRESHOLD})` : `Abaixo do corte (${SUS_THRESHOLD})`}
+            </p>
+          </div>
+        )}
+      </div>
+      {count > 0 && (
+        <div className="mt-4 relative h-2.5 rounded-full bg-surface-container-high overflow-hidden">
+          <div
+            className={"h-full rounded-full " + (v.good ? "bg-emerald-600" : "bg-error")}
+            style={{ width: `${barW}%` }}
+          />
+        </div>
+      )}
     </div>
   )
 }

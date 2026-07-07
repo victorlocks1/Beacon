@@ -170,6 +170,7 @@ export default async function TestRunPage({
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
         howItWorks={study.howItWorks}
+        susEnabled={study.susEnabled}
         goalsByMission={goalsByMission}
         startNodeByMission={startNodeByMission}
         screenByNode={screenByNode}
