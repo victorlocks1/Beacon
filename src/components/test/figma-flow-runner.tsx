@@ -68,10 +68,10 @@ export function FigmaFlowRunner({
   const [flowStarted, setFlowStarted] = useState(!welcome)
   const [introDone, setIntroDone] = useState(!howItWorks) // tela "Como funciona"
   const [taskStarted, setTaskStarted] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  // tela de conclusão da tarefa (feedback + botão continuar) antes de seguir
+  const [completion, setCompletion] = useState<null | "reached" | "gave_up">(null)
   const [finished, setFinished] = useState(false)
   const [embedSrc, setEmbedSrc] = useState<string | null>(null)
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const step = steps[stepIndex]
   const mission = step?.kind === "mission" ? step.mission : null
@@ -97,12 +97,6 @@ export function FigmaFlowRunner({
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now())
 
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg)
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(null), 2600)
-  }, [])
 
   const flush = useCallback(async () => {
     // 1) eventos crus do Figma
@@ -199,14 +193,17 @@ export function FigmaFlowRunner({
       } catch {
         /* segue */
       }
-      if (signal === "reached") {
-        const taskNumber = steps.slice(0, stepIndex + 1).filter((st) => st.kind === "mission").length
-        showToast(s.taskDoneToast(taskNumber))
-      }
-      advance()
+      // mostra a tela de conclusão (feedback + botão continuar) antes de avançar
+      setCompletion(signal)
     },
-    [advance, flush, s, showToast, steps, stepIndex, token]
+    [flush, token]
   )
+
+  // Continua da tela de conclusão para o próximo passo (pergunta ou missão).
+  const continueFromCompletion = useCallback(() => {
+    setCompletion(null)
+    advance()
+  }, [advance])
 
   // Listener global dos eventos da Embed API (Figma). Marca por tarefa, monta o
   // caminho e conclui a tarefa ao alcançar o frame-objetivo.
@@ -380,6 +377,33 @@ export function FigmaFlowRunner({
     )
   } else if (howItWorks && !introDone) {
     content = <HowItWorksScreen text={howItWorks} lang={lang} onContinue={() => setIntroDone(true)} />
+  } else if (completion) {
+    const reached = completion === "reached"
+    content = (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
+        <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-10 space-y-8 text-center">
+          <div className="space-y-3">
+            <div
+              className={
+                "inline-flex h-14 w-14 items-center justify-center rounded-2xl mb-1 " +
+                (reached ? "bg-emerald-600 text-white" : "bg-surface-container-high text-on-surface-variant")
+              }
+            >
+              {reached ? <Check className="h-7 w-7" /> : <Flag className="h-7 w-7" />}
+            </div>
+            <h1 className="text-headline-small text-on-surface">
+              {reached ? s.taskDoneTitle : s.taskGaveUpTitle}
+            </h1>
+            <p className="text-body-medium text-on-surface-variant">
+              {reached ? s.taskDoneBody : s.taskGaveUpBody}
+            </p>
+          </div>
+          <Button onClick={continueFromCompletion} className="w-full h-12" size="lg">
+            {s.continue}
+          </Button>
+        </div>
+      </div>
+    )
   } else if (finished || !step) {
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
@@ -484,12 +508,6 @@ export function FigmaFlowRunner({
       <link rel="preconnect" href="https://embed.figma.com" />
       <link rel="preconnect" href="https://www.figma.com" />
       {content}
-      {toast && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-2.5 elevation-3 animate-in fade-in slide-in-from-top-2 duration-200">
-          <Check className="h-4 w-4" />
-          <span className="text-title-small">{toast}</span>
-        </div>
-      )}
     </>
   )
 }
