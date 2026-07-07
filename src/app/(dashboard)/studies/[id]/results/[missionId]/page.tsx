@@ -9,6 +9,7 @@ import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath } from "@/lib/path"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 import { MetricInfo } from "@/components/results/metric-info"
+import { QuestionResultCard } from "@/components/results/question-result-card"
 import { FigmaImagesAutoLoad } from "@/components/results/load-figma-images-button"
 
 const outcomeBucket: Record<string, "direct" | "indirect" | "unfinished"> = {
@@ -40,6 +41,7 @@ export default async function MissionResultsPage({
   const mission = await prisma.mission.findFirst({
     where: { id: missionId, block: { study: { id, ownerId: session.user.id } } },
     include: {
+      questions: { orderBy: { order: "asc" }, include: { answers: true } },
       block: {
         include: {
           study: {
@@ -267,6 +269,20 @@ export default async function MissionResultsPage({
           <FigmaImagesAutoLoad studyId={id} pending={screensMissingImage} />
         )}
       </div>
+
+      {/* Perguntas desta missão (respostas dadas logo após a tarefa) */}
+      {mission.questions.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-title-large text-on-surface mb-4">
+            Perguntas da missão ({mission.questions.length})
+          </h2>
+          <div className="space-y-4">
+            {mission.questions.map((q, i) => (
+              <QuestionResultCard key={q.id} studyId={id} index={i} question={q} hideMissionRef />
+            ))}
+          </div>
+        </section>
+      )}
 
       {startedSessionIds.size === 0 ? (
         <div className="text-center py-24 border border-outline-variant rounded-3xl bg-surface-container-low">
