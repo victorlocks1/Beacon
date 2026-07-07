@@ -9,6 +9,7 @@ export function figmaEmbedUrl(opts: {
   startNodeId?: string | null
   host: string
   hideUi?: boolean
+  hotspotHints?: boolean // quadrados azuis do Figma (dicas de área clicável)
 }): string | null {
   if (!FIGMA_EMBED_CLIENT_ID || !opts.fileKey) return null
   const u = new URL(`https://embed.figma.com/proto/${opts.fileKey}/beacon`)
@@ -19,6 +20,9 @@ export function figmaEmbedUrl(opts: {
   u.searchParams.set("scaling", "scale-down")
   u.searchParams.set("content-scaling", "fixed")
   if (opts.hideUi !== false) u.searchParams.set("hide-ui", "1")
+  // No testador escondemos as dicas azuis (não entregar a área clicável). Na
+  // revisão mantemos ligadas. Padrão do Figma é mostrar (1).
+  if (opts.hotspotHints === false) u.searchParams.set("hotspot-hints", "0")
   return u.toString()
 }
 

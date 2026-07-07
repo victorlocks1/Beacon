@@ -132,7 +132,10 @@ export function FigmaFlowRunner({
   // Cada missão abre no seu frame de partida. Ao trocar de missão o embed
   // recarrega ali (reset limpo entre tarefas). host real p/ o Allowed origin.
   useEffect(() => {
-    setEmbedSrc(figmaEmbedUrl({ fileKey, startNodeId: currentStartNode, host: window.location.host }))
+    // testador: sem as dicas azuis do Figma (não entregar a área clicável)
+    setEmbedSrc(
+      figmaEmbedUrl({ fileKey, startNodeId: currentStartNode, host: window.location.host, hotspotHints: false })
+    )
     epochRef.current = now()
   }, [fileKey, currentStartNode])
 

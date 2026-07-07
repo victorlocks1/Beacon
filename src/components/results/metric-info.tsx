@@ -26,7 +26,7 @@ export function MetricInfo({ text, className }: { text: string; className?: stri
       {open && (
         <span
           role="tooltip"
-          className="absolute right-0 top-6 z-50 w-60 rounded-xl bg-surface-container-lowest p-3 text-left text-body-small text-on-surface-variant ring-1 ring-black/5 elevation-3"
+          className="absolute right-0 top-6 z-50 w-60 rounded-2xl bg-surface-container-lowest p-4 text-left text-body-small text-on-surface-variant"
         >
           {text}
         </span>
