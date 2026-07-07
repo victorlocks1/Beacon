@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
@@ -11,6 +12,7 @@ import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { DeleteAllScreensButton } from "@/components/prototype/delete-all-screens-button"
 import { RefreshFigmaButton } from "@/components/prototype/refresh-figma-button"
 import { SubmitButton } from "@/components/submit-button"
+import { MissionSavedToast } from "@/components/study/mission-saved-toast"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { deleteScreenAction, moveScreenAction } from "./actions"
@@ -122,6 +124,9 @@ export default async function StudyPage({
 
   return (
     <div className="max-w-5xl mx-auto">
+      <Suspense fallback={null}>
+        <MissionSavedToast />
+      </Suspense>
       {error && (
         <div className="mb-6 rounded-2xl border border-error/30 bg-error-container px-5 py-4 text-body-medium text-on-error-container">
           {decodeURIComponent(error)}

@@ -385,7 +385,7 @@ export async function createMissionAction(
 
   await createMissionQuestions(mission.id, input.questions)
 
-  redirect(`/studies/${studyId}?tab=missions`)
+  redirect(`/studies/${studyId}?tab=missions&saved=created`)
 }
 
 export async function updateMissionAction(
@@ -455,7 +455,7 @@ export async function updateMissionAction(
   await prisma.question.deleteMany({ where: { missionId } })
   await createMissionQuestions(missionId, input.questions)
 
-  redirect(`/studies/${studyId}?tab=missions`)
+  redirect(`/studies/${studyId}?tab=missions&saved=updated`)
 }
 
 export async function deleteMissionAction(studyId: string, missionId: string) {

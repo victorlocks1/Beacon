@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db"
 import { startSessionAction } from "./actions"
 import { SubmitButton } from "@/components/submit-button"
-import { ClipboardCheck, MousePointerClick, Clock } from "lucide-react"
+import { ClipboardCheck } from "lucide-react"
 import { tt, type Lang } from "@/lib/i18n"
 
 export default async function TestEntryPage({
@@ -36,7 +36,6 @@ export default async function TestEntryPage({
     )
   }
 
-  const missionCount = study.blocks.length
   const start = startSessionAction.bind(null, studyId, live === "1")
 
   return (
@@ -52,17 +51,6 @@ export default async function TestEntryPage({
           <p className="text-body-medium text-on-surface-variant whitespace-pre-wrap">
             {study.welcomeMessage || s.welcomeIntro}
           </p>
-        </div>
-
-        <div className="space-y-4 text-body-medium text-on-surface">
-          <div className="flex items-start gap-3">
-            <MousePointerClick className="h-5 w-5 mt-0.5 text-on-surface-variant shrink-0" />
-            <span>{s.tasksCount(missionCount)}</span>
-          </div>
-          <div className="flex items-start gap-3">
-            <Clock className="h-5 w-5 mt-0.5 text-on-surface-variant shrink-0" />
-            <span>{s.anonymous}</span>
-          </div>
         </div>
 
         <form action={start}>
