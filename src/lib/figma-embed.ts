@@ -17,7 +17,9 @@ export function figmaEmbedUrl(opts: {
   if (opts.startNodeId) u.searchParams.set("node-id", opts.startNodeId.replace(/:/g, "-"))
   u.searchParams.set("embed-host", opts.host)
   u.searchParams.set("client-id", FIGMA_EMBED_CLIENT_ID)
-  u.searchParams.set("scaling", "scale-down")
+  // "contain" = encaixa na tela ampliando/reduzindo (preenche o iframe, estilo
+  // Maze). "scale-down" só reduzia → protótipo pequeno com fundo sobrando.
+  u.searchParams.set("scaling", "contain")
   u.searchParams.set("content-scaling", "fixed")
   if (opts.hideUi !== false) u.searchParams.set("hide-ui", "1")
   // No testador escondemos as dicas azuis (não entregar a área clicável). Na

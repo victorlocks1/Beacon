@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db"
 import { startSessionAction } from "./actions"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/submit-button"
 import { ClipboardCheck, MousePointerClick, Clock } from "lucide-react"
 import { tt, type Lang } from "@/lib/i18n"
 
@@ -66,9 +66,9 @@ export default async function TestEntryPage({
         </div>
 
         <form action={start}>
-          <Button type="submit" className="w-full h-12" size="lg">
+          <SubmitButton size="lg" className="h-12">
             {s.start}
-          </Button>
+          </SubmitButton>
         </form>
       </div>
     </div>

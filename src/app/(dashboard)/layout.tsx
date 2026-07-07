@@ -1,7 +1,7 @@
 import { auth, signOut } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/submit-button"
 
 export default async function DashboardLayout({
   children,
@@ -32,9 +32,9 @@ export default async function DashboardLayout({
                 await signOut({ redirectTo: "/login" })
               }}
             >
-              <Button variant="ghost" size="sm" type="submit">
+              <SubmitButton variant="ghost" size="sm" fullWidth={false}>
                 Sair
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </div>

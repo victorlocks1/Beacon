@@ -3,7 +3,8 @@ import { redirect, notFound } from "next/navigation"
 import { prisma } from "@/lib/db"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
+import { SubmitButton } from "@/components/submit-button"
 import { Trash2, ArrowRight, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CreateStudyDialog } from "@/components/study/create-study-dialog"
@@ -85,14 +86,14 @@ export default async function ProjectStudiesPage({
 
               <div className="flex items-center justify-between mt-auto pt-4 border-t border-outline-variant">
                 <form action={deleteStudyAction.bind(null, study.id)}>
-                  <Button
+                  <SubmitButton
                     variant="ghost"
                     size="icon-sm"
+                    fullWidth={false}
                     className="text-on-surface-variant hover:text-error"
-                    type="submit"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </Button>
+                  </SubmitButton>
                 </form>
                 <Link
                   href={`/studies/${study.id}`}

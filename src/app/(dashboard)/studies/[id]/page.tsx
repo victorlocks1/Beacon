@@ -10,6 +10,7 @@ import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { DeleteAllScreensButton } from "@/components/prototype/delete-all-screens-button"
 import { RefreshFigmaButton } from "@/components/prototype/refresh-figma-button"
+import { SubmitButton } from "@/components/submit-button"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { deleteScreenAction, moveScreenAction } from "./actions"
@@ -233,14 +234,14 @@ export default async function StudyPage({
                     {editable && (
                     <div className="flex items-center gap-1 shrink-0">
                       <form action={moveScreenAction.bind(null, study.id, screen.id, "up")}>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} type="submit">
+                        <SubmitButton variant="ghost" size="icon" fullWidth={false} className="h-7 w-7" disabled={index === 0}>
                           <ChevronUp className="h-3.5 w-3.5" />
-                        </Button>
+                        </SubmitButton>
                       </form>
                       <form action={moveScreenAction.bind(null, study.id, screen.id, "down")}>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={index === screens.length - 1} type="submit">
+                        <SubmitButton variant="ghost" size="icon" fullWidth={false} className="h-7 w-7" disabled={index === screens.length - 1}>
                           <ChevronDown className="h-3.5 w-3.5" />
-                        </Button>
+                        </SubmitButton>
                       </form>
 
                       <Separator orientation="vertical" className="h-5 mx-1" />
@@ -254,9 +255,9 @@ export default async function StudyPage({
                       </Link>
 
                       <form action={deleteScreenAction.bind(null, study.id, screen.id)}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" type="submit">
+                        <SubmitButton variant="ghost" size="icon" fullWidth={false} className="h-8 w-8 text-red-500 hover:text-red-700">
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </SubmitButton>
                       </form>
                     </div>
                     )}

@@ -426,13 +426,12 @@ export function FigmaFlowRunner({
           </div>
         </div>
 
-        <div className="flex items-center justify-center px-6 py-10 md:px-12 bg-surface-container overflow-auto">
+        <div className="flex items-center justify-center p-4 md:p-6 bg-surface-container overflow-hidden md:h-screen">
           <div
             className={
-              "bg-white rounded-2xl overflow-hidden shadow-lg transition-opacity duration-300 " +
+              "bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[80vh] max-h-[900px] max-w-full " +
               (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
             }
-            style={{ width: 360, height: 800, maxWidth: "100%" }}
             aria-hidden={!taskStarted}
           >
             {embedSrc && (
@@ -440,6 +439,7 @@ export function FigmaFlowRunner({
                 title="Protótipo"
                 src={embedSrc}
                 allowFullScreen
+                loading="eager"
                 style={{ width: "100%", height: "100%", border: "none", display: "block" }}
               />
             )}
@@ -451,6 +451,9 @@ export function FigmaFlowRunner({
 
   return (
     <>
+      {/* acelera o 1º carregamento do embed abrindo a conexão com o Figma antes */}
+      <link rel="preconnect" href="https://embed.figma.com" />
+      <link rel="preconnect" href="https://www.figma.com" />
       {content}
       {toast && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-2.5 elevation-3 animate-in fade-in slide-in-from-top-2 duration-200">
