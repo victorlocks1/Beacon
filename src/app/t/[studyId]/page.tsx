@@ -40,7 +40,7 @@ export default async function TestEntryPage({
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
-      <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-10 space-y-8">
+      <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-10 space-y-8">
         <div className="text-center space-y-3">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-on-primary mb-1">
             <ClipboardCheck className="h-7 w-7" />

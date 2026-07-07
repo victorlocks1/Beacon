@@ -35,6 +35,10 @@ interface OurEvent {
 
 const VALID = new Set<string>(FIGMA_EVENT_TYPES)
 
+// Zoom no embed para cortar a moldura (device frame) do Figma. 1 = sem recorte;
+// >1 amplia e o overflow-hidden do quadro corta a borda preta. Ajuste fino aqui.
+const FRAME_CROP = 1.2
+
 // Runner do protótipo VIVO do Figma no fluxo completo: boas-vindas → tarefas
 // (painel + embed) → perguntas → obrigado. Captura os eventos da Embed API
 // (marcados por tarefa) e conclui a tarefa quando o frame-objetivo é alcançado.
@@ -443,18 +447,29 @@ export function FigmaFlowRunner({
         <div className="flex items-center justify-center p-2 md:p-3 bg-surface-container overflow-hidden md:h-screen">
           <div
             className={
-              "bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[94vh] max-w-full " +
+              "relative bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[94vh] max-w-full " +
               (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
             }
             aria-hidden={!taskStarted}
           >
             {embedSrc && (
+              /* Recorte da moldura do Figma: o iframe fica maior que o quadro e
+                 centralizado, e o overflow-hidden do quadro corta a borda preta
+                 do device frame. FRAME_CROP=1 desliga o recorte. */
               <iframe
                 title="Protótipo"
                 src={embedSrc}
                 allowFullScreen
                 loading="eager"
-                style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                style={{
+                  position: "absolute",
+                  width: `${FRAME_CROP * 100}%`,
+                  height: `${FRAME_CROP * 100}%`,
+                  left: `${-(FRAME_CROP - 1) * 50}%`,
+                  top: `${-(FRAME_CROP - 1) * 50}%`,
+                  border: "none",
+                  display: "block",
+                }}
               />
             )}
           </div>
