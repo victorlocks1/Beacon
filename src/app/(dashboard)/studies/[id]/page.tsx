@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { DeleteAllScreensButton } from "@/components/prototype/delete-all-screens-button"
+import { RefreshFigmaButton } from "@/components/prototype/refresh-figma-button"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
 import { deleteScreenAction, moveScreenAction } from "./actions"
@@ -169,7 +170,12 @@ export default async function StudyPage({
               {screens.length} {screens.length === 1 ? "tela" : "telas"}
             </h2>
             {editable && screens.length > 0 && (
-              <DeleteAllScreensButton studyId={study.id} screenCount={screens.length} />
+              <div className="flex items-center gap-2">
+                {study.prototype?.source === "figma" && (
+                  <RefreshFigmaButton studyId={study.id} />
+                )}
+                <DeleteAllScreensButton studyId={study.id} screenCount={screens.length} />
+              </div>
             )}
           </div>
           {screens.length === 0 ? (

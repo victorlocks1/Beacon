@@ -1,7 +1,7 @@
 "use server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
-import { supabase } from "@/lib/supabase"
+import { supabase, removeStorageByUrls } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { encryptSecret, decryptSecret } from "@/lib/crypto"
@@ -74,7 +74,7 @@ function isNextControlFlow(e: unknown): boolean {
 }
 
 type InspectResult =
-  | { ok: true; fileKey: string; screens: ImportScreen[] }
+  | { ok: true; fileKey: string; nodeId: string | null; screens: ImportScreen[] }
   | { ok: false; error: string }
 
 export async function figmaInspectAction(studyId: string, url: string): Promise<InspectResult> {
@@ -99,7 +99,7 @@ export async function figmaInspectAction(studyId: string, url: string): Promise<
     } catch {
       /* sem miniaturas desta vez */
     }
-    return { ok: true, fileKey, screens }
+    return { ok: true, fileKey, nodeId, screens }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
     return { ok: false, error: e instanceof Error ? e.message : "Falha ao ler o protótipo." }
@@ -148,7 +148,8 @@ export async function figmaImportAction(
 export async function figmaLiveImportAction(
   studyId: string,
   fileKey: string,
-  selected: ImportScreen[]
+  selected: ImportScreen[],
+  entryNodeId?: string | null
 ): Promise<ImportResult> {
   try {
     if (!selected.length) return { ok: false, error: "Nenhuma tela selecionada." }
@@ -164,7 +165,12 @@ export async function figmaLiveImportAction(
       }))
     await prisma.prototype.update({
       where: { id: proto.id },
-      data: { source: "figma", figmaFileKey: fileKey, figmaStartNodeId: startNodeId },
+      data: {
+        source: "figma",
+        figmaFileKey: fileKey,
+        figmaStartNodeId: startNodeId,
+        ...(entryNodeId !== undefined ? { figmaEntryNodeId: entryNodeId } : {}),
+      },
     })
 
     const startOrder = study.prototype?.screens.length
@@ -238,6 +244,80 @@ export async function loadFigmaImagesAction(
   } catch (e) {
     if (isNextControlFlow(e)) throw e
     return { ok: false, error: e instanceof Error ? e.message : "Falha ao carregar imagens." }
+  }
+}
+
+// Atualizar protótipo (modo ao vivo): re-lê o plano do Figma a partir do mesmo
+// nó de entrada e re-sincroniza o mapa de telas — ATUALIZA as existentes (por
+// node-id: nome, tamanho, scroll) e ADICIONA as novas. Não deleta telas que
+// sumiram do Figma (a FK de missão/objetivo é Cascade e apagaria missões).
+// Também limpa as imagens do heatmap (storage + imageUrl="") para que os
+// resultados baixem versões novas e reflitam mudanças visuais. Como o testador
+// usa o embed VIVO, as mudanças de fluxo já aparecem lá automaticamente.
+export async function figmaRefreshAction(
+  studyId: string
+): Promise<{ ok: true; updated: number; added: number } | { ok: false; error: string }> {
+  try {
+    const { study, userId } = await getOwnedEditableStudy(studyId)
+    const proto = study.prototype
+    if (!proto?.figmaFileKey) return { ok: false, error: "Estudo sem protótipo do Figma." }
+
+    const token = await getDecryptedToken(userId)
+    const entry = proto.figmaEntryNodeId ?? proto.figmaStartNodeId ?? null
+    const fresh = await collectImportPlan(token, proto.figmaFileKey, entry)
+    if (!fresh.length) {
+      return { ok: false, error: "Nenhuma tela encontrada ao reler o protótipo." }
+    }
+
+    const existing = proto.screens
+    const byNode = new Map(existing.filter((s) => s.figmaNodeId).map((s) => [s.figmaNodeId!, s]))
+
+    let updated = 0
+    let added = 0
+    let nextOrder = existing.length ? Math.max(...existing.map((s) => s.order)) + 1 : 0
+
+    for (const s of fresh) {
+      const cur = byNode.get(s.figmaId)
+      if (cur) {
+        await prisma.screen.update({
+          where: { id: cur.id },
+          data: { name: s.name, width: s.width || 360, height: s.height || 800, scroll: s.scroll },
+        })
+        updated++
+      } else {
+        await prisma.screen.create({
+          data: {
+            prototypeId: proto.id,
+            name: s.name,
+            order: nextOrder++,
+            imageUrl: "",
+            figmaNodeId: s.figmaId,
+            width: s.width || 360,
+            height: s.height || 800,
+            scroll: s.scroll,
+          },
+        })
+        added++
+      }
+    }
+
+    // frame inicial pode ter mudado
+    const startNodeId = (fresh.find((s) => s.isStart) ?? fresh[0])?.figmaId ?? proto.figmaStartNodeId
+    await prisma.prototype.update({
+      where: { id: proto.id },
+      data: { figmaStartNodeId: startNodeId },
+    })
+
+    // limpa imagens antigas do heatmap → o auto-loader baixa versões novas
+    await removeStorageByUrls(existing.map((s) => s.imageUrl))
+    await prisma.screen.updateMany({ where: { prototypeId: proto.id }, data: { imageUrl: "" } })
+
+    revalidatePath(`/studies/${studyId}`)
+    revalidatePath(`/studies/${studyId}/results`)
+    return { ok: true, updated, added }
+  } catch (e) {
+    if (isNextControlFlow(e)) throw e
+    return { ok: false, error: e instanceof Error ? e.message : "Falha ao atualizar o protótipo." }
   }
 }
 

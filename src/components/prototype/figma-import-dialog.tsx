@@ -41,6 +41,7 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
   const [token, setToken] = useState("")
   const [url, setUrl] = useState("")
   const [fileKey, setFileKey] = useState("")
+  const [entryNodeId, setEntryNodeId] = useState<string | null>(null)
   const [screens, setScreens] = useState<ImportScreen[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [startId, setStartId] = useState<string | null>(null)
@@ -52,6 +53,7 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
     setError(null)
     setToken("")
     setUrl("")
+    setEntryNodeId(null)
     setScreens([])
     setSelected(new Set())
     setStartId(null)
@@ -97,6 +99,7 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
         return
       }
       setFileKey(res.fileKey)
+      setEntryNodeId(res.nodeId)
       setScreens(res.screens)
       setSelected(new Set(res.screens.map((s) => s.figmaId)))
       setStartId(res.screens.find((s) => s.isStart)?.figmaId ?? null)
@@ -119,7 +122,7 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
         .map((s) => ({ ...s, isStart: s.figmaId === startId }))
       // Import leve (modo ao vivo): grava o mapa de frames sem baixar imagens
       // → não bate no rate limit do Figma. O embed vivo renderiza.
-      const res = await figmaLiveImportAction(studyId, fileKey, chosen)
+      const res = await figmaLiveImportAction(studyId, fileKey, chosen, entryNodeId)
       if (!res.ok) {
         setError(res.error)
         setStep("review")
