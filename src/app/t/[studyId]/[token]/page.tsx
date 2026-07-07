@@ -164,11 +164,8 @@ export default async function TestRunPage({
         lang={lang}
         fileKey={proto!.figmaFileKey!}
         steps={testSteps}
-        welcome={{
-          title: study.welcomeTitle ?? "",
-          message: study.welcomeMessage ?? "",
-          taskCount: testSteps.filter((st) => st.kind === "mission").length,
-        }}
+        /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
+        welcome={null}
         goalsByMission={goalsByMission}
         screenByNode={screenByNode}
       />
@@ -213,7 +210,7 @@ function ThankYou({ lang }: { lang: Lang }) {
   const s = tt(lang)
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
-      <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
+      <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-12 text-center space-y-2">
         <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
         <p className="text-body-medium text-on-surface-variant">{s.thanksBody}</p>
       </div>

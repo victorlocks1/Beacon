@@ -335,7 +335,7 @@ export function TestRunner({
     // ─────────── Fim ───────────
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
-        <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant elevation-1 p-12 text-center space-y-2">
+        <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-12 text-center space-y-2">
           <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
           <p className="text-body-medium text-on-surface-variant">{s.thanksBody}</p>
         </div>
