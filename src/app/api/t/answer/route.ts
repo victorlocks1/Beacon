@@ -28,8 +28,17 @@ export async function POST(request: Request) {
   }
 
   // A pergunta precisa pertencer ao MESMO study da sessão
+  // A pergunta precisa pertencer ao MESMO study — seja geral (block) OU de
+  // acompanhamento de missão (mission.block). Antes só aceitava block → as
+  // perguntas de missão eram rejeitadas e a resposta não salvava.
   const question = await prisma.question.findFirst({
-    where: { id: questionId, block: { studyId: session.studyId } },
+    where: {
+      id: questionId,
+      OR: [
+        { block: { studyId: session.studyId } },
+        { mission: { block: { studyId: session.studyId } } },
+      ],
+    },
     select: { id: true },
   })
   if (!question) {

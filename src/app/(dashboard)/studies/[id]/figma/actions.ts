@@ -195,6 +195,52 @@ export async function figmaLiveImportAction(
   }
 }
 
+// Carrega as imagens das telas sob demanda (fundo do heatmap). O import ao vivo
+// não baixa imagens; esta action busca só as que faltam (imageUrl vazio).
+export async function loadFigmaImagesAction(
+  studyId: string
+): Promise<{ ok: true; loaded: number } | { ok: false; error: string }> {
+  try {
+    const userId = await requireUser()
+    const study = await prisma.study.findUnique({
+      where: { id: studyId, ownerId: userId },
+      include: { prototype: true },
+    })
+    if (!study) return { ok: false, error: "Study não encontrado" }
+    const proto = study.prototype
+    if (!proto?.figmaFileKey) return { ok: false, error: "Estudo sem protótipo do Figma." }
+
+    const screens = await prisma.screen.findMany({
+      where: { prototypeId: proto.id, imageUrl: "", figmaNodeId: { not: null } },
+      select: { id: true, figmaNodeId: true },
+    })
+    if (!screens.length) return { ok: true, loaded: 0 }
+
+    const token = await getDecryptedToken(userId)
+    const nodeIds = screens.map((s) => s.figmaNodeId as string)
+    const urls = await figmaGetImages(token, proto.figmaFileKey, nodeIds, { scale: 2, format: "png" })
+
+    let loaded = 0
+    for (let i = 0; i < screens.length; i += 4) {
+      const batch = screens.slice(i, i + 4)
+      await Promise.all(
+        batch.map(async (sc, j) => {
+          const src = urls[sc.figmaNodeId as string]
+          if (!src) return
+          const publicUrl = await downloadAndUpload(studyId, src, i + j)
+          await prisma.screen.update({ where: { id: sc.id }, data: { imageUrl: publicUrl } })
+          loaded++
+        })
+      )
+    }
+    revalidatePath(`/studies/${studyId}/results`)
+    return { ok: true, loaded }
+  } catch (e) {
+    if (isNextControlFlow(e)) throw e
+    return { ok: false, error: e instanceof Error ? e.message : "Falha ao carregar imagens." }
+  }
+}
+
 async function figmaImportImpl(
   studyId: string,
   fileKey: string,

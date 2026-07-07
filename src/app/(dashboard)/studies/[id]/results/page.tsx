@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Users } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
 import { ResetDataButton } from "@/components/study/reset-data-button"
+import { MetricInfo } from "@/components/results/metric-info"
+import { LoadFigmaImagesButton } from "@/components/results/load-figma-images-button"
 
 export default async function ResultsOverviewPage({
   params,
@@ -36,6 +38,11 @@ export default async function ResultsOverviewPage({
 
   const results = await prisma.missionResult.findMany({
     where: { session: { studyId: id } },
+  })
+
+  // Telas do Figma ainda sem imagem (import ao vivo) — para o botão de heatmap.
+  const screensMissingImage = await prisma.screen.count({
+    where: { prototype: { studyId: id }, imageUrl: "" },
   })
 
   const finishedSessions = await prisma.session.count({
@@ -136,6 +143,9 @@ export default async function ResultsOverviewPage({
           <Users className="h-3.5 w-3.5" />
           {study._count.sessions} sessão(ões) · {finishedSessions} concluída(s)
         </Badge>
+        {screensMissingImage > 0 && (
+          <LoadFigmaImagesButton studyId={id} pending={screensMissingImage} />
+        )}
         <ResetDataButton studyId={id} sessionCount={study._count.sessions} />
       </div>
 
@@ -169,10 +179,26 @@ export default async function ResultsOverviewPage({
                   </p>
                 ) : (
                   <div className="grid grid-cols-4 gap-3 mt-6">
-                    <Stat label="Conclusão" value={formatPct(s.completionRate)} />
-                    <Stat label="Perdida" value={formatPct(s.lostRate)} />
-                    <Stat label="Misclick" value={formatPct(s.misclickRate)} />
-                    <Stat label="Duração méd." value={formatDuration(s.avgDuration)} />
+                    <Stat
+                      label="Conclusão"
+                      value={formatPct(s.completionRate)}
+                      info="Participantes que chegaram na tela-objetivo, sobre as sessões encerradas (concluídas + desistências + perdidas)."
+                    />
+                    <Stat
+                      label="Perdida"
+                      value={formatPct(s.lostRate)}
+                      info="Abandono silencioso: iniciou a tarefa mas não concluiu nem desistiu, e a sessão foi encerrada (fim do teste ou inatividade > 30 min)."
+                    />
+                    <Stat
+                      label="Misclick"
+                      value={formatPct(s.misclickRate)}
+                      info="Percentual de cliques fora de uma área clicável (erro de alvo), sobre o total de cliques."
+                    />
+                    <Stat
+                      label="Duração méd."
+                      value={formatDuration(s.avgDuration)}
+                      info="Tempo médio da tarefa (início até concluir/desistir), só das sessões com resultado."
+                    />
                   </div>
                 )}
               </Link>
@@ -319,11 +345,14 @@ function QBar({ label, count, total }: { label: string; count: number; total: nu
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, info }: { label: string; value: string; info?: string }) {
   return (
     <div>
       <p className="text-title-large text-on-surface">{value}</p>
-      <p className="text-body-small text-on-surface-variant mt-0.5">{label}</p>
+      <p className="text-body-small text-on-surface-variant mt-0.5 flex items-center gap-1">
+        {label}
+        {info && <MetricInfo text={info} />}
+      </p>
     </div>
   )
 }

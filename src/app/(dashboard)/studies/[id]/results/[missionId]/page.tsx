@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath } from "@/lib/path"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
+import { MetricInfo } from "@/components/results/metric-info"
 
 const outcomeBucket: Record<string, "direct" | "indirect" | "unfinished"> = {
   direct: "direct",
@@ -273,9 +274,24 @@ export default async function MissionResultsPage({
           {/* Desfecho — as três taxas somam 100% das sessões encerradas */}
           <div>
             <div className="grid grid-cols-3 gap-3">
-              <Kpi label="Conclusão" value={formatPct(completionRate)} sub={`${counts.completed} de ${ended}`} />
-              <Kpi label="Desistência declarada" value={formatPct(declaredRate)} sub={`${counts.declared} de ${ended}`} />
-              <Kpi label="Perdida" value={formatPct(lostRate)} sub={`${counts.lost} de ${ended}`} />
+              <Kpi
+                label="Conclusão"
+                value={formatPct(completionRate)}
+                sub={`${counts.completed} de ${ended}`}
+                info="Percentual de participantes que chegaram na tela-objetivo da tarefa. Denominador = sessões encerradas (concluídas + desistências + perdidas). As três taxas somam 100%."
+              />
+              <Kpi
+                label="Desistência declarada"
+                value={formatPct(declaredRate)}
+                sub={`${counts.declared} de ${ended}`}
+                info="Participantes que clicaram em 'Desistir' — declararam que não conseguiram concluir a tarefa."
+              />
+              <Kpi
+                label="Perdida"
+                value={formatPct(lostRate)}
+                sub={`${counts.lost} de ${ended}`}
+                info="Abandono silencioso: iniciou a tarefa mas não concluiu nem desistiu, e a sessão foi encerrada (fim do teste ou inatividade acima de 30 min)."
+              />
             </div>
             {counts.open > 0 && (
               <p className="text-body-small text-on-surface-variant mt-2">
@@ -286,14 +302,28 @@ export default async function MissionResultsPage({
 
           {/* Esforço */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Kpi label="Duração média" value={formatDuration(avgDuration)} />
+            <Kpi
+              label="Duração média"
+              value={formatDuration(avgDuration)}
+              info="Tempo médio da tarefa, do início (Iniciar tarefa) até concluir ou desistir. Considera só as sessões com resultado."
+            />
             <Kpi
               label="Tempo até 1º toque"
               value={clickers ? formatDuration(avgFirstTap) : "—"}
               sub={clickers ? `méd. de ${clickers}` : "sem cliques"}
+              info="Tempo do início da tarefa até o primeiro clique do participante. Média apenas de quem clicou (quem nunca clicou é reportado à parte)."
             />
-            <Kpi label="Nunca clicaram" value={String(neverClicked)} sub="não têm 1º toque" />
-            <Kpi label="Misclick rate" value={formatPct(misclickRate)} />
+            <Kpi
+              label="Nunca clicaram"
+              value={String(neverClicked)}
+              sub="não têm 1º toque"
+              info="Quantos participantes iniciaram a tarefa e não deram nenhum clique. Não entram na média de tempo até o 1º toque."
+            />
+            <Kpi
+              label="Misclick rate"
+              value={formatPct(misclickRate)}
+              info="Percentual de cliques que caíram fora de uma área clicável (erro de alvo), sobre o total de cliques."
+            />
           </div>
 
           {/* Primeiro clique isolado */}
@@ -435,9 +465,24 @@ export default async function MissionResultsPage({
   )
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Kpi({
+  label,
+  value,
+  sub,
+  info,
+}: {
+  label: string
+  value: string
+  sub?: string
+  info?: string
+}) {
   return (
-    <div className="border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
+    <div className="relative border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
+      {info && (
+        <div className="absolute top-2.5 right-2.5">
+          <MetricInfo text={info} />
+        </div>
+      )}
       <p className="text-headline-small text-on-surface">{value}</p>
       <p className="text-body-small text-on-surface-variant mt-1">{label}</p>
       {sub && <p className="text-label-small text-on-surface-variant/70 mt-0.5">{sub}</p>}
