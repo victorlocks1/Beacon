@@ -10,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { M3TextField } from "@/components/ui/m3-text-field"
-import { Textarea } from "@/components/ui/textarea"
+import { M3Textarea } from "@/components/ui/m3-textarea"
 import { updateWelcomeAction } from "@/app/(dashboard)/studies/[id]/actions"
 import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
@@ -114,25 +114,29 @@ export function WelcomeDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Textarea
+              <M3Textarea
+                label="Mensagem de boas-vindas"
                 value={m}
                 onChange={(e) => setM(e.target.value)}
-                placeholder={defaultMessage}
-                className="rounded-lg min-h-28"
+                labelBg="bg-popover"
+                className="min-h-28"
               />
-              <p className="text-body-small text-on-surface-variant px-1">Mensagem de boas-vindas.</p>
+              <p className="text-body-small text-on-surface-variant px-1">
+                Deixe em branco para usar o texto padrão do idioma.
+              </p>
             </div>
 
             <div className="space-y-1.5">
-              <Textarea
+              <M3Textarea
+                label="Como funciona"
                 value={hiw}
                 onChange={(e) => setHiw(e.target.value)}
-                placeholder="Ex.: Você verá telas do app. Toque nos elementos como faria no dia a dia; se travar, use “Não consegui”."
-                className="rounded-lg min-h-28"
+                labelBg="bg-popover"
+                className="min-h-28"
               />
               <p className="text-body-small text-on-surface-variant px-1">
-                Como funciona — exibido numa tela extra, depois das boas-vindas e antes das tarefas.
-                Deixe em branco para não mostrar.
+                Exibido numa tela extra, depois das boas-vindas e antes das tarefas. Deixe em branco
+                para não mostrar.
               </p>
             </div>
 
