@@ -66,6 +66,8 @@ export default async function TestRunPage({
           description: string | null
           startScreenId: string
           goalScreenIds: string[]
+          successType: "screen" | "path"
+          paths: string[][] // sequências de screenId (caminho exato)
         }
       }
     | {
@@ -124,6 +126,8 @@ export default async function TestRunPage({
             description: m.description,
             startScreenId: m.startScreenId,
             goalScreenIds,
+            successType: m.successType as "screen" | "path",
+            paths: m.paths.map((p) => p.steps.map((s) => s.screenId)),
           },
         },
         ...m.questions.map(toQuestionStep),
@@ -157,6 +161,9 @@ export default async function TestRunPage({
     }
     const goalsByMission: Record<string, string[]> = {}
     const startNodeByMission: Record<string, string | null> = {}
+    const successTypeByMission: Record<string, "screen" | "path"> = {}
+    // Caminhos esperados como sequências de screenId (rastreador do caminho exato)
+    const expectedPathsByMission: Record<string, string[][]> = {}
     for (const st of testSteps) {
       if (st.kind === "mission") {
         goalsByMission[st.mission.id] = st.mission.goalScreenIds
@@ -164,6 +171,8 @@ export default async function TestRunPage({
           .filter((n): n is string => !!n)
         // frame de partida da missão (node-id do Figma), p/ o embed abrir ali
         startNodeByMission[st.mission.id] = screenToNode[st.mission.startScreenId] ?? null
+        successTypeByMission[st.mission.id] = st.mission.successType
+        expectedPathsByMission[st.mission.id] = st.mission.paths.filter((p) => p.length >= 2)
       }
     }
     return (
@@ -178,6 +187,8 @@ export default async function TestRunPage({
         susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
         goalsByMission={goalsByMission}
         startNodeByMission={startNodeByMission}
+        successTypeByMission={successTypeByMission}
+        expectedPathsByMission={expectedPathsByMission}
         screenByNode={screenByNode}
       />
     )

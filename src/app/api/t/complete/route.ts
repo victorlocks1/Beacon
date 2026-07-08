@@ -8,6 +8,7 @@ export async function POST(request: Request) {
     token?: string
     missionId?: string
     signal?: "reached" | "gave_up"
+    outcome?: "direct" | "indirect" // classificação do cliente (caminho exato)
     path?: string[]
     durationMs?: number
     misclickCount?: number
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "invalid_body" }, { status: 400 })
   }
 
-  const { token, missionId, signal, path, durationMs, misclickCount, clickCount, isLast } = body
+  const { token, missionId, signal, outcome: clientOutcome, path, durationMs, misclickCount, clickCount, isLast } = body
 
   if (!token || !missionId || (signal !== "reached" && signal !== "gave_up")) {
     return Response.json({ ok: false, error: "missing_fields" }, { status: 400 })
@@ -49,9 +50,13 @@ export async function POST(request: Request) {
     outcome = "given_up"
   } else if (mission.successType === "screen") {
     outcome = "direct"
+  } else if (clientOutcome === "direct" || clientOutcome === "indirect") {
+    // CAMINHO EXATO: o cliente (rastreador do caminho) enxerga toda a navegação
+    // e só sinaliza "reached" quando o caminho exato foi percorrido; a distinção
+    // direto/indireto vem dele (fonte da verdade da navegação).
+    outcome = clientOutcome
   } else {
-    // path: usa o caminho enviado pelo cliente (fonte da verdade); cai para
-    // a reconstrução por eventos só se o cliente não enviar nada.
+    // Fallback (cliente antigo/sem outcome): reconstrói pelos eventos/caminho.
     let actual: string[]
     if (Array.isArray(path) && path.length > 0) {
       actual = dedupeConsecutive(path)

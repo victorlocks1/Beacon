@@ -56,6 +56,8 @@ export function FigmaFlowRunner({
   susStatements,
   goalsByMission,
   startNodeByMission,
+  successTypeByMission,
+  expectedPathsByMission,
   screenByNode,
 }: {
   token: string
@@ -67,6 +69,8 @@ export function FigmaFlowRunner({
   susStatements?: string[]
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
+  successTypeByMission: Record<string, "screen" | "path"> // critério de sucesso da missão
+  expectedPathsByMission: Record<string, string[][]> // caminhos esperados (screenId)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
 }) {
   const s = tt(lang)
@@ -96,6 +100,9 @@ export function FigmaFlowRunner({
   const startTimeRef = useRef(0)
   const interactedRef = useRef(false) // guarda p/ marcar o 1º clique uma vez
   const lastMouseRef = useRef<{ t: number; x: number; y: number } | null>(null) // de-dup press/release
+  // rastreador do caminho exato: por caminho esperado, progresso contíguo + se
+  // manteve limpo (sem desvio). len = telas consecutivas certas a partir do início.
+  const matchRef = useRef<{ steps: string[]; len: number; clean: boolean }[]>([])
   const pathRef = useRef<string[]>([]) // caminho em screenIds
   const clickCountRef = useRef(0)
   const misclickCountRef = useRef(0)
@@ -176,7 +183,7 @@ export function FigmaFlowRunner({
   }, [isLastStep, finishFlow])
 
   const completeMission = useCallback(
-    (signal: "reached" | "gave_up") => {
+    (signal: "reached" | "gave_up", outcome?: "direct" | "indirect") => {
       if (!missionRef.current || completedRef.current) return
       completedRef.current = true
       const missionId = missionRef.current
@@ -204,6 +211,7 @@ export function FigmaFlowRunner({
           token,
           missionId,
           signal,
+          outcome, // classificação do cliente (caminho exato): direct | indirect
           path: pathRef.current,
           durationMs: Math.round(now() - startTimeRef.current),
           misclickCount: misclickCountRef.current,
@@ -270,15 +278,21 @@ export function FigmaFlowRunner({
         }
         const handled = d.data?.handled !== false
         if (!handled) misclickCountRef.current += 1
-        // posição do clique na tela atual (best-effort: relativo ao frame rolável)
+        // posição do clique na tela (best-effort). Preferimos a posição relativa
+        // ao frame rolável e somamos o offset de scroll (posição no conteúdo);
+        // sem frame rolável, caímos na posição relativa ao nó clicado.
         const scr = screenByNode[d.data?.presentedNodeId as string]
         if (scr) {
+          const usedScroll = !!d.data?.nearestScrollingFrameMousePosition
+          const off = d.data?.nearestScrollingFrameOffset as { x: number; y: number } | null
+          const px = (pos.x ?? 0) + (usedScroll ? off?.x ?? 0 : 0)
+          const py = (pos.y ?? 0) + (usedScroll ? off?.y ?? 0 : 0)
           ourBufferRef.current.push({
             missionId,
             screenId: scr.id,
             type: handled ? "click" : "misclick",
-            xNorm: clamp01((pos.x ?? 0) / (scr.w || 1)),
-            yNorm: clamp01((pos.y ?? 0) / (scr.h || 1)),
+            xNorm: clamp01(px / (scr.w || 1)),
+            yNorm: clamp01(py / (scr.h || 1)),
             timestampMs: ts,
           })
         }
@@ -288,7 +302,8 @@ export function FigmaFlowRunner({
         const nodeId = d.data?.presentedNodeId as string | undefined
         const scr = nodeId ? screenByNode[nodeId] : undefined
         if (scr) {
-          if (pathRef.current[pathRef.current.length - 1] !== scr.id) {
+          const changed = pathRef.current[pathRef.current.length - 1] !== scr.id
+          if (changed) {
             pathRef.current.push(scr.id)
             ourBufferRef.current.push({
               missionId,
@@ -300,12 +315,31 @@ export function FigmaFlowRunner({
               timestampMs: ts,
             })
           }
-          const goals = goalsByMission[missionId] ?? []
-          if (nodeId && goals.includes(nodeId)) {
-            // não conclui de imediato se o objetivo é a própria tela inicial
-            // (evita "sucesso" no primeiro frame antes de qualquer navegação)
-            const atStart = startNodeRef.current === nodeId && pathRef.current.length <= 1
-            if (!atStart) completeMission("reached")
+
+          if (successTypeByMission[missionId] === "path") {
+            // CAMINHO EXATO: conclui só quando a sequência exata é percorrida de
+            // forma contígua. Direto = sem desvio; indireto = vagou e depois fez.
+            if (changed) {
+              for (const m of matchRef.current) {
+                if (scr.id === m.steps[m.len]) {
+                  m.len++
+                } else {
+                  m.clean = false
+                  m.len = scr.id === m.steps[0] ? 1 : 0
+                }
+                if (m.steps.length > 0 && m.len === m.steps.length) {
+                  completeMission("reached", m.clean ? "direct" : "indirect")
+                  break
+                }
+              }
+            }
+          } else {
+            // TELA-ALVO: chegar na tela objetivo por qualquer caminho = sucesso.
+            const goals = goalsByMission[missionId] ?? []
+            if (nodeId && goals.includes(nodeId)) {
+              const atStart = startNodeRef.current === nodeId && pathRef.current.length <= 1
+              if (!atStart) completeMission("reached", "direct")
+            }
           }
         }
       }
@@ -345,6 +379,13 @@ export function FigmaFlowRunner({
     pathRef.current = mission.startScreenId ? [mission.startScreenId] : []
     missionRef.current = mission.id
     startNodeRef.current = currentStartNode
+    lastMouseRef.current = null
+    // inicializa o rastreador do caminho exato (início já conta como 1º passo)
+    matchRef.current = (expectedPathsByMission[mission.id] ?? []).map((steps) => ({
+      steps,
+      len: steps[0] === mission.startScreenId ? 1 : 0,
+      clean: true,
+    }))
     startedRef.current = true
     // navigate inicial: marca o início da tarefa na tela inicial e persiste já
     // (permite distinguir "iniciou e sumiu" = perdida de "nunca iniciou").
