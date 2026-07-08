@@ -95,6 +95,7 @@ export function FigmaFlowRunner({
   const completedRef = useRef(false)
   const startTimeRef = useRef(0)
   const interactedRef = useRef(false) // guarda p/ marcar o 1º clique uma vez
+  const lastMouseRef = useRef<{ t: number; x: number; y: number } | null>(null) // de-dup press/release
   const pathRef = useRef<string[]>([]) // caminho em screenIds
   const clickCountRef = useRef(0)
   const misclickCountRef = useRef(0)
@@ -243,6 +244,24 @@ export function FigmaFlowRunner({
       const ts = Math.round(now() - startTimeRef.current)
 
       if (d.type === "MOUSE_PRESS_OR_RELEASE") {
+        // O Figma dispara este evento no PRESS e no RELEASE (2x por clique) e
+        // não há campo p/ distinguir. De-dup: ignora o par (mesma posição num
+        // curto intervalo) para não dobrar clickCount nem os pontos do heatmap.
+        const pos =
+          (d.data?.nearestScrollingFrameMousePosition as { x: number; y: number } | null) ??
+          (d.data?.targetNodeMousePosition as { x: number; y: number } | null) ?? { x: 0, y: 0 }
+        const tNow = now()
+        const last = lastMouseRef.current
+        lastMouseRef.current = { t: tNow, x: pos.x ?? 0, y: pos.y ?? 0 }
+        if (
+          last &&
+          tNow - last.t < 250 &&
+          Math.abs((pos.x ?? 0) - last.x) < 6 &&
+          Math.abs((pos.y ?? 0) - last.y) < 6
+        ) {
+          return // release do mesmo clique
+        }
+
         clickCountRef.current += 1
         // 1º clique da tarefa → revela o "Não consegui" (com fade suave)
         if (!interactedRef.current) {
@@ -254,9 +273,6 @@ export function FigmaFlowRunner({
         // posição do clique na tela atual (best-effort: relativo ao frame rolável)
         const scr = screenByNode[d.data?.presentedNodeId as string]
         if (scr) {
-          const pos =
-            (d.data?.nearestScrollingFrameMousePosition as { x: number; y: number } | null) ??
-            (d.data?.targetNodeMousePosition as { x: number; y: number } | null) ?? { x: 0, y: 0 }
           ourBufferRef.current.push({
             missionId,
             screenId: scr.id,

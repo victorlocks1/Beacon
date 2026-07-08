@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath } from "@/lib/path"
+import { median, lostness, lostnessBand } from "@/lib/metrics"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
@@ -43,6 +44,7 @@ export default async function MissionResultsPage({
     where: { id: missionId, block: { study: { id, ownerId: session.user.id } } },
     include: {
       questions: { orderBy: { order: "asc" }, include: { answers: true } },
+      paths: { include: { steps: { orderBy: { order: "asc" } } } },
       block: {
         include: {
           study: {
@@ -130,11 +132,17 @@ export default async function MissionResultsPage({
   const isPath = mission.successType === "path"
 
   // Esforço (sobre quem tem resultado registrado)
-  const withResult = results.length
   const totalClicks = results.reduce((a, r) => a + r.clickCount, 0)
   const totalMisclicks = results.reduce((a, r) => a + r.misclickCount, 0)
   const misclickRate = totalClicks ? (totalMisclicks / totalClicks) * 100 : 0
-  const avgDuration = withResult ? results.reduce((a, r) => a + r.durationMs, 0) / withResult : 0
+  // Duração: MEDIANA (tempos são enviesados à direita), separando quem concluiu
+  // (direto/indireto) de quem NÃO concluiu (desistiu; perdidas não têm duração).
+  const completeDurations = results
+    .filter((r) => r.outcome === "direct" || r.outcome === "indirect")
+    .map((r) => r.durationMs)
+  const failDurations = results.filter((r) => r.outcome === "given_up").map((r) => r.durationMs)
+  const medComplete = median(completeDurations)
+  const medFail = median(failDurations)
 
   // ── Primeiro clique: 1 por participante, o mais antigo por timestamp (travado).
   //    Retornos à mesma tela NÃO geram novo primeiro clique. ──
@@ -157,11 +165,11 @@ export default async function MissionResultsPage({
     firstClickByScreen.set(fc.screenId, arr)
   }
 
-  // ── Tempo até o 1º toque: média só de quem clicou; reporta quantos nunca clicaram ──
+  // ── Tempo até o 1º toque: MEDIANA só de quem clicou; reporta quantos nunca clicaram ──
   const firstTaps = [...firstClickBySession.values()].map((fc) => fc.tMs)
   const clickers = firstTaps.length
   const neverClicked = startedSessionIds.size - clickers
-  const avgFirstTap = clickers ? firstTaps.reduce((a, b) => a + b, 0) / clickers : 0
+  const medFirstTap = median(firstTaps)
 
   // ── Abandono: tela onde DESISTIU (escolha) e ÚLTIMA tela vista das perdidas (inferência) ──
   const giveUpByScreen = new Map<string, number>()
@@ -215,6 +223,23 @@ export default async function MissionResultsPage({
     pathCache.set(sessionId, path)
     return path
   }
+
+  // ── Lostness (só caminho exato): compara telas visitadas com o caminho ótimo.
+  //    N = únicas visitadas, S = total (com revisitas), R = mínimo do caminho ótimo.
+  const optimalLens = mission.paths
+    .map((p) => new Set(p.steps.map((st) => st.screenId)).size)
+    .filter((n) => n > 0)
+  const R = optimalLens.length ? Math.min(...optimalLens) : 0
+  const lostnessVals: number[] = []
+  if (isPath && R > 0) {
+    for (const r of results) {
+      const path = pathFor(r.sessionId)
+      const L = lostness(new Set(path).size, path.length, R)
+      if (L != null) lostnessVals.push(L)
+    }
+  }
+  const medLostness = median(lostnessVals)
+  const lostBand = lostnessBand(medLostness)
 
   // ── Agrupar caminhos por desfecho ──
   type PathGroup = {
@@ -340,33 +365,51 @@ export default async function MissionResultsPage({
           {/* Esforço */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Kpi
-              label="Duração média"
-              value={formatDuration(avgDuration)}
-              info="Tempo médio da tarefa, do início (Iniciar tarefa) até concluir ou desistir. Considera só as sessões com resultado."
+              label="Duração — concluíram"
+              value={completeDurations.length ? formatDuration(medComplete) : "—"}
+              sub={completeDurations.length ? `mediana de ${completeDurations.length}` : "sem conclusões"}
+              info="Tempo MEDIANO da tarefa entre quem concluiu (direto ou indireto). Mediana porque tempos têm outliers — mais fiel que a média (padrão NN/G)."
+            />
+            <Kpi
+              label="Duração — não concl."
+              value={failDurations.length ? formatDuration(medFail) : "—"}
+              sub={failDurations.length ? `mediana · desistiram` : "sem desistências"}
+              info="Tempo mediano de quem DESISTIU. As sessões 'perdidas' não têm duração registrada, então não entram aqui."
             />
             <Kpi
               label="Tempo até 1º toque"
-              value={clickers ? formatDuration(avgFirstTap) : "—"}
-              sub={clickers ? `méd. de ${clickers}` : "sem cliques"}
-              info="Tempo do início da tarefa até o primeiro clique do participante. Média apenas de quem clicou (quem nunca clicou é reportado à parte)."
-            />
-            <Kpi
-              label="Nunca clicaram"
-              value={String(neverClicked)}
-              sub="não têm 1º toque"
-              info="Quantos participantes iniciaram a tarefa e não deram nenhum clique. Não entram na média de tempo até o 1º toque."
+              value={clickers ? formatDuration(medFirstTap) : "—"}
+              sub={clickers ? `mediana de ${clickers}` : "sem cliques"}
+              info="Tempo (mediana) do início da tarefa até o primeiro clique. Só de quem clicou (quem nunca clicou é reportado à parte). Um 1º toque no caminho certo prevê ~2x mais sucesso (Bailey & Wolfson)."
             />
             <Kpi
               label="Misclick rate"
               value={formatPct(misclickRate)}
               info="Percentual de cliques que caíram fora de uma área clicável (erro de alvo), sobre o total de cliques."
             />
+            <Kpi
+              label="Nunca clicaram"
+              value={String(neverClicked)}
+              sub="não têm 1º toque"
+              info="Quantos participantes iniciaram a tarefa e não deram nenhum clique."
+            />
+            {isPath && lostnessVals.length > 0 && (
+              <Kpi
+                label="Lostness"
+                value={medLostness.toFixed(2)}
+                sub={lostBand.label}
+                info="Métrica de 'perdido' (Smith, 1996 / NN/G): 0 = caminho perfeito; < 0,4 não-perdido; > 0,5 perdido. Compara as telas visitadas (únicas e totais) com o caminho ótimo definido. Mediana entre os participantes."
+              />
+            )}
           </div>
 
           {/* Tela do abandono */}
           {(giveUpRows.length > 0 || lostRows.length > 0) && (
             <section>
-              <h2 className="text-title-large text-on-surface mb-4">Onde as pessoas abandonam</h2>
+              <h2 className="text-title-large text-on-surface mb-4 flex items-center gap-1.5">
+                Onde as pessoas abandonam
+                <MetricInfo text="“Desistiu” é escolha explícita (clicou em Não consegui). “Última tela vista” é uma inferência das sessões perdidas — a última tela registrada antes de a sessão encerrar." />
+              </h2>
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="border border-outline-variant rounded-2xl p-4 bg-surface-container-low">
                   <p className="text-title-small text-on-surface mb-2">Desistiu (declarado)</p>
@@ -399,9 +442,6 @@ export default async function MissionResultsPage({
                   )}
                 </div>
               </div>
-              <p className="text-body-small text-on-surface-variant mt-2">
-                &ldquo;Desistiu&rdquo; é escolha explícita; &ldquo;última tela vista&rdquo; é inferência das perdidas.
-              </p>
             </section>
           )}
 

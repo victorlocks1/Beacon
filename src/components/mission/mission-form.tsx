@@ -349,10 +349,10 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
       <div
         className={cn(
           stickyFooter &&
-            "sticky bottom-0 -mx-6 px-6 py-4 bg-surface border-t border-outline-variant"
+            "sticky bottom-0 -mx-6 px-6 py-4 bg-surface border-t border-outline-variant flex justify-end"
         )}
       >
-        <Button onClick={submit} disabled={pending} className="w-full h-12">
+        <Button onClick={submit} disabled={pending} className={stickyFooter ? "" : "w-full h-12"}>
           {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {isEdit ? "Salvar alterações" : "Criar missão"}
         </Button>
