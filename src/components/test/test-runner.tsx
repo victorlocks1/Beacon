@@ -42,6 +42,9 @@ interface Props {
   welcome?: WelcomeInfo | null
   // "Como funciona": tela extra após as boas-vindas, antes das tarefas.
   howItWorks?: string | null
+  // Agradecimento customizável (ausente = padrão do idioma).
+  thanksTitle?: string | null
+  thanksMessage?: string | null
   // SUS: enunciados customizados (ausente = padrão do idioma).
   susStatements?: string[]
 }
@@ -66,6 +69,8 @@ export function TestRunner({
   preview = false,
   welcome = null,
   howItWorks = null,
+  thanksTitle,
+  thanksMessage,
   susStatements,
 }: Props) {
   const s = tt(lang)
@@ -361,8 +366,12 @@ export function TestRunner({
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
         <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-12 text-center space-y-2">
-          <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
-          <p className="text-body-medium text-on-surface-variant">{s.thanksBody}</p>
+          <h1 className="text-headline-small text-on-surface whitespace-pre-wrap">
+            {thanksTitle?.trim() || s.thanksTitle}
+          </h1>
+          <p className="text-body-medium text-on-surface-variant whitespace-pre-wrap">
+            {thanksMessage?.trim() || s.thanksBody}
+          </p>
         </div>
       </div>
     )

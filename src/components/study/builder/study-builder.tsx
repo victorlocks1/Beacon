@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { MissionForm, type MissionInitial, type Screen as MissionFormScreen } from "@/components/mission/mission-form"
 import { WelcomeEditor } from "@/components/study/builder/welcome-editor"
+import { ThanksEditor } from "@/components/study/builder/thanks-editor"
 import { QuestionEditor, type QuestionInitial } from "@/components/study/builder/question-editor"
 import { SusEditor } from "@/components/study/builder/sus-editor"
 import {
@@ -56,6 +57,7 @@ export function StudyBuilder({
   editable,
   deviceType,
   welcome,
+  thanks,
   blocks,
   missionScreens,
   figmaFileKey,
@@ -65,6 +67,7 @@ export function StudyBuilder({
   editable: boolean
   deviceType: "desktop" | "tablet" | "mobile"
   welcome: { title: string | null; message: string | null; howItWorks: string | null; defaultTitle: string }
+  thanks: { title: string | null; message: string | null; defaultTitle: string; defaultMessage: string }
   blocks: BuilderBlock[]
   missionScreens: MissionFormScreen[]
   figmaFileKey: string | null
@@ -311,12 +314,14 @@ export function StudyBuilder({
             defaultTitle={welcome.defaultTitle}
           />
         ) : sel === "thanks" ? (
-          <div className="space-y-2">
-            <h2 className="text-title-medium text-on-surface">Tela de agradecimento</h2>
-            <p className="text-body-medium text-on-surface-variant">
-              Exibida ao final do teste. Texto padrão do idioma — sem edição por enquanto.
-            </p>
-          </div>
+          <ThanksEditor
+            studyId={studyId}
+            editable={editable}
+            title={thanks.title}
+            message={thanks.message}
+            defaultTitle={thanks.defaultTitle}
+            defaultMessage={thanks.defaultMessage}
+          />
         ) : sel === "new-mission" ? (
           <MissionForm
             studyId={studyId}

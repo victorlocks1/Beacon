@@ -328,6 +328,12 @@ export default async function StudyPage({
               howItWorks: study.howItWorks,
               defaultTitle: tt((study.language ?? "pt") as Lang).welcomeTitle,
             }}
+            thanks={{
+              title: study.thanksTitle,
+              message: study.thanksMessage,
+              defaultTitle: tt((study.language ?? "pt") as Lang).thanksTitle,
+              defaultMessage: tt((study.language ?? "pt") as Lang).thanksBody,
+            }}
             blocks={builderBlocks}
             missionScreens={missionScreens}
             figmaFileKey={builderFigmaKey}

@@ -63,6 +63,21 @@ export async function updateWelcomeAction(
   revalidatePath(`/studies/${studyId}`)
 }
 
+export async function updateThanksAction(
+  studyId: string,
+  input: { title: string; message: string }
+) {
+  const { study } = await getStudyOrThrow(studyId)
+  await prisma.study.update({
+    where: { id: study.id },
+    data: {
+      thanksTitle: input.title.trim() || null,
+      thanksMessage: input.message.trim() || null,
+    },
+  })
+  revalidatePath(`/studies/${studyId}`)
+}
+
 // Adiciona o bloco SUS na sequência (só um por estudo). O SUS é fixo: 10
 // afirmações padrão exibidas ao testador na posição escolhida.
 export async function addSusBlockAction(studyId: string) {

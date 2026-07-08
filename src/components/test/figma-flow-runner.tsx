@@ -54,6 +54,8 @@ export function FigmaFlowRunner({
   steps,
   welcome,
   howItWorks,
+  thanksTitle,
+  thanksMessage,
   susStatements,
   goalsByMission,
   startNodeByMission,
@@ -67,6 +69,8 @@ export function FigmaFlowRunner({
   steps: Step[]
   welcome: WelcomeInfo | null
   howItWorks: string | null
+  thanksTitle?: string | null
+  thanksMessage?: string | null
   susStatements?: string[]
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
@@ -564,8 +568,12 @@ export function FigmaFlowRunner({
     content = (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
         <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-12 text-center space-y-2">
-          <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
-          <p className="text-body-medium text-on-surface-variant">{s.thanksBody}</p>
+          <h1 className="text-headline-small text-on-surface whitespace-pre-wrap">
+            {thanksTitle?.trim() || s.thanksTitle}
+          </h1>
+          <p className="text-body-medium text-on-surface-variant whitespace-pre-wrap">
+            {thanksMessage?.trim() || s.thanksBody}
+          </p>
         </div>
       </div>
     )

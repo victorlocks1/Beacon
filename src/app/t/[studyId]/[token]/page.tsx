@@ -50,7 +50,13 @@ export default async function TestRunPage({
 
   // Sessão já finalizada → agradecimento
   if (testSession.finishedAt) {
-    return <ThankYou lang={lang} />
+    return (
+      <ThankYou
+        lang={lang}
+        title={testSession.study.thanksTitle}
+        message={testSession.study.thanksMessage}
+      />
+    )
   }
 
   const study = testSession.study
@@ -144,7 +150,7 @@ export default async function TestRunPage({
 
   const hasMission = testSteps.some((st) => st.kind === "mission")
   if (testSteps.length === 0 || (hasMission && screens.length === 0)) {
-    return <ThankYou lang={lang} />
+    return <ThankYou lang={lang} title={study.thanksTitle} message={study.thanksMessage} />
   }
 
   // ─── Protótipo VIVO do Figma (embed) é o padrão para estudos do Figma ───
@@ -184,6 +190,8 @@ export default async function TestRunPage({
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
         howItWorks={null} /* Como funciona agora fica na tela de boas-vindas (entry) */
+        thanksTitle={study.thanksTitle}
+        thanksMessage={study.thanksMessage}
         susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
         goalsByMission={goalsByMission}
         startNodeByMission={startNodeByMission}
@@ -200,6 +208,8 @@ export default async function TestRunPage({
       lang={lang}
       deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
       howItWorks={null} /* Como funciona agora fica na tela de boas-vindas (entry) */
+      thanksTitle={study.thanksTitle}
+      thanksMessage={study.thanksMessage}
       susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
       screens={screens.map((s) => ({
         id: s.id,
@@ -230,13 +240,25 @@ export default async function TestRunPage({
   )
 }
 
-function ThankYou({ lang }: { lang: Lang }) {
+function ThankYou({
+  lang,
+  title,
+  message,
+}: {
+  lang: Lang
+  title?: string | null
+  message?: string | null
+}) {
   const s = tt(lang)
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
       <div className="w-full max-w-md rounded-[28px] bg-surface-container-low border border-outline-variant p-12 text-center space-y-2">
-        <h1 className="text-headline-small text-on-surface">{s.thanksTitle}</h1>
-        <p className="text-body-medium text-on-surface-variant">{s.thanksBody}</p>
+        <h1 className="text-headline-small text-on-surface whitespace-pre-wrap">
+          {title?.trim() || s.thanksTitle}
+        </h1>
+        <p className="text-body-medium text-on-surface-variant whitespace-pre-wrap">
+          {message?.trim() || s.thanksBody}
+        </p>
       </div>
     </div>
   )

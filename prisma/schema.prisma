@@ -46,6 +46,9 @@ model Study {
   welcomeMessage String?
   // "Como funciona": tela extra exibida após as boas-vindas, antes das tarefas
   howItWorks     String?
+  // Tela de agradecimento customizável (nulo = usa o padrão do idioma)
+  thanksTitle    String?
+  thanksMessage  String?
   // SUS: enunciados customizados (array de 10). Nulo = usa o padrão do idioma.
   susStatements  Json?
   // Código de compartilhamento (link) para o time interno entrar como membro
