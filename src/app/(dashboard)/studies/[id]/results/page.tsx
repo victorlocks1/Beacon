@@ -168,12 +168,11 @@ export default async function ResultsOverviewPage({
         <ResetDataButton studyId={id} sessionCount={study._count.sessions} />
       </div>
 
-      {hasSus && <SusSummary avg={susAvg} count={susResponses.length} />}
-
       <Tabs defaultValue="missions">
         <TabsList className="mb-6">
           <TabsTrigger value="missions">Missões ({missions.length})</TabsTrigger>
           <TabsTrigger value="questions">Perguntas ({freeQuestions.length})</TabsTrigger>
+          {hasSus && <TabsTrigger value="sus">SUS</TabsTrigger>}
         </TabsList>
 
         {/* ── Missões (cada uma com suas perguntas de acompanhamento) ── */}
@@ -197,7 +196,11 @@ export default async function ResultsOverviewPage({
                           <p className="text-label-medium text-on-surface-variant mb-1">
                             MISSÃO {index + 1}
                           </p>
-                          <h2 className="text-title-medium text-on-surface truncate">{mission.task}</h2>
+                          <h2 className="text-title-medium text-on-surface truncate">
+                            {mission.task.length > 64
+                              ? mission.task.slice(0, 64).trimEnd() + "…"
+                              : mission.task}
+                          </h2>
                         </div>
                         <ArrowRight className="h-4 w-4 text-on-surface-variant shrink-0 mt-1" />
                       </div>
@@ -251,6 +254,13 @@ export default async function ResultsOverviewPage({
             </div>
           )}
         </TabsContent>
+
+        {/* ── SUS ── */}
+        {hasSus && (
+          <TabsContent value="sus">
+            <SusSummary avg={susAvg} count={susResponses.length} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
