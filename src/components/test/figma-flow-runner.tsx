@@ -470,36 +470,31 @@ export function FigmaFlowRunner({
           }
 
           if (successTypeByMission[missionId] === "path") {
-            // CAMINHO EXATO: o SUCESSO é alcançar a tela-objetivo (última tela do
-            // caminho definido) PELA CONEXÃO do caminho — ou seja, a última
-            // transição precisa vir da tela que antecede a objetivo no caminho
-            // exato. Isso separa:
-            //  • Direto   = percorreu o caminho exato inteiro, em ordem, sem desvio.
-            //  • Indireto = desviou/vagou (abriu um bottomsheet, foi a outra tela…)
-            //               mas voltou e entrou na objetivo pela conexão do caminho.
-            //  • Não conta = chegou na objetivo por uma rota totalmente diferente
-            //               (ex.: outra lista X→Y→objetivo) — a conexão final não é
-            //               a do caminho exato definido.
+            // CAMINHO EXATO: o SUCESSO exige PERCORRER o caminho definido em ordem
+            // — TODAS as telas do caminho, incluindo a(s) tela(s)-chave (ex.: a
+            // "Cerca de subir - Listagem"), terminando na tela-objetivo. Assim:
+            //  • Direto   = percorreu um caminho exato limpo, sem telas extras.
+            //  • Indireto = passou por todas as telas do caminho, na ordem, mas com
+            //               desvios/telas extras no meio (abriu filtro, foi a outra
+            //               tela e voltou…). Ainda percorreu a tela-chave.
+            //  • Não conta = chegou na tela-objetivo SEM percorrer o caminho (pulou
+            //               a tela-chave) → não é sucesso; conta como não concluído.
+            // Cada tela avança a subsequência de cada caminho esperado; desvio marca
+            // "não limpo". Conclui quando algum caminho é percorrido por inteiro;
+            // preferimos DIRETO se algum caminho foi percorrido limpo.
             if (changed) {
-              const prevScreen = pathRef.current[pathRef.current.length - 2]
+              let reachedGoal = false
+              let directHit = false
               for (const m of matchRef.current) {
                 if (m.steps.length < 2) continue
-                const goalId = m.steps[m.steps.length - 1]
-                const predecessor = m.steps[m.steps.length - 2]
-                // avança no caminho exato enquanto a próxima tela esperada é atingida
-                if (scr.id === m.steps[m.len]) {
-                  m.len++
-                } else {
-                  // saiu da sequência exata → não é mais "direto" (mas segue valendo)
-                  m.clean = false
-                }
-                // conclui só se entrou na objetivo pela conexão do caminho exato
-                if (scr.id === goalId && prevScreen === predecessor) {
-                  const direct = m.clean && m.len === m.steps.length
-                  completeMission("reached", direct ? "direct" : "indirect")
-                  break
+                if (scr.id === m.steps[m.len]) m.len++
+                else m.clean = false
+                if (m.len === m.steps.length) {
+                  reachedGoal = true
+                  if (m.clean) directHit = true
                 }
               }
+              if (reachedGoal) completeMission("reached", directHit ? "direct" : "indirect")
             }
           } else {
             // TELA-ALVO: chegar na tela objetivo por qualquer caminho = sucesso.
