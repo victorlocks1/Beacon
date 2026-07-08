@@ -1,7 +1,8 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock } from "lucide-react"
+import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock, Star } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { figmaEmbedUrl, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
@@ -84,10 +85,24 @@ export function FigmaFlowRunner({
   const [completion, setCompletion] = useState<null | "reached" | "gave_up">(null)
   const [finished, setFinished] = useState(false)
   const [embedSrc, setEmbedSrc] = useState<string | null>(null)
+  // nota de estrelas embutida no feedback de sucesso (quando a próxima pergunta
+  // é de estrelas, respondemos ali mesmo pra poupar um clique)
+  const [inlineRating, setInlineRating] = useState(0)
 
   const step = steps[stepIndex]
   const mission = step?.kind === "mission" ? step.mission : null
   const isLastStep = stepIndex === steps.length - 1
+
+  // Se o próximo passo for uma pergunta de ESTRELAS, mostramos as estrelas
+  // abaixo do feedback de conclusão da tarefa (só no sucesso) e pulamos aquele
+  // step — evita a tela extra só pra dar a nota.
+  const nextStep = steps[stepIndex + 1]
+  const inlineRatingQ =
+    completion === "reached" &&
+    nextStep?.kind === "question" &&
+    nextStep.question.type === "rating"
+      ? (nextStep.question as StepQuestion)
+      : null
 
   // node-id do Figma onde a missão atual começa (null → frame padrão do protótipo)
   const currentStartNode = mission ? startNodeByMission[mission.id] ?? null : null
@@ -232,6 +247,33 @@ export function FigmaFlowRunner({
     setCompletion(null)
     advance()
   }, [advance])
+
+  // Continua a partir do feedback de sucesso quando a próxima pergunta é de
+  // estrelas: grava a nota dada ali mesmo e pula o step da pergunta.
+  const continueWithInlineRating = useCallback(
+    (nextQ: StepQuestion) => {
+      if (inlineRating > 0) {
+        fetch("/api/t/answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, questionId: nextQ.id, rating: inlineRating }),
+          keepalive: true,
+        }).catch(() => {})
+      }
+      setCompletion(null)
+      setInlineRating(0)
+      // pula a missão atual E a pergunta de estrelas (já respondida aqui)
+      const skipTo = stepIndex + 2
+      if (skipTo > steps.length - 1) {
+        finishFlow()
+      } else {
+        setStepIndex(skipTo)
+        setTaskStarted(false)
+        startedRef.current = false
+      }
+    },
+    [inlineRating, token, stepIndex, steps.length, finishFlow]
+  )
 
   // Listener global dos eventos da Embed API (Figma). Marca por tarefa, monta o
   // caminho e conclui a tarefa ao alcançar o frame-objetivo.
@@ -550,9 +592,53 @@ export function FigmaFlowRunner({
                       {reached ? s.taskDoneBody : s.taskGaveUpBody}
                     </p>
                   </div>
-                  <Button onClick={continueFromCompletion} className="h-12 px-6" size="lg">
-                    {s.continue}
-                  </Button>
+
+                  {/* Pergunta de estrelas embutida (próximo passo) — poupa 1 clique */}
+                  {inlineRatingQ && (
+                    <div className="space-y-2 pt-1">
+                      <p className="text-title-small text-on-surface">{inlineRatingQ.title}</p>
+                      {inlineRatingQ.description && (
+                        <p className="text-body-medium text-on-surface-variant">
+                          {inlineRatingQ.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setInlineRating(n)}
+                            aria-label={`${n}`}
+                            className="p-1"
+                          >
+                            <Star
+                              className={cn(
+                                "h-9 w-9 transition-colors",
+                                n <= inlineRating ? "text-amber-400" : "text-outline-variant"
+                              )}
+                              fill={n <= inlineRating ? "currentColor" : "none"}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-body-small text-on-surface-variant">{s.rateHint}</p>
+                    </div>
+                  )}
+
+                  {inlineRatingQ ? (
+                    <Button
+                      onClick={() => continueWithInlineRating(inlineRatingQ)}
+                      disabled={inlineRatingQ.required && inlineRating === 0}
+                      className="h-12 px-6"
+                      size="lg"
+                    >
+                      {s.continue}
+                    </Button>
+                  ) : (
+                    <Button onClick={continueFromCompletion} className="h-12 px-6" size="lg">
+                      {s.continue}
+                    </Button>
+                  )}
                 </>
               ) : (
                 <>
