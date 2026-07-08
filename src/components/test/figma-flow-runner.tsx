@@ -92,6 +92,7 @@ export function FigmaFlowRunner({
   const [taskStarted, setTaskStarted] = useState(false)
   const [interacted, setInteracted] = useState(false) // já houve o 1º clique na tarefa
   const [embedLoaded, setEmbedLoaded] = useState(false) // protótipo do Figma pronto
+  const [loadProgress, setLoadProgress] = useState(0) // 0..100 da barra de carregamento
   // conclusão da tarefa (feedback + botão continuar) antes de seguir
   const [completion, setCompletion] = useState<null | "reached" | "gave_up">(null)
   const [finished, setFinished] = useState(false)
@@ -207,6 +208,25 @@ export function FigmaFlowRunner({
     const t = setTimeout(() => setEmbedLoaded(true), 10000)
     return () => clearTimeout(t)
   }, [fileKey, currentStartNode])
+
+  // Barra de carregamento: enche SEMPRE avançando (desacelera perto do fim mas
+  // nunca congela) enquanto o embed não está pronto; completa quando fica pronto.
+  useEffect(() => {
+    if (embedLoaded) {
+      setLoadProgress(100)
+      return
+    }
+    setLoadProgress(8) // recomeça a cada (re)carregamento do embed
+    const id = setInterval(() => {
+      setLoadProgress((p) => {
+        if (p >= 96) return 96 // teto: os últimos % ficam para o "pronto"
+        // desacelera em degraus, mas sempre soma algo → nunca parece travado
+        const step = p < 55 ? 5 : p < 80 ? 1.8 : 0.7
+        return Math.min(96, p + step)
+      })
+    }, 120)
+    return () => clearInterval(id)
+  }, [embedLoaded, embedSrc])
 
   const finishFlow = useCallback(() => {
     setFinished(true)
@@ -834,12 +854,11 @@ export function FigmaFlowRunner({
                   </div>
                   <div className="w-full max-w-[200px] h-2 rounded-full bg-surface-container-high overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ animation: "beaconFill 3.2s cubic-bezier(0.22,1,0.36,1) forwards" }}
+                      className="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
+                      style={{ width: loadProgress + "%" }}
                     />
                   </div>
                   <span className="text-title-medium text-on-surface">{s.loadingPrototype}</span>
-                  <style>{`@keyframes beaconFill{0%{width:6%}55%{width:64%}100%{width:92%}}`}</style>
                 </div>
               )}
             </div>
