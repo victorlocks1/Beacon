@@ -268,10 +268,15 @@ export function FigmaFlowRunner({
         const pending = pendingPressRef.current
 
         if (pending && tNow - pending.t < 600) {
-          // release do gesto iniciado em `pending`. Movimento grande = arraste
-          // (scroll/swipe) → descarta (não é clique).
+          // release do gesto iniciado em `pending`.
           pendingPressRef.current = null
-          if (Math.abs(px - pending.x) > 14 || Math.abs(py - pending.y) > 14) {
+          const releaseNode = d.data?.presentedNodeId as string | undefined
+          // Se a tela mudou entre press e release, o clique NAVEGOU → é clique de
+          // verdade (o release já vem na tela nova, em outro sistema de coords, por
+          // isso não dá pra comparar posição). Só aplicamos o teste de arraste
+          // (scroll/swipe descarta) quando press e release estão na MESMA tela.
+          const navigated = !!releaseNode && !!pending.nodeId && releaseNode !== pending.nodeId
+          if (!navigated && (Math.abs(px - pending.x) > 14 || Math.abs(py - pending.y) > 14)) {
             return
           }
           // é um clique de verdade → conta UMA vez, na posição do press
