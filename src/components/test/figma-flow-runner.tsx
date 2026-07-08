@@ -267,7 +267,7 @@ export function FigmaFlowRunner({
       }
       // No sucesso, dá um respiro (~1,2s) entre o clique-objetivo e o feedback,
       // para não trocar de tela bruscamente. Na desistência, imediato.
-      if (signal === "reached") setTimeout(() => setCompletion("reached"), 800)
+      if (signal === "reached") setTimeout(() => setCompletion("reached"), 600)
       else setCompletion("gave_up")
       flush()
       fetch("/api/t/complete", {
