@@ -4,6 +4,7 @@ import { TestRunner } from "@/components/test/test-runner"
 import { FigmaFlowRunner } from "@/components/test/figma-flow-runner"
 import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { tt, type Lang } from "@/lib/i18n"
+import { susStatementsFor } from "@/lib/sus"
 
 export default async function TestRunPage({
   params,
@@ -174,6 +175,7 @@ export default async function TestRunPage({
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
         howItWorks={study.howItWorks}
+        susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
         goalsByMission={goalsByMission}
         startNodeByMission={startNodeByMission}
         screenByNode={screenByNode}
@@ -187,6 +189,7 @@ export default async function TestRunPage({
       lang={lang}
       deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
       howItWorks={study.howItWorks}
+      susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
       screens={screens.map((s) => ({
         id: s.id,
         name: s.name,

@@ -1,6 +1,7 @@
 "use server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { Prisma } from "@/generated/prisma/client"
 import { supabase, removeStorageByUrls } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -75,6 +76,20 @@ export async function addSusBlockAction(studyId: string) {
   await prisma.block.create({
     data: { studyId: study.id, type: "sus", order: await nextBlockOrder(study.id) },
   })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+// Salva enunciados customizados do SUS (10). Passe null para voltar ao padrão.
+export async function updateSusStatementsAction(studyId: string, statements: string[] | null) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+  if (statements === null) {
+    await prisma.study.update({ where: { id: study.id }, data: { susStatements: Prisma.DbNull } })
+  } else {
+    const clean = statements.map((s) => s.trim())
+    if (clean.length !== 10 || clean.some((s) => !s)) throw new Error("SUS precisa de 10 enunciados.")
+    await prisma.study.update({ where: { id: study.id }, data: { susStatements: clean } })
+  }
   revalidatePath(`/studies/${studyId}`)
 }
 

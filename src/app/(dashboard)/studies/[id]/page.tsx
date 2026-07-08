@@ -19,6 +19,7 @@ import { deleteScreenAction, moveScreenAction } from "./actions"
 import { StudyBuilder, type BuilderBlock } from "@/components/study/builder/study-builder"
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
+import { susStatementsFor, SUS_STATEMENTS, SUS_OPTIONS } from "@/lib/sus"
 import {
   ArrowLeft,
   Trash2,
@@ -150,6 +151,7 @@ export default async function StudyPage({
     })),
   }))
   const builderFigmaKey = study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null
+  const susLang = (study.language ?? "pt") === "es" ? "es" : "pt"
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
   const editable = study.status !== "live"
@@ -329,6 +331,11 @@ export default async function StudyPage({
             blocks={builderBlocks}
             missionScreens={missionScreens}
             figmaFileKey={builderFigmaKey}
+            sus={{
+              statements: susStatementsFor(susLang, study.susStatements),
+              scaleOptions: SUS_OPTIONS[susLang],
+              defaultStatements: SUS_STATEMENTS[susLang],
+            }}
           />
         </TabsContent>
       </Tabs>

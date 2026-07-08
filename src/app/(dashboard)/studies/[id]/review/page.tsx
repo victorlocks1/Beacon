@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TestRunner, type Step } from "@/components/test/test-runner"
 import { type Lang } from "@/lib/i18n"
+import { susStatementsFor } from "@/lib/sus"
 import { CommentsBoard, type BoardComment } from "@/components/comments/comments-board"
 
 export default async function ReviewPage({
@@ -216,6 +217,7 @@ export default async function ReviewPage({
                   taskCount: missionCount,
                 }}
                 howItWorks={study.howItWorks}
+                susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
                 deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
                 screens={screens.map((s) => ({
                   id: s.id,

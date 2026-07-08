@@ -53,6 +53,7 @@ export function FigmaFlowRunner({
   steps,
   welcome,
   howItWorks,
+  susStatements,
   goalsByMission,
   startNodeByMission,
   screenByNode,
@@ -63,6 +64,7 @@ export function FigmaFlowRunner({
   steps: Step[]
   welcome: WelcomeInfo | null
   howItWorks: string | null
+  susStatements?: string[]
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
@@ -191,7 +193,7 @@ export function FigmaFlowRunner({
       }
       // No sucesso, dá um respiro (~1,2s) entre o clique-objetivo e o feedback,
       // para não trocar de tela bruscamente. Na desistência, imediato.
-      if (signal === "reached") setTimeout(() => setCompletion("reached"), 1200)
+      if (signal === "reached") setTimeout(() => setCompletion("reached"), 800)
       else setCompletion("gave_up")
       flush()
       fetch("/api/t/complete", {
@@ -432,7 +434,7 @@ export function FigmaFlowRunner({
       </div>
     )
   } else if (step.kind === "sus") {
-    content = <SusView lang={lang} onSubmit={submitSus} />
+    content = <SusView lang={lang} statements={susStatements} onSubmit={submitSus} />
   } else {
     // Missão: tarefa à esquerda, protótipo VIVO à direita. Ao concluir, o painel
     // esquerdo vira o feedback (com botão continuar) e o protótipo some.

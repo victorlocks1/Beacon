@@ -41,6 +41,19 @@ export const SUS_OPTIONS: Record<Lang, string[]> = {
   es: ["Totalmente en desacuerdo", "En desacuerdo", "Neutro", "De acuerdo", "Totalmente de acuerdo"],
 }
 
+// Resolve os enunciados: usa os customizados do estudo se válidos (10 não-vazios),
+// senão o padrão do idioma. Aceita Json vindo do banco.
+export function susStatementsFor(lang: Lang, custom: unknown): string[] {
+  if (
+    Array.isArray(custom) &&
+    custom.length === SUS_ITEM_COUNT &&
+    custom.every((s) => typeof s === "string" && s.trim())
+  ) {
+    return custom as string[]
+  }
+  return SUS_STATEMENTS[lang]
+}
+
 export const SUS_INTRO: Record<Lang, { title: string; body: string }> = {
   pt: {
     title: "Quase lá! Uma última avaliação",

@@ -42,6 +42,8 @@ interface Props {
   welcome?: WelcomeInfo | null
   // "Como funciona": tela extra após as boas-vindas, antes das tarefas.
   howItWorks?: string | null
+  // SUS: enunciados customizados (ausente = padrão do idioma).
+  susStatements?: string[]
 }
 
 interface BufferedEvent {
@@ -64,6 +66,7 @@ export function TestRunner({
   preview = false,
   welcome = null,
   howItWorks = null,
+  susStatements,
 }: Props) {
   const s = tt(lang)
   const [stepIndex, setStepIndex] = useState(0)
@@ -378,7 +381,7 @@ export function TestRunner({
     )
   } else if (step.kind === "sus") {
     // ─────────── SUS ───────────
-    content = <SusView lang={lang} onSubmit={submitSus} />
+    content = <SusView lang={lang} statements={susStatements} onSubmit={submitSus} />
   } else {
     // ─────────── Missão (tela dividida: tarefa | protótipo) ───────────
     content = (

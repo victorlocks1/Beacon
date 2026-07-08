@@ -10,14 +10,17 @@ import { tt, type Lang } from "@/lib/i18n"
 // Todas obrigatórias (padrão do método). Ao concluir, devolve os 10 valores 1..5.
 export function SusView({
   lang,
+  statements: customStatements,
   onSubmit,
 }: {
   lang: Lang
+  statements?: string[] // enunciados customizados; ausente = padrão do idioma
   onSubmit: (values: number[]) => void
 }) {
   const s = tt(lang)
   const l = (lang === "es" ? "es" : "pt") as "pt" | "es"
-  const statements = SUS_STATEMENTS[l]
+  const statements =
+    customStatements && customStatements.length === SUS_ITEM_COUNT ? customStatements : SUS_STATEMENTS[l]
   const options = SUS_OPTIONS[l]
   const intro = SUS_INTRO[l]
   const [values, setValues] = useState<(number | null)[]>(Array(SUS_ITEM_COUNT).fill(null))

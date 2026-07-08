@@ -23,6 +23,7 @@ import {
 import { MissionForm, type MissionInitial, type Screen as MissionFormScreen } from "@/components/mission/mission-form"
 import { WelcomeEditor } from "@/components/study/builder/welcome-editor"
 import { QuestionEditor, type QuestionInitial } from "@/components/study/builder/question-editor"
+import { SusEditor } from "@/components/study/builder/sus-editor"
 import {
   reorderBlocksAction,
   deleteMissionAction,
@@ -58,6 +59,7 @@ export function StudyBuilder({
   blocks,
   missionScreens,
   figmaFileKey,
+  sus,
 }: {
   studyId: string
   editable: boolean
@@ -66,6 +68,7 @@ export function StudyBuilder({
   blocks: BuilderBlock[]
   missionScreens: MissionFormScreen[]
   figmaFileKey: string | null
+  sus: { statements: string[]; scaleOptions: string[]; defaultStatements: string[] }
 }) {
   const router = useRouter()
   const [sel, setSel] = useState<Selection>("welcome")
@@ -341,19 +344,15 @@ export function StudyBuilder({
             initial={selectedBlock.initial}
           />
         ) : selectedBlock?.kind === "sus" ? (
-          <div className="space-y-3">
-            <h2 className="text-title-medium text-on-surface">Questionário SUS</h2>
-            <p className="text-body-medium text-on-surface-variant">
-              System Usability Scale — 10 afirmações padrão (escala 1–5), exibidas ao testador nesta
-              posição da sequência. As afirmações são fixas e não podem ser editadas. Vira uma nota
-              de 0 a 100 nos resultados.
-            </p>
-            {editable && (
-              <Button variant="outline" onClick={() => del(selectedBlock)}>
-                <Trash2 className="h-4 w-4 mr-2" /> Remover SUS
-              </Button>
-            )}
-          </div>
+          <SusEditor
+            studyId={studyId}
+            blockId={selectedBlock.id}
+            editable={editable}
+            statements={sus.statements}
+            scaleOptions={sus.scaleOptions}
+            defaultStatements={sus.defaultStatements}
+            onDeleted={() => setSel("welcome")}
+          />
         ) : (
           <p className="text-body-medium text-on-surface-variant">Selecione um bloco à esquerda.</p>
         )}
