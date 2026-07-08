@@ -99,7 +99,11 @@ export function FigmaFlowRunner({
   const completedRef = useRef(false)
   const startTimeRef = useRef(0)
   const interactedRef = useRef(false) // guarda p/ marcar o 1º clique uma vez
-  const lastMouseRef = useRef<{ t: number; x: number; y: number } | null>(null) // de-dup press/release
+  // press pendente: pareia press+release. Clique = quase sem movimento; arraste
+  // (scroll/swipe) = movimento grande → NÃO conta como clique.
+  const pendingPressRef = useRef<
+    { t: number; x: number; y: number; handled: boolean; nodeId: string | undefined } | null
+  >(null)
   // rastreador do caminho exato: por caminho esperado, progresso contíguo + se
   // manteve limpo (sem desvio). len = telas consecutivas certas a partir do início.
   const matchRef = useRef<{ steps: string[]; len: number; clean: boolean }[]>([])
@@ -252,49 +256,52 @@ export function FigmaFlowRunner({
       const ts = Math.round(now() - startTimeRef.current)
 
       if (d.type === "MOUSE_PRESS_OR_RELEASE") {
-        // O Figma dispara este evento no PRESS e no RELEASE (2x por clique) e
-        // não há campo p/ distinguir. De-dup: ignora o par (mesma posição num
-        // curto intervalo) para não dobrar clickCount nem os pontos do heatmap.
+        // Posição na VIEWPORT (relativa ao frame rolável ou ao nó). NÃO somamos o
+        // offset de scroll — o heatmap é sobre o frame na tela, e somar o offset
+        // jogava o ponto pra fora (canto) quando havia scroll horizontal.
         const pos =
           (d.data?.nearestScrollingFrameMousePosition as { x: number; y: number } | null) ??
           (d.data?.targetNodeMousePosition as { x: number; y: number } | null) ?? { x: 0, y: 0 }
+        const px = pos.x ?? 0
+        const py = pos.y ?? 0
         const tNow = now()
-        const last = lastMouseRef.current
-        lastMouseRef.current = { t: tNow, x: pos.x ?? 0, y: pos.y ?? 0 }
-        if (
-          last &&
-          tNow - last.t < 250 &&
-          Math.abs((pos.x ?? 0) - last.x) < 6 &&
-          Math.abs((pos.y ?? 0) - last.y) < 6
-        ) {
-          return // release do mesmo clique
-        }
+        const pending = pendingPressRef.current
 
-        clickCountRef.current += 1
-        // 1º clique da tarefa → revela o "Não consegui" (com fade suave)
-        if (!interactedRef.current) {
-          interactedRef.current = true
-          setInteracted(true)
-        }
-        const handled = d.data?.handled !== false
-        if (!handled) misclickCountRef.current += 1
-        // posição do clique na tela (best-effort). Preferimos a posição relativa
-        // ao frame rolável e somamos o offset de scroll (posição no conteúdo);
-        // sem frame rolável, caímos na posição relativa ao nó clicado.
-        const scr = screenByNode[d.data?.presentedNodeId as string]
-        if (scr) {
-          const usedScroll = !!d.data?.nearestScrollingFrameMousePosition
-          const off = d.data?.nearestScrollingFrameOffset as { x: number; y: number } | null
-          const px = (pos.x ?? 0) + (usedScroll ? off?.x ?? 0 : 0)
-          const py = (pos.y ?? 0) + (usedScroll ? off?.y ?? 0 : 0)
-          ourBufferRef.current.push({
-            missionId,
-            screenId: scr.id,
-            type: handled ? "click" : "misclick",
-            xNorm: clamp01(px / (scr.w || 1)),
-            yNorm: clamp01(py / (scr.h || 1)),
-            timestampMs: ts,
-          })
+        if (pending && tNow - pending.t < 600) {
+          // release do gesto iniciado em `pending`. Movimento grande = arraste
+          // (scroll/swipe) → descarta (não é clique).
+          pendingPressRef.current = null
+          if (Math.abs(px - pending.x) > 14 || Math.abs(py - pending.y) > 14) {
+            return
+          }
+          // é um clique de verdade → conta UMA vez, na posição do press
+          clickCountRef.current += 1
+          if (!interactedRef.current) {
+            interactedRef.current = true
+            setInteracted(true)
+          }
+          const handled = pending.handled
+          if (!handled) misclickCountRef.current += 1
+          const scr = pending.nodeId ? screenByNode[pending.nodeId] : undefined
+          if (scr) {
+            ourBufferRef.current.push({
+              missionId,
+              screenId: scr.id,
+              type: handled ? "click" : "misclick",
+              xNorm: clamp01(pending.x / (scr.w || 1)),
+              yNorm: clamp01(pending.y / (scr.h || 1)),
+              timestampMs: ts,
+            })
+          }
+        } else {
+          // início de um gesto (press): guarda e espera o release para decidir
+          pendingPressRef.current = {
+            t: tNow,
+            x: px,
+            y: py,
+            handled: d.data?.handled !== false,
+            nodeId: d.data?.presentedNodeId as string | undefined,
+          }
         }
       }
 
@@ -379,7 +386,7 @@ export function FigmaFlowRunner({
     pathRef.current = mission.startScreenId ? [mission.startScreenId] : []
     missionRef.current = mission.id
     startNodeRef.current = currentStartNode
-    lastMouseRef.current = null
+    pendingPressRef.current = null
     // inicializa o rastreador do caminho exato (início já conta como 1º passo)
     matchRef.current = (expectedPathsByMission[mission.id] ?? []).map((steps) => ({
       steps,
