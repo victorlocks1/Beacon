@@ -56,6 +56,7 @@ export function StudyBuilder({
   studyId,
   editable,
   deviceType,
+  initialSelection,
   welcome,
   thanks,
   blocks,
@@ -66,6 +67,7 @@ export function StudyBuilder({
   studyId: string
   editable: boolean
   deviceType: "desktop" | "tablet" | "mobile"
+  initialSelection?: string // bloco a abrir ao montar (ex.: após salvar a missão)
   welcome: { title: string | null; message: string | null; howItWorks: string | null; defaultTitle: string }
   thanks: { title: string | null; message: string | null; defaultTitle: string; defaultMessage: string }
   blocks: BuilderBlock[]
@@ -74,7 +76,10 @@ export function StudyBuilder({
   sus: { statements: string[]; scaleOptions: string[]; defaultStatements: string[] }
 }) {
   const router = useRouter()
-  const [sel, setSel] = useState<Selection>("welcome")
+  // Abre no bloco recém-salvo (se veio na URL e ainda existe); senão, boas-vindas.
+  const [sel, setSel] = useState<Selection>(
+    initialSelection && blocks.some((b) => b.id === initialSelection) ? initialSelection : "welcome"
+  )
   const [items, setItems] = useState(blocks)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()

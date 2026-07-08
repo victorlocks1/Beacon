@@ -33,10 +33,10 @@ export default async function StudyPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ error?: string; tab?: string }>
+  searchParams: Promise<{ error?: string; tab?: string; block?: string }>
 }) {
   const { id } = await params
-  const { error, tab } = await searchParams
+  const { error, tab, block } = await searchParams
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
@@ -322,6 +322,7 @@ export default async function StudyPage({
             studyId={study.id}
             editable={editable}
             deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+            initialSelection={block}
             welcome={{
               title: study.welcomeTitle,
               message: study.welcomeMessage,
