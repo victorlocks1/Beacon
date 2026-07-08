@@ -303,6 +303,22 @@ export default async function MissionResultsPage({
     count: number
     totalDuration: number
   }
+  // Sessões abandonadas (iniciaram, não concluíram nem desistiram, e encerraram):
+  // não têm MissionResult, mas TÊM caminho (eventos de navegação). Entram na
+  // análise para entender o que a pessoa tentou fazer.
+  const lostSessionIds = [...stateBySession.entries()]
+    .filter(([, st]) => st === "lost")
+    .map(([sid]) => sid)
+  // Duração aproximada (último evento) e misclicks das abandonadas, a partir dos eventos.
+  const lastEventMsBySession = new Map<string, number>()
+  const misclickBySession = new Map<string, number>()
+  for (const e of events) {
+    const t = Number(e.timestampMs)
+    if (t > (lastEventMsBySession.get(e.sessionId) ?? -1)) lastEventMsBySession.set(e.sessionId, t)
+    if (e.type === "misclick")
+      misclickBySession.set(e.sessionId, (misclickBySession.get(e.sessionId) ?? 0) + 1)
+  }
+
   const groupMap = new Map<string, PathGroup>()
   for (const r of results) {
     const bucket = outcomeBucket[r.outcome]
@@ -316,27 +332,54 @@ export default async function MissionResultsPage({
       groupMap.set(key, { bucket, path, count: 1, totalDuration: r.durationMs })
     }
   }
+  // caminhos das abandonadas → bucket "não concluído"
+  for (const sid of lostSessionIds) {
+    const path = pathFor(sid)
+    const key = `unfinished|${path.join(">")}`
+    const g = groupMap.get(key)
+    if (g) {
+      g.count++
+      g.totalDuration += lastEventMsBySession.get(sid) ?? 0
+    } else {
+      groupMap.set(key, {
+        bucket: "unfinished",
+        path,
+        count: 1,
+        totalDuration: lastEventMsBySession.get(sid) ?? 0,
+      })
+    }
+  }
   const bucketOrder = { direct: 0, indirect: 1, unfinished: 2 }
   const pathGroups = [...groupMap.values()].sort(
     (a, b) => bucketOrder[a.bucket] - bucketOrder[b.bucket] || b.count - a.count
   )
 
-  // ── Sessões individuais ──
-  const sessionRows = results.map((r) => {
-    const path = pathFor(r.sessionId)
-    return {
+  // ── Sessões individuais (inclui as abandonadas, com o caminho percorrido) ──
+  const thumbsFor = (path: string[]) =>
+    path
+      .slice(0, 4)
+      .map((sid) => screenById.get(sid)?.imageUrl)
+      .filter((u): u is string => !!u)
+  const sessionRows = [
+    ...results.map((r) => ({
       id: r.sessionId,
       label: `Testador ${testerNumber.get(r.sessionId) ?? "?"}`,
-      outcome: r.outcome,
       bucket: outcomeBucket[r.outcome],
+      badgeText: r.outcome === "given_up" ? "Desistiu" : undefined,
       durationMs: r.durationMs,
       misclickCount: r.misclickCount,
-      thumbs: path
-        .slice(0, 4)
-        .map((sid) => screenById.get(sid)?.imageUrl)
-        .filter((u): u is string => !!u),
-    }
-  })
+      thumbs: thumbsFor(pathFor(r.sessionId)),
+    })),
+    ...lostSessionIds.map((sid) => ({
+      id: sid,
+      label: `Testador ${testerNumber.get(sid) ?? "?"}`,
+      bucket: "unfinished" as const,
+      badgeText: "Abandonou",
+      durationMs: lastEventMsBySession.get(sid) ?? 0,
+      misclickCount: misclickBySession.get(sid) ?? 0,
+      thumbs: thumbsFor(pathFor(sid)),
+    })),
+  ]
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -591,7 +634,7 @@ export default async function MissionResultsPage({
                     </p>
                   </div>
                   <Badge variant={bucketColor[row.bucket]}>
-                    {bucketLabel[row.bucket]}
+                    {row.badgeText ?? bucketLabel[row.bucket]}
                   </Badge>
                 </div>
               ))}
