@@ -158,17 +158,17 @@ export default async function StudyPage({
   const activeTab = tab === "missions" ? "missions" : "prototype"
 
   return (
-    <div className="max-w-[1500px] mx-auto">
+    <div className="max-w-[1500px] mx-auto lg:h-[calc(100svh-8rem)] lg:flex lg:flex-col lg:min-h-0">
       <Suspense fallback={null}>
         <MissionSavedToast />
       </Suspense>
       {error && (
-        <div className="mb-6 rounded-2xl border border-error/30 bg-error-container px-5 py-4 text-body-medium text-on-error-container">
+        <div className="mb-6 rounded-2xl border border-error/30 bg-error-container px-5 py-4 text-body-medium text-on-error-container lg:shrink-0">
           {decodeURIComponent(error)}
         </div>
       )}
       {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
+      <div className="flex items-center gap-3 mb-8 lg:shrink-0">
         <Link href={`/projects/${study.projectId}`} className={buttonVariants({ variant: "ghost", size: "icon" })}>
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -189,15 +189,15 @@ export default async function StudyPage({
       </div>
 
       {!editable && (
-        <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container px-5 py-4 text-body-medium text-on-surface-variant">
+        <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container px-5 py-4 text-body-medium text-on-surface-variant lg:shrink-0">
           Estudo <strong className="text-on-surface font-medium">ao vivo</strong> — a edição está bloqueada para não
           distorcer os resultados. Use <strong className="text-on-surface font-medium">Encerrar</strong> para fazer
           alterações.
         </div>
       )}
 
-      <Tabs defaultValue={activeTab}>
-        <div className="mb-8">
+      <Tabs defaultValue={activeTab} className="lg:flex-1 lg:min-h-0">
+        <div className="mb-8 lg:shrink-0">
           <TabsList>
             <TabsTrigger value="prototype">Protótipo</TabsTrigger>
             <TabsTrigger value="missions">Missões</TabsTrigger>
@@ -205,7 +205,7 @@ export default async function StudyPage({
         </div>
 
         {/* ── Protótipo ── */}
-        <TabsContent value="prototype">
+        <TabsContent value="prototype" className="lg:min-h-0 lg:overflow-y-auto subtle-scroll">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-title-medium text-on-surface">
               {screens.length} {screens.length === 1 ? "tela" : "telas"}
@@ -317,7 +317,7 @@ export default async function StudyPage({
         </TabsContent>
 
         {/* ── Sequência (builder em 3 colunas: blocos · editor · preview) ── */}
-        <TabsContent value="missions">
+        <TabsContent value="missions" className="lg:min-h-0">
           <StudyBuilder
             studyId={study.id}
             editable={editable}

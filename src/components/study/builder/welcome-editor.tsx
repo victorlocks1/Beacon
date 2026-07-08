@@ -57,7 +57,7 @@ export function WelcomeEditor({
         </p>
       </div>
 
-      <fieldset disabled={!editable} className="space-y-5 disabled:opacity-60">
+      <fieldset disabled={!editable} className="space-y-5 pb-2 disabled:opacity-60">
         <div className="space-y-1.5">
           <M3TextField label="Título" value={t} onChange={(e) => setT(e.target.value)} />
           <p className="text-body-small text-on-surface-variant px-1">
