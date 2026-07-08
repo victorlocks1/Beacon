@@ -62,11 +62,6 @@ export default async function TestEntryPage({
               {study.welcomeMessage || s.welcomeIntro}
             </p>
           </div>
-          <form action={start} className="flex justify-end">
-            <SubmitButton size="lg" fullWidth={false} className="h-12 px-8">
-              {s.start}
-            </SubmitButton>
-          </form>
         </div>
 
         {/* Como funciona (à direita, separado) */}
@@ -79,6 +74,13 @@ export default async function TestEntryPage({
             <p className="text-body-medium text-on-surface-variant whitespace-pre-wrap">{howItWorks}</p>
           </div>
         )}
+
+        {/* Botão no rodapé direito do card (abaixo das duas colunas) */}
+        <form action={start} className={"flex justify-end " + (howItWorks ? "md:col-span-2" : "mt-8")}>
+          <SubmitButton size="lg" fullWidth={false} className="h-12 px-8">
+            {s.start}
+          </SubmitButton>
+        </form>
       </div>
     </div>
   )
