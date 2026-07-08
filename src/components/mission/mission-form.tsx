@@ -73,9 +73,10 @@ interface Props {
   figmaFileKey?: string | null // presente => protótipo vivo do Figma (grava caminho no embed)
   missionId?: string // presente => modo edição
   initial?: MissionInitial
+  stickyFooter?: boolean // no builder: botão salvar fixo no rodapé
 }
 
-export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missionId, initial }: Props) {
+export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missionId, initial, stickyFooter = false }: Props) {
   // Estudos do Figma gravam o caminho no protótipo vivo (embed); manuais usam o player de imagem.
   const canEmbed = !!figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
   const isEdit = !!missionId
@@ -345,10 +346,17 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
         <p className="text-body-small text-error px-1">{err}</p>
       )}
 
-      <Button onClick={submit} disabled={pending} className="w-full h-12">
-        {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-        {isEdit ? "Salvar alterações" : "Criar missão"}
-      </Button>
+      <div
+        className={cn(
+          stickyFooter &&
+            "sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface border-t border-outline-variant"
+        )}
+      >
+        <Button onClick={submit} disabled={pending} className="w-full h-12">
+          {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          {isEdit ? "Salvar alterações" : "Criar missão"}
+        </Button>
+      </div>
     </div>
   )
 }

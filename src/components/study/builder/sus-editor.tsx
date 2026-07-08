@@ -144,26 +144,28 @@ export function SusEditor({
         ))}
       </div>
 
-      {editing ? (
-        <div className="flex items-center gap-2">
-          <Button onClick={save} disabled={pending}>
-            {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Salvar
-          </Button>
-          <Button variant="ghost" onClick={() => { setVals(statements); setEditing(false) }} disabled={pending}>
-            Cancelar
-          </Button>
-          <Button variant="ghost" onClick={restore} disabled={pending} className="ml-auto text-on-surface-variant">
-            <RotateCcw className="h-4 w-4 mr-1.5" />
-            Restaurar padrão
-          </Button>
+      {editable && (
+        <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface border-t border-outline-variant">
+          {editing ? (
+            <div className="flex items-center gap-2">
+              <Button onClick={save} disabled={pending}>
+                {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Salvar alterações
+              </Button>
+              <Button variant="ghost" onClick={() => { setVals(statements); setEditing(false) }} disabled={pending}>
+                Cancelar
+              </Button>
+              <Button variant="ghost" onClick={restore} disabled={pending} className="ml-auto text-on-surface-variant">
+                <RotateCcw className="h-4 w-4 mr-1.5" />
+                Restaurar padrão
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" onClick={del} disabled={pending} className="text-on-surface-variant">
+              <Trash2 className="h-4 w-4 mr-2" /> Remover SUS
+            </Button>
+          )}
         </div>
-      ) : (
-        editable && (
-          <Button variant="outline" onClick={del} disabled={pending} className="text-on-surface-variant">
-            <Trash2 className="h-4 w-4 mr-2" /> Remover SUS
-          </Button>
-        )
       )}
     </div>
   )

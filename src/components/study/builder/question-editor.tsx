@@ -173,13 +173,16 @@ export function QuestionEditor({
           <span className="text-body-medium text-on-surface">Resposta obrigatória</span>
         </label>
 
-        {editable && (
+      </fieldset>
+
+      {editable && (
+        <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface border-t border-outline-variant">
           <Button onClick={save} disabled={!canSave} className="h-12 px-8">
             {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {questionId ? "Salvar" : "Adicionar pergunta"}
+            {questionId ? "Salvar alterações" : "Adicionar pergunta"}
           </Button>
-        )}
-      </fieldset>
+        </div>
+      )}
     </div>
   )
 }

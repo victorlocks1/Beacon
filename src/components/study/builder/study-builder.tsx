@@ -223,7 +223,7 @@ export function StudyBuilder({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 lg:h-[calc(100dvh-220px)]">
       {/* ── Coluna 1: lista de blocos (rola por dentro) ── */}
-      <div className="space-y-2 lg:h-full lg:overflow-y-auto lg:pr-1 subtle-scroll">
+      <div className="space-y-2 lg:h-full lg:overflow-y-auto lg:pr-1 no-scrollbar">
         <Row id="welcome" icon={Sparkles} label="Boas-vindas" sub="Tela inicial" />
 
         {items.map((b, i) =>
@@ -299,7 +299,7 @@ export function StudyBuilder({
       </div>
 
       {/* ── Coluna 2: editor (altura fixa + rolagem interna → sem "pulo") ── */}
-      <div className="rounded-2xl border border-outline-variant bg-surface p-6 min-h-[400px] lg:min-h-0 lg:h-full lg:overflow-y-auto subtle-scroll">
+      <div className="rounded-2xl border border-outline-variant bg-surface p-6 min-h-[400px] lg:min-h-0 lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
         {sel === "welcome" ? (
           <WelcomeEditor
             studyId={studyId}
@@ -322,6 +322,7 @@ export function StudyBuilder({
             deviceType={deviceType}
             screens={missionScreens}
             figmaFileKey={figmaFileKey}
+            stickyFooter
           />
         ) : sel === "new-question" ? (
           <QuestionEditor studyId={studyId} editable={editable} onSaved={() => setSel("welcome")} />
@@ -334,6 +335,7 @@ export function StudyBuilder({
             deviceType={deviceType}
             screens={missionScreens}
             figmaFileKey={figmaFileKey}
+            stickyFooter
           />
         ) : selectedBlock?.kind === "question" ? (
           <QuestionEditor
