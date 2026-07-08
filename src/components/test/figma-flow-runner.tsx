@@ -329,18 +329,27 @@ export function FigmaFlowRunner({
           }
 
           if (successTypeByMission[missionId] === "path") {
-            // CAMINHO EXATO: conclui só quando a sequência exata é percorrida de
-            // forma contígua. Direto = sem desvio; indireto = vagou e depois fez.
+            // CAMINHO EXATO: o SUCESSO é alcançar a tela-objetivo (última tela do
+            // caminho definido), por qualquer rota. O caminho exato só classifica:
+            //  • Direto   = percorreu o caminho exato inteiro, em ordem, sem desvio.
+            //  • Indireto = desviou/vagou (abriu um bottomsheet, foi a outra tela…)
+            //               mas ainda assim chegou na tela-objetivo.
+            // Antes exigíamos a sequência contígua e um desvio "perdia" o caminho —
+            // então voltar e clicar na tela de sucesso não contava. Agora conta.
             if (changed) {
               for (const m of matchRef.current) {
+                if (m.steps.length === 0) continue
+                const goalId = m.steps[m.steps.length - 1]
+                // avança no caminho exato enquanto a próxima tela esperada é atingida
                 if (scr.id === m.steps[m.len]) {
                   m.len++
                 } else {
+                  // saiu da sequência exata → não é mais "direto" (mas segue valendo)
                   m.clean = false
-                  m.len = scr.id === m.steps[0] ? 1 : 0
                 }
-                if (m.steps.length > 0 && m.len === m.steps.length) {
-                  completeMission("reached", m.clean ? "direct" : "indirect")
+                if (scr.id === goalId) {
+                  const direct = m.clean && m.len === m.steps.length
+                  completeMission("reached", direct ? "direct" : "indirect")
                   break
                 }
               }
