@@ -183,7 +183,7 @@ export default async function TestRunPage({
         steps={testSteps}
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
-        howItWorks={study.howItWorks}
+        howItWorks={null} /* Como funciona agora fica na tela de boas-vindas (entry) */
         susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
         goalsByMission={goalsByMission}
         startNodeByMission={startNodeByMission}
@@ -199,7 +199,7 @@ export default async function TestRunPage({
       token={token}
       lang={lang}
       deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-      howItWorks={study.howItWorks}
+      howItWorks={null} /* Como funciona agora fica na tela de boas-vindas (entry) */
       susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
       screens={screens.map((s) => ({
         id: s.id,
