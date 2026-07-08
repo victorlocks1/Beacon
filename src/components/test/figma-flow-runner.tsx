@@ -516,7 +516,7 @@ export function FigmaFlowRunner({
           {!completion && (
             <div
               className={
-                "relative bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[85vh] max-w-full " +
+                "relative bg-white rounded-[28px] overflow-hidden transition-opacity duration-300 aspect-[9/20] h-[85vh] max-w-full " +
                 (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
               }
               aria-hidden={!taskStarted}
