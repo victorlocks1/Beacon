@@ -149,9 +149,6 @@ export default async function StudyPage({
       targetScreenId: h.targetScreenId,
     })),
   }))
-  const previewScreens = screens.map((sc) => ({ id: sc.id, name: sc.name, imageUrl: sc.imageUrl }))
-  const startNodeByScreen: Record<string, string | null> = {}
-  for (const sc of screens) startNodeByScreen[sc.id] = sc.figmaNodeId ?? null
   const builderFigmaKey = study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
@@ -332,8 +329,6 @@ export default async function StudyPage({
             blocks={builderBlocks}
             missionScreens={missionScreens}
             figmaFileKey={builderFigmaKey}
-            previewScreens={previewScreens}
-            startNodeByScreen={startNodeByScreen}
           />
         </TabsContent>
       </Tabs>

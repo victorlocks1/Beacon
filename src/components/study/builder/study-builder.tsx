@@ -23,7 +23,6 @@ import {
 import { MissionForm, type MissionInitial, type Screen as MissionFormScreen } from "@/components/mission/mission-form"
 import { WelcomeEditor } from "@/components/study/builder/welcome-editor"
 import { QuestionEditor, type QuestionInitial } from "@/components/study/builder/question-editor"
-import { BuilderPreview } from "@/components/study/builder/builder-preview"
 import {
   reorderBlocksAction,
   deleteMissionAction,
@@ -59,8 +58,6 @@ export function StudyBuilder({
   blocks,
   missionScreens,
   figmaFileKey,
-  previewScreens,
-  startNodeByScreen,
 }: {
   studyId: string
   editable: boolean
@@ -69,8 +66,6 @@ export function StudyBuilder({
   blocks: BuilderBlock[]
   missionScreens: MissionFormScreen[]
   figmaFileKey: string | null
-  previewScreens: { id: string; name: string; imageUrl: string }[]
-  startNodeByScreen: Record<string, string | null>
 }) {
   const router = useRouter()
   const [sel, setSel] = useState<Selection>("welcome")
@@ -144,10 +139,6 @@ export function StudyBuilder({
   }
 
   const hasSus = items.some((b) => b.kind === "sus")
-
-  // node-id de partida do preview (frame da missão selecionada, se houver)
-  const previewStart =
-    selectedBlock?.kind === "mission" ? startNodeByScreen[selectedBlock.startScreenId] ?? null : null
 
   // ── item da lista ──
   function Row({
@@ -227,7 +218,7 @@ export function StudyBuilder({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
       {/* ── Coluna 1: lista de blocos ── */}
       <div className="space-y-2">
         <Row id="welcome" icon={Sparkles} label="Boas-vindas" sub="Tela inicial" />
@@ -366,11 +357,6 @@ export function StudyBuilder({
         ) : (
           <p className="text-body-medium text-on-surface-variant">Selecione um bloco à esquerda.</p>
         )}
-      </div>
-
-      {/* ── Coluna 3: preview ── */}
-      <div className="hidden xl:block">
-        <BuilderPreview fileKey={figmaFileKey} startNodeId={previewStart} screens={previewScreens} />
       </div>
     </div>
   )
