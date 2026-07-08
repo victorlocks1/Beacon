@@ -108,6 +108,33 @@ export async function updateSusStatementsAction(studyId: string, statements: str
   revalidatePath(`/studies/${studyId}`)
 }
 
+// Gera (uma vez) e retorna o código curto do link do testador: /t/<code>.
+export async function ensureTesterCodeAction(studyId: string): Promise<{ code: string }> {
+  const { study } = await getStudyOrThrow(studyId)
+  const existing = await prisma.study.findUnique({
+    where: { id: study.id },
+    select: { testerCode: true },
+  })
+  if (existing?.testerCode) return { code: existing.testerCode }
+
+  const alphabet = "abcdefghijkmnpqrstuvwxyz23456789" // sem 0/o/1/l (ambíguos)
+  const gen = () =>
+    Array.from({ length: 7 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("")
+
+  for (let i = 0; i < 8; i++) {
+    const code = gen()
+    const taken = await prisma.study.findUnique({ where: { testerCode: code }, select: { id: true } })
+    if (taken) continue
+    try {
+      await prisma.study.update({ where: { id: study.id }, data: { testerCode: code } })
+      return { code }
+    } catch {
+      // colisão de corrida no unique → tenta outro
+    }
+  }
+  throw new Error("Não foi possível gerar o código do link.")
+}
+
 // Converte "tempo ideal" (segundos, do form) em ms; vazio/0/negativo → null (usa KLM).
 function normalizeIdealTime(ms: number | null | undefined): number | null {
   return typeof ms === "number" && ms > 0 ? Math.round(ms) : null

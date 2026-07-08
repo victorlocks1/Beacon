@@ -57,6 +57,8 @@ model Study {
   susStatements  Json?
   // Código de compartilhamento (link) para o time interno entrar como membro
   shareCode  String?     @unique
+  // Código curto do link do testador (URL encurtada): /t/<testerCode>
+  testerCode String?     @unique
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   prototype  Prototype?

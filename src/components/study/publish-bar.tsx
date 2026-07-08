@@ -6,6 +6,7 @@ import {
   publishStudyAction,
   closeStudyAction,
   reopenStudyAction,
+  ensureTesterCodeAction,
 } from "@/app/(dashboard)/studies/[id]/actions"
 import { Rocket, Copy, Check, Lock, RotateCw, Loader2 } from "lucide-react"
 
@@ -22,7 +23,15 @@ export function PublishBar({ studyId, status, canPublish }: Props) {
   const [copied, setCopied] = useState(false)
 
   async function copyLink() {
-    const url = `${window.location.origin}/t/${studyId}`
+    // Link curto: /t/<código>. Gera o código na 1ª vez; cai no id se falhar.
+    let path = `/t/${studyId}`
+    try {
+      const { code } = await ensureTesterCodeAction(studyId)
+      path = `/t/${code}`
+    } catch {
+      /* mantém o link completo */
+    }
+    const url = `${window.location.origin}${path}`
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url)

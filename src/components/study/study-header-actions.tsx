@@ -15,6 +15,7 @@ import {
   publishStudyAction,
   closeStudyAction,
   reopenStudyAction,
+  ensureTesterCodeAction,
 } from "@/app/(dashboard)/studies/[id]/actions"
 import { cn } from "@/lib/utils"
 import {
@@ -51,19 +52,31 @@ export function StudyHeaderActions({
   const [copied, setCopied] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
 
-  function copyTesterLink() {
-    const url = `${window.location.origin}/t/${studyId}`
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard
-        .writeText(url)
-        .then(() => {
-          setCopied(true)
-          setTimeout(() => setCopied(false), 2000)
-        })
-        .catch(() => window.prompt("Copie o link do teste:", url))
-    } else {
+  async function writeClipboard(url: string) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+      } else {
+        window.prompt("Copie o link do teste:", url)
+        return
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
       window.prompt("Copie o link do teste:", url)
     }
+  }
+
+  async function copyTesterLink() {
+    // Link curto: /t/<código>. Gera o código na 1ª vez; cai no id se falhar.
+    let path = `/t/${studyId}`
+    try {
+      const { code } = await ensureTesterCodeAction(studyId)
+      path = `/t/${code}`
+    } catch {
+      /* mantém o link completo */
+    }
+    await writeClipboard(`${window.location.origin}${path}`)
   }
 
   return (

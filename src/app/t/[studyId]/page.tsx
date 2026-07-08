@@ -14,8 +14,9 @@ export default async function TestEntryPage({
   const { studyId } = await params
   const { live } = await searchParams
 
-  const study = await prisma.study.findUnique({
-    where: { id: studyId },
+  // Aceita o id do estudo OU o código curto (URL encurtada: /t/<testerCode>).
+  const study = await prisma.study.findFirst({
+    where: { OR: [{ id: studyId }, { testerCode: studyId }] },
     include: {
       blocks: { where: { type: "mission" } },
     },
@@ -36,7 +37,7 @@ export default async function TestEntryPage({
     )
   }
 
-  const start = startSessionAction.bind(null, studyId, live === "1")
+  const start = startSessionAction.bind(null, study.id, live === "1")
   const howItWorks = study.howItWorks?.trim()
 
   return (
