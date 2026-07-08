@@ -330,16 +330,21 @@ export function FigmaFlowRunner({
 
           if (successTypeByMission[missionId] === "path") {
             // CAMINHO EXATO: o SUCESSO é alcançar a tela-objetivo (última tela do
-            // caminho definido), por qualquer rota. O caminho exato só classifica:
+            // caminho definido) PELA CONEXÃO do caminho — ou seja, a última
+            // transição precisa vir da tela que antecede a objetivo no caminho
+            // exato. Isso separa:
             //  • Direto   = percorreu o caminho exato inteiro, em ordem, sem desvio.
             //  • Indireto = desviou/vagou (abriu um bottomsheet, foi a outra tela…)
-            //               mas ainda assim chegou na tela-objetivo.
-            // Antes exigíamos a sequência contígua e um desvio "perdia" o caminho —
-            // então voltar e clicar na tela de sucesso não contava. Agora conta.
+            //               mas voltou e entrou na objetivo pela conexão do caminho.
+            //  • Não conta = chegou na objetivo por uma rota totalmente diferente
+            //               (ex.: outra lista X→Y→objetivo) — a conexão final não é
+            //               a do caminho exato definido.
             if (changed) {
+              const prevScreen = pathRef.current[pathRef.current.length - 2]
               for (const m of matchRef.current) {
-                if (m.steps.length === 0) continue
+                if (m.steps.length < 2) continue
                 const goalId = m.steps[m.steps.length - 1]
+                const predecessor = m.steps[m.steps.length - 2]
                 // avança no caminho exato enquanto a próxima tela esperada é atingida
                 if (scr.id === m.steps[m.len]) {
                   m.len++
@@ -347,7 +352,8 @@ export function FigmaFlowRunner({
                   // saiu da sequência exata → não é mais "direto" (mas segue valendo)
                   m.clean = false
                 }
-                if (scr.id === goalId) {
+                // conclui só se entrou na objetivo pela conexão do caminho exato
+                if (scr.id === goalId && prevScreen === predecessor) {
                   const direct = m.clean && m.len === m.steps.length
                   completeMission("reached", direct ? "direct" : "indirect")
                   break
