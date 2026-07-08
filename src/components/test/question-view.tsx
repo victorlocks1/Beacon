@@ -102,7 +102,7 @@ export function QuestionView({
 
       {question.type === "rating" && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
@@ -113,7 +113,7 @@ export function QuestionView({
               >
                 <Star
                   className={cn(
-                    "h-9 w-9 transition-colors",
+                    "h-12 w-12 transition-colors",
                     n <= rating ? "text-amber-400" : "text-outline-variant"
                   )}
                   fill={n <= rating ? "currentColor" : "none"}

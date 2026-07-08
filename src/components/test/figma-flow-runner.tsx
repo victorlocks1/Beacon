@@ -625,14 +625,14 @@ export function FigmaFlowRunner({
 
                   {/* Pergunta de estrelas embutida (próximo passo) — poupa 1 clique */}
                   {inlineRatingQ && (
-                    <div className="space-y-2 pt-1">
-                      <p className="text-title-small text-on-surface">{inlineRatingQ.title}</p>
+                    <div className="space-y-2.5 pt-1">
+                      <p className="text-title-medium text-on-surface">{inlineRatingQ.title}</p>
                       {inlineRatingQ.description && (
                         <p className="text-body-medium text-on-surface-variant">
                           {inlineRatingQ.description}
                         </p>
                       )}
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex items-center gap-2.5 pt-1">
                         {[1, 2, 3, 4, 5].map((n) => (
                           <button
                             key={n}
@@ -643,7 +643,7 @@ export function FigmaFlowRunner({
                           >
                             <Star
                               className={cn(
-                                "h-9 w-9 transition-colors",
+                                "h-12 w-12 transition-colors",
                                 n <= inlineRating ? "text-amber-400" : "text-outline-variant"
                               )}
                               fill={n <= inlineRating ? "currentColor" : "none"}
