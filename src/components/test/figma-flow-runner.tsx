@@ -36,12 +36,12 @@ interface OurEvent {
 
 const VALID = new Set<string>(FIGMA_EVENT_TYPES)
 
-// Zoom no embed para cortar a moldura (device frame) do Figma. 1 = sem recorte;
-// >1 amplia e o overflow-hidden do quadro corta a borda preta. Ajuste fino aqui.
-const FRAME_CROP = 1.3
-// Fração do excesso vertical cortada do TOPO (o resto sai de baixo). 0.5 =
-// centralizado; menor = corta menos o topo (evita comer o topo do protótipo).
-const FRAME_CROP_TOP = 0.32
+// Zoom no embed. 1 = sem recorte (protótipo SEM device frame no Figma → a tela
+// 9:20 preenche o quadro 9:20 exatamente, sem preto e sem cortar as laterais).
+// Só aumente se o protótipo tiver moldura no Figma (o certo é Device: None lá).
+const FRAME_CROP = 1.0
+// Fração do excesso vertical cortada do TOPO (só relevante com FRAME_CROP > 1).
+const FRAME_CROP_TOP = 0.3
 
 // Runner do protótipo VIVO do Figma no fluxo completo: boas-vindas → tarefas
 // (painel + embed) → perguntas → obrigado. Captura os eventos da Embed API
@@ -516,7 +516,7 @@ export function FigmaFlowRunner({
           {!completion && (
             <div
               className={
-                "relative bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[88vh] max-w-full " +
+                "relative bg-white rounded-[28px] overflow-hidden shadow-lg transition-opacity duration-300 aspect-[9/20] h-[85vh] max-w-full " +
                 (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
               }
               aria-hidden={!taskStarted}
