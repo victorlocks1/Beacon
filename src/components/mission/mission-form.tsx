@@ -349,7 +349,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
       <div
         className={cn(
           stickyFooter &&
-            "sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface border-t border-outline-variant"
+            "sticky bottom-0 -mx-6 px-6 py-4 bg-surface border-t border-outline-variant"
         )}
       >
         <Button onClick={submit} disabled={pending} className="w-full h-12">

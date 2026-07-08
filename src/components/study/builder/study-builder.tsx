@@ -299,7 +299,7 @@ export function StudyBuilder({
       </div>
 
       {/* ── Coluna 2: editor (altura fixa + rolagem interna → sem "pulo") ── */}
-      <div className="rounded-2xl border border-outline-variant bg-surface p-6 min-h-[400px] lg:min-h-0 lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
+      <div className="rounded-2xl border border-outline-variant bg-surface px-6 pt-6 pb-0 min-h-[400px] lg:min-h-0 lg:h-full lg:overflow-y-auto overflow-x-hidden no-scrollbar">
         {sel === "welcome" ? (
           <WelcomeEditor
             studyId={studyId}

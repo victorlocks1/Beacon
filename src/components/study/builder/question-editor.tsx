@@ -176,7 +176,7 @@ export function QuestionEditor({
       </fieldset>
 
       {editable && (
-        <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface border-t border-outline-variant">
+        <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-surface border-t border-outline-variant">
           <Button onClick={save} disabled={!canSave} className="h-12 px-8">
             {pending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {questionId ? "Salvar alterações" : "Adicionar pergunta"}

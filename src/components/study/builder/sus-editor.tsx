@@ -145,7 +145,7 @@ export function SusEditor({
       </div>
 
       {editable && (
-        <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface border-t border-outline-variant">
+        <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-surface border-t border-outline-variant">
           {editing ? (
             <div className="flex items-center gap-2">
               <Button onClick={save} disabled={pending}>
