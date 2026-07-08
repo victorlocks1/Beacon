@@ -125,7 +125,11 @@ export default async function MissionResultsPage({
   // As taxas somam 100% sobre as sessões ENCERRADAS (concluída + indireta +
   // declarada + perdida).
   const ended = counts.completed + counts.indirect + counts.declared + counts.lost
-  const completionRate = ended ? (counts.completed / ended) * 100 : 0
+  // SUCESSO = concluiu a tarefa = DIRETO + INDIRETO (ambos completaram o caminho
+  // exato; direto = limpo, indireto = vagou antes). Só desistiu/perdida = falha.
+  const successCount = counts.completed + counts.indirect
+  const completionRate = ended ? (successCount / ended) * 100 : 0
+  const directRate = ended ? (counts.completed / ended) * 100 : 0
   const indirectRate = ended ? (counts.indirect / ended) * 100 : 0
   const declaredRate = ended ? (counts.declared / ended) * 100 : 0
   const lostRate = ended ? (counts.lost / ended) * 100 : 0
@@ -321,38 +325,26 @@ export default async function MissionResultsPage({
         </div>
       ) : (
         <div className="space-y-8">
-          {/* Desfecho — as taxas somam 100% das sessões encerradas */}
+          {/* ── Destaques: taxa de sucesso + tempo na tarefa (as 2 principais) ── */}
           <div>
-            <div className={"grid gap-3 " + (isPath ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3")}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Kpi
+                big
                 label="Conclusão"
                 value={formatPct(completionRate)}
-                sub={`${counts.completed} de ${ended}`}
+                sub={`${successCount} de ${ended} concluíram`}
                 info={
                   isPath
-                    ? "Sucesso no caminho exato: participantes que seguiram FIELMENTE o caminho esperado até a tela final. Chegar por outro caminho conta como 'Caminho indireto', não como conclusão. Denominador = sessões encerradas."
-                    : "Percentual de participantes que chegaram na tela-objetivo da tarefa. Denominador = sessões encerradas (concluídas + desistências + perdidas)."
+                    ? "Sucesso = concluiu a tarefa percorrendo o caminho exato — DIRETO (limpo) ou INDIRETO (vagou e depois completou). Ambos contam como conclusão. Chegar na tela final SEM percorrer o caminho exato não conta. Denominador = sessões encerradas."
+                    : "Participantes que chegaram na tela-objetivo da tarefa. Denominador = sessões encerradas (concluídas + desistências + perdidas)."
                 }
               />
-              {isPath && (
-                <Kpi
-                  label="Caminho indireto"
-                  value={formatPct(indirectRate)}
-                  sub={`${counts.indirect} de ${ended}`}
-                  info="Chegou na tela final, mas NÃO pelo caminho exato definido. No caminho exato isso não conta como sucesso."
-                />
-              )}
               <Kpi
-                label="Desistência declarada"
-                value={formatPct(declaredRate)}
-                sub={`${counts.declared} de ${ended}`}
-                info="Participantes que clicaram em 'Desistir' — declararam que não conseguiram concluir a tarefa."
-              />
-              <Kpi
-                label="Perdida"
-                value={formatPct(lostRate)}
-                sub={`${counts.lost} de ${ended}`}
-                info="Abandono silencioso: iniciou a tarefa mas não concluiu nem desistiu, e a sessão foi encerrada (fim do teste ou inatividade acima de 30 min)."
+                big
+                label="Duração na tarefa"
+                value={completeDurations.length ? formatDuration(medComplete) : "—"}
+                sub={completeDurations.length ? `mediana de ${completeDurations.length} · concluíram` : "sem conclusões"}
+                info="Tempo MEDIANO da tarefa entre quem concluiu. Mediana porque tempos têm outliers — mais fiel que a média (padrão NN/G)."
               />
             </div>
             {counts.open > 0 && (
@@ -362,45 +354,70 @@ export default async function MissionResultsPage({
             )}
           </div>
 
-          {/* Esforço */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Kpi
-              label="Duração — concluíram"
-              value={completeDurations.length ? formatDuration(medComplete) : "—"}
-              sub={completeDurations.length ? `mediana de ${completeDurations.length}` : "sem conclusões"}
-              info="Tempo MEDIANO da tarefa entre quem concluiu (direto ou indireto). Mediana porque tempos têm outliers — mais fiel que a média (padrão NN/G)."
-            />
-            <Kpi
-              label="Duração — não concl."
-              value={failDurations.length ? formatDuration(medFail) : "—"}
-              sub={failDurations.length ? `mediana · desistiram` : "sem desistências"}
-              info="Tempo mediano de quem DESISTIU. As sessões 'perdidas' não têm duração registrada, então não entram aqui."
-            />
-            <Kpi
-              label="Tempo até 1º toque"
-              value={clickers ? formatDuration(medFirstTap) : "—"}
-              sub={clickers ? `mediana de ${clickers}` : "sem cliques"}
-              info="Tempo (mediana) do início da tarefa até o primeiro clique. Só de quem clicou (quem nunca clicou é reportado à parte). Um 1º toque no caminho certo prevê ~2x mais sucesso (Bailey & Wolfson)."
-            />
-            <Kpi
-              label="Misclick rate"
-              value={formatPct(misclickRate)}
-              info="Percentual de cliques que caíram fora de uma área clicável (erro de alvo), sobre o total de cliques."
-            />
-            <Kpi
-              label="Nunca clicaram"
-              value={String(neverClicked)}
-              sub="não têm 1º toque"
-              info="Quantos participantes iniciaram a tarefa e não deram nenhum clique."
-            />
-            {isPath && lostnessVals.length > 0 && (
+          {/* ── Métricas de apoio (cards menores) ── */}
+          <div>
+            <p className="text-label-medium text-on-surface-variant mb-3">MÉTRICAS DE APOIO</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {isPath && (
+                <Kpi
+                  label="Direto"
+                  value={formatPct(directRate)}
+                  sub={`${counts.completed} de ${ended}`}
+                  info="Concluiu seguindo o caminho exato LIMPO, sem desvios. É parte da Conclusão."
+                />
+              )}
+              {isPath && (
+                <Kpi
+                  label="Indireto"
+                  value={formatPct(indirectRate)}
+                  sub={`${counts.indirect} de ${ended}`}
+                  info="Concluiu o caminho exato, mas VAGOU por outras telas antes. Também é sucesso (entra na Conclusão), só não foi direto."
+                />
+              )}
               <Kpi
-                label="Lostness"
-                value={medLostness.toFixed(2)}
-                sub={lostBand.label}
-                info="Métrica de 'perdido' (Smith, 1996 / NN/G): 0 = caminho perfeito; < 0,4 não-perdido; > 0,5 perdido. Compara as telas visitadas (únicas e totais) com o caminho ótimo definido. Mediana entre os participantes."
+                label="Desistência declarada"
+                value={formatPct(declaredRate)}
+                sub={`${counts.declared} de ${ended}`}
+                info="Participantes que clicaram em 'Não consegui' — declararam que não conseguiram concluir."
               />
-            )}
+              <Kpi
+                label="Perdida"
+                value={formatPct(lostRate)}
+                sub={`${counts.lost} de ${ended}`}
+                info="Abandono silencioso: iniciou mas não concluiu nem desistiu, e a sessão encerrou (fim do teste ou inatividade > 30 min)."
+              />
+              <Kpi
+                label="Duração — não concl."
+                value={failDurations.length ? formatDuration(medFail) : "—"}
+                sub={failDurations.length ? "mediana · desistiram" : "sem desistências"}
+                info="Tempo mediano de quem DESISTIU. As 'perdidas' não têm duração registrada."
+              />
+              <Kpi
+                label="Tempo até 1º toque"
+                value={clickers ? formatDuration(medFirstTap) : "—"}
+                sub={clickers ? `mediana de ${clickers}` : "sem cliques"}
+                info="Tempo (mediana) do início até o primeiro clique. Só de quem clicou. Um 1º toque no caminho certo prevê ~2x mais sucesso (Bailey & Wolfson)."
+              />
+              <Kpi
+                label="Misclick rate"
+                value={formatPct(misclickRate)}
+                info="Percentual de cliques fora de uma área clicável (erro de alvo), sobre o total de cliques."
+              />
+              <Kpi
+                label="Nunca clicaram"
+                value={String(neverClicked)}
+                sub="não têm 1º toque"
+                info="Quantos participantes iniciaram e não deram nenhum clique."
+              />
+              {isPath && lostnessVals.length > 0 && (
+                <Kpi
+                  label="Lostness"
+                  value={medLostness.toFixed(2)}
+                  sub={lostBand.label}
+                  info="Métrica de 'perdido' (Smith, 1996 / NN/G): 0 = caminho perfeito; < 0,4 não-perdido; > 0,5 perdido. Compara telas visitadas (únicas e totais) com o caminho ótimo. Obs.: se o caminho ótimo revisita uma tela, o valor perfeito já fica > 0."
+                />
+              )}
+            </div>
           </div>
 
           {/* Tela do abandono */}
@@ -549,21 +566,28 @@ function Kpi({
   value,
   sub,
   info,
+  big = false,
 }: {
   label: string
   value: string
   sub?: string
   info?: string
+  big?: boolean
 }) {
   return (
-    <div className="relative border border-outline-variant rounded-2xl p-5 bg-surface-container-low">
+    <div
+      className={
+        "relative border border-outline-variant rounded-2xl bg-surface-container-low " +
+        (big ? "p-6" : "p-4")
+      }
+    >
       {info && (
         <div className="absolute top-2.5 right-2.5">
           <MetricInfo text={info} />
         </div>
       )}
-      <p className="text-headline-small text-on-surface">{value}</p>
-      <p className="text-body-small text-on-surface-variant mt-1">{label}</p>
+      <p className={(big ? "text-display-small" : "text-headline-small") + " text-on-surface"}>{value}</p>
+      <p className={(big ? "text-title-small" : "text-body-small") + " text-on-surface-variant mt-1"}>{label}</p>
       {sub && <p className="text-label-small text-on-surface-variant/70 mt-0.5">{sub}</p>}
     </div>
   )

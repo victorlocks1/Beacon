@@ -138,7 +138,8 @@ export default async function ResultsOverviewPage({
       : 0
     return {
       started: started.size,
-      completionRate: ended ? (completed / ended) * 100 : 0,
+      // Sucesso = concluiu = DIRETO + INDIRETO (ambos completaram o caminho exato)
+      completionRate: ended ? ((completed + indirect) / ended) * 100 : 0,
       lostRate: ended ? (lost / ended) * 100 : 0,
       misclickRate: totalClicks ? (totalMisclicks / totalClicks) * 100 : 0,
       avgDuration,
@@ -214,7 +215,7 @@ export default async function ResultsOverviewPage({
                           <Stat
                             label="Conclusão"
                             value={formatPct(s.completionRate)}
-                            info="Sucesso da tarefa sobre as sessões encerradas. No critério de caminho exato, só conta quem seguiu FIELMENTE o caminho definido — chegar na tela final por outro caminho não conta como conclusão (veja 'Caminho indireto' no detalhe da missão)."
+                            info="Sucesso da tarefa (direto + indireto) sobre as sessões encerradas. No caminho exato, sucesso = completar o caminho definido, seja limpo (direto) ou vagando antes (indireto). Chegar na tela final SEM percorrer o caminho exato não conta. Detalhe direto × indireto na página da missão."
                           />
                           <Stat
                             label="Perdida"
