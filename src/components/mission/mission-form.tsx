@@ -37,7 +37,7 @@ interface Hotspot {
   overlayPosition: "bottom" | "center" | null
   targetScreenId: string | null
 }
-interface Screen {
+export interface Screen {
   id: string
   name: string
   order: number

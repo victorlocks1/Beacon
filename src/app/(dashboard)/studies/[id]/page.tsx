@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
@@ -15,20 +15,16 @@ import { SubmitButton } from "@/components/submit-button"
 import { MissionSavedToast } from "@/components/study/mission-saved-toast"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
-import { deleteScreenAction, moveScreenAction, addSusBlockAction } from "./actions"
-import { QuestionDialog } from "@/components/question/question-dialog"
-import { SequenceList, type SeqBlock } from "@/components/study/sequence-list"
-import { WelcomeDialog } from "@/components/study/welcome-dialog"
+import { deleteScreenAction, moveScreenAction } from "./actions"
+import { StudyBuilder, type BuilderBlock } from "@/components/study/builder/study-builder"
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import {
   ArrowLeft,
   Trash2,
   MousePointerClick,
-  Plus,
   ChevronUp,
   ChevronDown,
-  ClipboardCheck,
 } from "lucide-react"
 
 export default async function StudyPage({
@@ -61,6 +57,7 @@ export default async function StudyPage({
             include: {
               startScreen: true,
               goals: { include: { goalScreen: true } },
+              questions: { orderBy: { order: "asc" } },
               paths: {
                 include: {
                   steps: {
@@ -86,8 +83,8 @@ export default async function StudyPage({
     .filter((b) => b.type === "mission" && b.mission)
     .map((b) => b.mission!)
 
-  const seqBlocks: SeqBlock[] = blocks
-    .map((b): SeqBlock | null => {
+  const builderBlocks: BuilderBlock[] = blocks
+    .map((b): BuilderBlock | null => {
       if (b.type === "mission" && b.mission) {
         const m = b.mission
         return {
@@ -95,11 +92,22 @@ export default async function StudyPage({
           kind: "mission",
           missionId: m.id,
           task: m.task,
-          description: m.description,
-          startScreenName: m.startScreen.name,
-          successType: m.successType as "screen" | "path",
-          goalScreenName: m.goals[0]?.goalScreen.name ?? null,
-          pathsCount: m.paths.length,
+          startScreenId: m.startScreenId,
+          initial: {
+            task: m.task,
+            description: m.description,
+            successType: m.successType as "screen" | "path",
+            startScreenId: m.startScreenId,
+            goalScreenId: m.goals[0]?.goalScreenId ?? null,
+            paths: m.paths.map((p) => p.steps.map((s) => s.screenId)),
+            questions: m.questions.map((q) => ({
+              type: q.type as "open" | "choice" | "rating" | "binary",
+              title: q.title,
+              description: q.description,
+              required: q.required,
+              options: (q.options as string[] | null) ?? [],
+            })),
+          },
         }
       }
       if (b.type === "question" && b.question) {
@@ -108,20 +116,43 @@ export default async function StudyPage({
           id: b.id,
           kind: "question",
           questionId: q.id,
-          qtype: q.type as "open" | "choice" | "rating" | "binary",
           title: q.title,
-          description: q.description,
-          required: q.required,
-          options: (q.options as string[] | null) ?? [],
+          qtype: q.type,
+          initial: {
+            type: q.type as "open" | "choice" | "rating" | "binary",
+            title: q.title,
+            description: q.description,
+            required: q.required,
+            options: (q.options as string[] | null) ?? [],
+          },
         }
       }
-      if (b.type === "sus") {
-        return { id: b.id, kind: "sus" }
-      }
+      if (b.type === "sus") return { id: b.id, kind: "sus" }
       return null
     })
-    .filter((b): b is SeqBlock => b !== null)
-  const hasSus = seqBlocks.some((b) => b.kind === "sus")
+    .filter((b): b is BuilderBlock => b !== null)
+
+  const missionScreens = screens.map((sc) => ({
+    id: sc.id,
+    name: sc.name,
+    order: sc.order,
+    imageUrl: sc.imageUrl,
+    width: sc.width,
+    height: sc.height,
+    scroll: sc.scroll as "none" | "vertical" | "horizontal" | "both",
+    figmaNodeId: sc.figmaNodeId,
+    hotspots: sc.hotspots.map((h) => ({
+      id: h.id,
+      coords: h.coords as { x: number; y: number; w: number; h: number },
+      action: h.action as "navigate" | "open_overlay" | "close_overlay" | "back",
+      overlayPosition: h.overlayPosition as "bottom" | "center" | null,
+      targetScreenId: h.targetScreenId,
+    })),
+  }))
+  const previewScreens = screens.map((sc) => ({ id: sc.id, name: sc.name, imageUrl: sc.imageUrl }))
+  const startNodeByScreen: Record<string, string | null> = {}
+  for (const sc of screens) startNodeByScreen[sc.id] = sc.figmaNodeId ?? null
+  const builderFigmaKey = study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
   const editable = study.status !== "live"
@@ -286,89 +317,24 @@ export default async function StudyPage({
           )}
         </TabsContent>
 
-        {/* ── Sequência (missões + perguntas) ── */}
+        {/* ── Sequência (builder em 3 colunas: blocos · editor · preview) ── */}
         <TabsContent value="missions">
-          {(() => {
-            const s = tt((study.language ?? "pt") as Lang)
-            const wTitle = study.welcomeTitle || s.welcomeTitle
-            const wMsg = study.welcomeMessage || s.welcomeIntro
-            return (
-              <div className="mb-6 rounded-2xl border border-outline-variant bg-surface-container-low p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-label-medium text-on-surface-variant mb-1">
-                      TELA DE BOAS-VINDAS
-                    </p>
-                    <h3 className="text-title-medium text-on-surface">{wTitle}</h3>
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{wMsg}</p>
-                  </div>
-                  {editable && (
-                    <WelcomeDialog
-                      studyId={study.id}
-                      title={study.welcomeTitle}
-                      message={study.welcomeMessage}
-                      howItWorks={study.howItWorks}
-                      defaultTitle={s.welcomeTitle}
-                      defaultMessage={s.welcomeIntro}
-                    />
-                  )}
-                </div>
-              </div>
-            )
-          })()}
-
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-title-medium text-on-surface">
-                {blocks.length} {blocks.length === 1 ? "bloco" : "blocos"}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Tarefas e perguntas na ordem que o testador vê.
-              </p>
-            </div>
-            {editable && (
-              <div className="flex items-center gap-2 shrink-0">
-                <form action={addSusBlockAction.bind(null, study.id)}>
-                  <SubmitButton variant="outline" fullWidth={false} disabled={hasSus}>
-                    <ClipboardCheck className="h-4 w-4 mr-2" />
-                    {hasSus ? "SUS adicionado" : "Adicionar SUS"}
-                  </SubmitButton>
-                </form>
-                <QuestionDialog studyId={study.id} variant="create" />
-                {screens.length > 0 ? (
-                  <Link href={`/studies/${study.id}/missions/new`} className={buttonVariants()}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nova missão
-                  </Link>
-                ) : (
-                  <Button disabled title="Adicione telas primeiro">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nova missão
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {blocks.length === 0 ? (
-            <div className="text-center py-20 border border-outline-variant rounded-3xl bg-surface-container-low">
-              <p className="text-title-medium text-on-surface">Sequência vazia</p>
-              <p className="text-body-medium text-on-surface-variant mt-1.5">
-                {screens.length === 0
-                  ? "Adicione telas ao protótipo e crie a primeira tarefa"
-                  : "Adicione uma missão ou uma pergunta para começar"}
-              </p>
-            </div>
-          ) : (
-            <>
-              {editable && (
-                <p className="text-xs text-muted-foreground mb-3">
-                  Arraste pelos <span className="align-middle">⠿</span> para reordenar a sequência.
-                </p>
-              )}
-              <SequenceList studyId={study.id} editable={editable} blocks={seqBlocks} />
-            </>
-          )}
+          <StudyBuilder
+            studyId={study.id}
+            editable={editable}
+            deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+            welcome={{
+              title: study.welcomeTitle,
+              message: study.welcomeMessage,
+              howItWorks: study.howItWorks,
+              defaultTitle: tt((study.language ?? "pt") as Lang).welcomeTitle,
+            }}
+            blocks={builderBlocks}
+            missionScreens={missionScreens}
+            figmaFileKey={builderFigmaKey}
+            previewScreens={previewScreens}
+            startNodeByScreen={startNodeByScreen}
+          />
         </TabsContent>
       </Tabs>
     </div>
