@@ -119,6 +119,9 @@ export function FigmaFlowRunner({
   const pendingPressRef = useRef<
     { t: number; x: number; y: number; handled: boolean; nodeId: string | undefined } | null
   >(null)
+  // instante da última contagem de clique na navegação — usado para ignorar o
+  // evento de "release" que chega logo depois (senão viraria um press fantasma).
+  const postNavRef = useRef(0)
   // rastreador do caminho exato: por caminho esperado, progresso contíguo + se
   // manteve limpo (sem desvio). len = telas consecutivas certas a partir do início.
   const matchRef = useRef<{ steps: string[]; len: number; clean: boolean }[]>([])
@@ -297,6 +300,34 @@ export function FigmaFlowRunner({
       const missionId = missionRef.current
       const ts = Math.round(now() - startTimeRef.current)
 
+      // Registra um clique (na tela de origem) uma única vez, a partir de um
+      // press pendente. Usado tanto no pareamento press/release (toque na mesma
+      // tela) quanto na navegação (o press que disparou a troca de tela).
+      const countClick = (p: {
+        x: number
+        y: number
+        handled: boolean
+        nodeId: string | undefined
+      }) => {
+        clickCountRef.current += 1
+        if (!interactedRef.current) {
+          interactedRef.current = true
+          setInteracted(true)
+        }
+        if (!p.handled) misclickCountRef.current += 1
+        const scr = p.nodeId ? screenByNode[p.nodeId] : undefined
+        if (scr) {
+          ourBufferRef.current.push({
+            missionId,
+            screenId: scr.id,
+            type: p.handled ? "click" : "misclick",
+            xNorm: clamp01(p.x / (scr.w || 1)),
+            yNorm: clamp01(p.y / (scr.h || 1)),
+            timestampMs: ts,
+          })
+        }
+      }
+
       if (d.type === "MOUSE_PRESS_OR_RELEASE") {
         // Posição na VIEWPORT (relativa ao frame rolável ou ao nó). NÃO somamos o
         // offset de scroll — o heatmap é sobre o frame na tela, e somar o offset
@@ -309,39 +340,22 @@ export function FigmaFlowRunner({
         const tNow = now()
         const pending = pendingPressRef.current
 
-        if (pending && tNow - pending.t < 600) {
-          // release do gesto iniciado em `pending`.
+        // "release" que chega logo após um clique já contado na navegação → ignora
+        if (!pending && tNow - postNavRef.current < 250) {
+          return
+        }
+
+        if (pending && tNow - pending.t < 700) {
+          // release do gesto na MESMA tela (navegação é tratada no
+          // PRESENTED_NODE_CHANGED). Movimento grande = arraste (scroll) → descarta.
           pendingPressRef.current = null
-          const releaseNode = d.data?.presentedNodeId as string | undefined
-          // Se a tela mudou entre press e release, o clique NAVEGOU → é clique de
-          // verdade (o release já vem na tela nova, em outro sistema de coords, por
-          // isso não dá pra comparar posição). Só aplicamos o teste de arraste
-          // (scroll/swipe descarta) quando press e release estão na MESMA tela.
-          const navigated = !!releaseNode && !!pending.nodeId && releaseNode !== pending.nodeId
-          if (!navigated && (Math.abs(px - pending.x) > 14 || Math.abs(py - pending.y) > 14)) {
+          if (Math.abs(px - pending.x) > 14 || Math.abs(py - pending.y) > 14) {
             return
           }
-          // é um clique de verdade → conta UMA vez, na posição do press
-          clickCountRef.current += 1
-          if (!interactedRef.current) {
-            interactedRef.current = true
-            setInteracted(true)
-          }
-          const handled = pending.handled
-          if (!handled) misclickCountRef.current += 1
-          const scr = pending.nodeId ? screenByNode[pending.nodeId] : undefined
-          if (scr) {
-            ourBufferRef.current.push({
-              missionId,
-              screenId: scr.id,
-              type: handled ? "click" : "misclick",
-              xNorm: clamp01(pending.x / (scr.w || 1)),
-              yNorm: clamp01(pending.y / (scr.h || 1)),
-              timestampMs: ts,
-            })
-          }
+          countClick(pending)
         } else {
-          // início de um gesto (press): guarda e espera o release para decidir
+          // início de um gesto (press): guarda; o clique é contado no release ou,
+          // se navegar antes, no PRESENTED_NODE_CHANGED.
           pendingPressRef.current = {
             t: tNow,
             x: px,
@@ -358,6 +372,13 @@ export function FigmaFlowRunner({
         if (scr) {
           const changed = pathRef.current[pathRef.current.length - 1] !== scr.id
           if (changed) {
+            // o press pendente foi o clique que disparou esta navegação → conta
+            // na tela de ORIGEM (antes de empurrar a nova tela no caminho).
+            if (pendingPressRef.current) {
+              countClick(pendingPressRef.current)
+              pendingPressRef.current = null
+              postNavRef.current = now()
+            }
             pathRef.current.push(scr.id)
             ourBufferRef.current.push({
               missionId,
@@ -449,6 +470,7 @@ export function FigmaFlowRunner({
     missionRef.current = mission.id
     startNodeRef.current = currentStartNode
     pendingPressRef.current = null
+    postNavRef.current = 0
     // inicializa o rastreador do caminho exato (início já conta como 1º passo)
     matchRef.current = (expectedPathsByMission[mission.id] ?? []).map((steps) => ({
       steps,
