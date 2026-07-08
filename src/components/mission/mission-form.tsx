@@ -17,7 +17,7 @@ import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { QuestionDialog, type QuestionInput } from "@/components/question/question-dialog"
 import { createMissionAction, updateMissionAction } from "@/app/(dashboard)/studies/[id]/actions"
 import { cn } from "@/lib/utils"
-import { Target, Route, Loader2, Plus, Pencil, Trash2 } from "lucide-react"
+import { Target, Route, Loader2, Plus, Pencil, Trash2, GripVertical } from "lucide-react"
 
 const qTypeLabel: Record<string, string> = {
   open: "Aberta",
@@ -101,6 +101,22 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
   }
   function removeQuestion(key: string) {
     setQuestions((prev) => prev.filter((q) => q.key !== key))
+  }
+
+  // ── reordenar perguntas (drag & drop) ── a ordem é a do array (salva no submit)
+  const [draggingKey, setDraggingKey] = useState<string | null>(null)
+  function onQuestionDragOver(e: React.DragEvent, overKey: string) {
+    if (!draggingKey || draggingKey === overKey) return
+    e.preventDefault()
+    setQuestions((prev) => {
+      const from = prev.findIndex((q) => q.key === draggingKey)
+      const to = prev.findIndex((q) => q.key === overKey)
+      if (from === -1 || to === -1 || from === to) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
   }
 
   const screenItems = Object.fromEntries(
@@ -292,8 +308,25 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
             {questions.map((q) => (
               <div
                 key={q.key}
-                className="flex items-center gap-2 rounded-2xl border border-outline-variant p-3 bg-surface-container-low"
+                onDragOver={(e) => onQuestionDragOver(e, q.key)}
+                onDrop={(e) => e.preventDefault()}
+                className={cn(
+                  "flex items-center gap-2 rounded-2xl border border-outline-variant p-3 bg-surface-container-low",
+                  draggingKey === q.key && "opacity-50"
+                )}
               >
+                <span
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggingKey(q.key)
+                    e.dataTransfer.effectAllowed = "move"
+                  }}
+                  onDragEnd={() => setDraggingKey(null)}
+                  className="inline-flex h-8 w-6 items-center justify-center text-on-surface-variant/50 cursor-grab active:cursor-grabbing shrink-0"
+                  title="Arraste para reordenar"
+                >
+                  <GripVertical className="h-4 w-4" />
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-body-medium text-on-surface truncate">{q.title || "—"}</p>
                   <p className="text-label-small text-on-surface-variant">
