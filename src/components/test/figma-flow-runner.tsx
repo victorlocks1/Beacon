@@ -121,7 +121,17 @@ export function FigmaFlowRunner({
   // press pendente: pareia press+release. Clique = quase sem movimento; arraste
   // (scroll/swipe) = movimento grande → NÃO conta como clique.
   const pendingPressRef = useRef<
-    { t: number; x: number; y: number; handled: boolean; nodeId: string | undefined } | null
+    {
+      t: number
+      x: number
+      y: number
+      handled: boolean
+      nodeId: string | undefined
+      // posição confiável p/ o heatmap? falso quando o clique caiu dentro de um
+      // sub-frame rolado (carrossel), onde a posição é relativa ao frame e não à
+      // tela — plotar ali enganaria (cairia no topo). Nesses casos: conta, não plota.
+      posReliable: boolean
+    } | null
   >(null)
   // instante da última contagem de clique na navegação — usado para ignorar o
   // evento de "release" que chega logo depois (senão viraria um press fantasma).
@@ -312,6 +322,7 @@ export function FigmaFlowRunner({
         y: number
         handled: boolean
         nodeId: string | undefined
+        posReliable: boolean
       }) => {
         clickCountRef.current += 1
         if (!interactedRef.current) {
@@ -319,7 +330,9 @@ export function FigmaFlowRunner({
           setInteracted(true)
         }
         if (!p.handled) misclickCountRef.current += 1
-        const scr = p.nodeId ? screenByNode[p.nodeId] : undefined
+        // Só plota no heatmap quando a posição é confiável (fora de sub-frame
+        // rolado). O clique continua contando nas métricas de qualquer forma.
+        const scr = p.posReliable && p.nodeId ? screenByNode[p.nodeId] : undefined
         if (scr) {
           ourBufferRef.current.push({
             missionId,
@@ -336,11 +349,23 @@ export function FigmaFlowRunner({
         // Posição na VIEWPORT (relativa ao frame rolável ou ao nó). NÃO somamos o
         // offset de scroll — o heatmap é sobre o frame na tela, e somar o offset
         // jogava o ponto pra fora (canto) quando havia scroll horizontal.
+        const sfPos = d.data?.nearestScrollingFrameMousePosition as { x: number; y: number } | null
         const pos =
-          (d.data?.nearestScrollingFrameMousePosition as { x: number; y: number } | null) ??
+          sfPos ??
           (d.data?.targetNodeMousePosition as { x: number; y: number } | null) ?? { x: 0, y: 0 }
         const px = pos.x ?? 0
         const py = pos.y ?? 0
+        // Posição NÃO confiável p/ heatmap quando o clique caiu num SUB-frame rolado
+        // (carrossel): aí a posição é relativa ao frame interno, não à tela, e cairia
+        // no lugar errado. Detecta pelo id do frame ≠ tela apresentada; e, quando o
+        // id não vem, por um offset HORIZONTAL relevante (caso do carrossel) — nunca
+        // por offset vertical, p/ não afetar o scroll vertical da página (que funciona).
+        const sfId = d.data?.nearestScrollingFrameId as string | undefined
+        const presentedId = d.data?.presentedNodeId as string | undefined
+        const sfOff = d.data?.nearestScrollingFrameOffset as { x: number; y: number } | null
+        const nestedById = !!sfId && !!presentedId && sfId !== presentedId
+        const horizNestedByOffset = !sfId && !!sfOff && Math.abs(sfOff.x ?? 0) > 4
+        const posReliable = !(!!sfPos && (nestedById || horizNestedByOffset))
         const tNow = now()
         const pending = pendingPressRef.current
 
@@ -366,6 +391,7 @@ export function FigmaFlowRunner({
             y: py,
             handled: d.data?.handled !== false,
             nodeId: d.data?.presentedNodeId as string | undefined,
+            posReliable,
           }
         }
       }
