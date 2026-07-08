@@ -62,8 +62,8 @@ export default async function TestEntryPage({
               {study.welcomeMessage || s.welcomeIntro}
             </p>
           </div>
-          <form action={start}>
-            <SubmitButton size="lg" className="h-12">
+          <form action={start} className="flex justify-end">
+            <SubmitButton size="lg" fullWidth={false} className="h-12 px-8">
               {s.start}
             </SubmitButton>
           </form>
