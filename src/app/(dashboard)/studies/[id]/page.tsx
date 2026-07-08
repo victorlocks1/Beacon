@@ -205,7 +205,7 @@ export default async function StudyPage({
         </div>
 
         {/* ── Protótipo ── */}
-        <TabsContent value="prototype" className="lg:min-h-0 lg:overflow-y-auto subtle-scroll">
+        <TabsContent value="prototype" className="lg:min-h-0 lg:overflow-y-auto no-scrollbar">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-title-medium text-on-surface">
               {screens.length} {screens.length === 1 ? "tela" : "telas"}
