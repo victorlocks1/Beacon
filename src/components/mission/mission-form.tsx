@@ -14,6 +14,7 @@ import {
 import { PathRecorder } from "@/components/mission/path-recorder"
 import { FigmaPathRecorder } from "@/components/mission/figma-path-recorder"
 import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
+import { klmIdealMs } from "@/lib/sum"
 import { QuestionDialog, type QuestionInput } from "@/components/question/question-dialog"
 import { createMissionAction, updateMissionAction } from "@/app/(dashboard)/studies/[id]/actions"
 import { cn } from "@/lib/utils"
@@ -63,6 +64,7 @@ export interface MissionInitial {
   startScreenId: string
   goalScreenId: string | null
   paths: string[][]
+  idealTimeMs?: number | null
   questions?: QuestionInput[]
 }
 
@@ -74,9 +76,10 @@ interface Props {
   missionId?: string // presente => modo edição
   initial?: MissionInitial
   stickyFooter?: boolean // no builder: botão salvar fixo no rodapé
+  sumEnabled?: boolean // SUM ativa → mostra o campo de tempo ideal (override do KLM)
 }
 
-export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missionId, initial, stickyFooter = false }: Props) {
+export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missionId, initial, stickyFooter = false, sumEnabled = false }: Props) {
   // Estudos do Figma gravam o caminho no protótipo vivo (embed); manuais usam o player de imagem.
   const canEmbed = !!figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
   const isEdit = !!missionId
@@ -86,6 +89,10 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
   const [startScreenId, setStartScreenId] = useState<string>(initial?.startScreenId ?? "")
   const [goalScreenId, setGoalScreenId] = useState<string>(initial?.goalScreenId ?? "")
   const [paths, setPaths] = useState<string[][]>(initial?.paths ?? [])
+  // SUM: tempo ideal em SEGUNDOS (override do KLM); vazio = estima automático.
+  const [idealTimeSec, setIdealTimeSec] = useState(
+    initial?.idealTimeMs ? String(Math.round(initial.idealTimeMs / 1000)) : ""
+  )
   const keyRef = useRef(0)
   const [questions, setQuestions] = useState<LocalQuestion[]>(
     (initial?.questions ?? []).map((q) => ({ ...q, key: `q${keyRef.current++}` }))
@@ -132,6 +139,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
     if (successType === "path" && paths.length === 0)
       return setErr("Grave ao menos um caminho esperado.")
 
+    const idealSec = parseInt(idealTimeSec, 10)
     const payload = {
       task,
       description,
@@ -139,6 +147,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
       successType,
       goalScreenId: successType === "screen" ? goalScreenId : null,
       paths: successType === "path" ? paths : undefined,
+      idealTimeMs: Number.isFinite(idealSec) && idealSec > 0 ? idealSec * 1000 : null,
       questions: questions
         .filter((q) => q.title.trim())
         .map(({ key: _key, ...q }) => q),
@@ -293,6 +302,34 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
           </div>
         )}
       </section>
+
+      {/* ── SUM: tempo ideal (dimensão Tempo) ── */}
+      {sumEnabled && (
+        <section className="space-y-2">
+          <div>
+            <h2 className="text-title-medium text-on-surface">Tempo ideal (SUM)</h2>
+            <p className="text-body-small text-on-surface-variant mt-0.5">
+              Referência da dimensão <strong className="text-on-surface font-medium">Tempo</strong>.
+              Deixe vazio para estimar automaticamente pelo KLM a partir do caminho exato.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              value={idealTimeSec}
+              onChange={(e) => setIdealTimeSec(e.target.value)}
+              placeholder={
+                successType === "path" && paths.length > 0
+                  ? String(Math.round(klmIdealMs(Math.max(...paths.map((p) => p.length - 1))) / 1000))
+                  : "—"
+              }
+              className="w-28 rounded-lg border border-outline bg-transparent px-3 py-2 text-body-medium text-on-surface outline-none focus:border-primary"
+            />
+            <span className="text-body-medium text-on-surface-variant">segundos</span>
+          </div>
+        </section>
+      )}
 
       {/* ── Perguntas de acompanhamento ── */}
       <section className="space-y-4">

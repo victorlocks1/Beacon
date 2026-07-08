@@ -49,6 +49,10 @@ model Study {
   // Tela de agradecimento customizável (nulo = usa o padrão do idioma)
   thanksTitle    String?
   thanksMessage  String?
+  // SUM: coleta a pergunta SEQ (facilidade) após cada tarefa. sumStatement =
+  // enunciado customizado da SEQ (nulo = padrão do idioma).
+  sumEnabled     Boolean     @default(false)
+  sumStatement   String?
   // SUS: enunciados customizados (array de 10). Nulo = usa o padrão do idioma.
   susStatements  Json?
   // Código de compartilhamento (link) para o time interno entrar como membro
@@ -274,11 +278,15 @@ model Mission {
   startScreenId String
   startScreen   Screen          @relation("MissionStartScreen", fields: [startScreenId], references: [id], onDelete: Cascade)
   successType   SuccessType
+  // SUM: tempo ideal (ms) da tarefa p/ a dimensão Tempo. Nulo = estima por KLM
+  // a partir do caminho exato.
+  idealTimeMs   Int?
   goals         MissionGoal[]
   paths         MissionPath[]
   results       MissionResult[]
   events        Event[]
   questions     Question[]
+  sumResponses  SumResponse[]
 }
 
 enum SuccessType {
@@ -325,6 +333,7 @@ model Session {
   figmaEvents FigmaEventLog[]
   answers    Answer[]
   susResponse SusResponse?
+  sumResponses SumResponse[]
 }
 
 // Resposta do questionário SUS (System Usability Scale) — 10 itens 1..5, uma
@@ -336,6 +345,19 @@ model SusResponse {
   values    Int[]    // 10 respostas (1..5) na ordem dos itens
   score     Float    // 0..100
   createdAt DateTime @default(now())
+}
+
+// SUM: resposta SEQ (facilidade, 1..7) de UMA tarefa, por sessão.
+model SumResponse {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  missionId String
+  mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  ease      Int      // SEQ: 1 (muito difícil) .. 7 (muito fácil)
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, missionId])
 }
 
 // Eventos crus da Embed API do Figma (protótipo vivo). Guardamos o payload

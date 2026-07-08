@@ -5,6 +5,7 @@ import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Cl
 import { cn } from "@/lib/utils"
 import { figmaEmbedUrl, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
+import { SeqScale } from "@/components/test/seq-scale"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
 import { SusView } from "@/components/test/sus-view"
 import { type Step } from "@/components/test/test-runner"
@@ -57,6 +58,8 @@ export function FigmaFlowRunner({
   thanksTitle,
   thanksMessage,
   susStatements,
+  sumEnabled,
+  sumStatement,
   goalsByMission,
   startNodeByMission,
   successTypeByMission,
@@ -72,6 +75,8 @@ export function FigmaFlowRunner({
   thanksTitle?: string | null
   thanksMessage?: string | null
   susStatements?: string[]
+  sumEnabled?: boolean // SUM: coleta a SEQ após cada tarefa
+  sumStatement?: string // enunciado da SEQ (resolvido por idioma)
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   successTypeByMission: Record<string, "screen" | "path"> // critério de sucesso da missão
@@ -92,6 +97,8 @@ export function FigmaFlowRunner({
   // nota de estrelas embutida no feedback de sucesso (quando a próxima pergunta
   // é de estrelas, respondemos ali mesmo pra poupar um clique)
   const [inlineRating, setInlineRating] = useState(0)
+  // SUM: nota SEQ (1..7) coletada no feedback de conclusão de cada tarefa
+  const [sumEase, setSumEase] = useState(0)
 
   const step = steps[stepIndex]
   const mission = step?.kind === "mission" ? step.mission : null
@@ -264,6 +271,24 @@ export function FigmaFlowRunner({
     setCompletion(null)
     advance()
   }, [advance])
+
+  // SUM: grava a SEQ da tarefa (coletada no feedback de conclusão) e segue.
+  const continueWithSum = useCallback(
+    (missionId: string) => {
+      if (sumEase > 0) {
+        fetch("/api/t/sum", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, missionId, ease: sumEase }),
+          keepalive: true,
+        }).catch(() => {})
+      }
+      setSumEase(0)
+      setCompletion(null)
+      advance()
+    },
+    [sumEase, token, advance]
+  )
 
   // Continua a partir do feedback de sucesso quando a próxima pergunta é de
   // estrelas: grava a nota dada ali mesmo e pula o step da pergunta.
@@ -501,6 +526,7 @@ export function FigmaFlowRunner({
     startNodeRef.current = currentStartNode
     pendingPressRef.current = null
     postNavRef.current = 0
+    setSumEase(0)
     // inicializa o rastreador do caminho exato (início já conta como 1º passo)
     matchRef.current = (expectedPathsByMission[mission.id] ?? []).map((steps) => ({
       steps,
@@ -649,8 +675,21 @@ export function FigmaFlowRunner({
                     </p>
                   </div>
 
-                  {/* Pergunta de estrelas embutida (próximo passo) — poupa 1 clique */}
-                  {inlineRatingQ && (
+                  {/* SUM: SEQ 1..7 embutida no feedback (coletada após cada tarefa) */}
+                  {sumEnabled && (
+                    <div className="pt-1">
+                      <SeqScale
+                        statement={sumStatement || ""}
+                        value={sumEase}
+                        onChange={setSumEase}
+                        lang={lang === "es" ? "es" : "pt"}
+                      />
+                    </div>
+                  )}
+
+                  {/* Pergunta de estrelas embutida (próximo passo) — poupa 1 clique.
+                      Só quando a SUM não está embutida aqui (evita dois inline). */}
+                  {!sumEnabled && inlineRatingQ && (
                     <div className="space-y-2.5 pt-1">
                       <p className="text-title-medium text-on-surface">{inlineRatingQ.title}</p>
                       {inlineRatingQ.description && (
@@ -681,7 +720,16 @@ export function FigmaFlowRunner({
                     </div>
                   )}
 
-                  {inlineRatingQ ? (
+                  {sumEnabled ? (
+                    <Button
+                      onClick={() => continueWithSum(step.mission.id)}
+                      disabled={sumEase === 0}
+                      className="h-12 px-6"
+                      size="lg"
+                    >
+                      {s.continue}
+                    </Button>
+                  ) : inlineRatingQ ? (
                     <Button
                       onClick={() => continueWithInlineRating(inlineRatingQ)}
                       disabled={inlineRatingQ.required && inlineRating === 0}

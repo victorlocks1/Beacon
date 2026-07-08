@@ -108,6 +108,31 @@ export async function updateSusStatementsAction(studyId: string, statements: str
   revalidatePath(`/studies/${studyId}`)
 }
 
+// Converte "tempo ideal" (segundos, do form) em ms; vazio/0/negativo → null (usa KLM).
+function normalizeIdealTime(ms: number | null | undefined): number | null {
+  return typeof ms === "number" && ms > 0 ? Math.round(ms) : null
+}
+
+// ── SUM (Single Usability Metric) ──
+// "Adicionar bloco → SUM" liga a coleta da SEQ após CADA tarefa (flag do estudo).
+export async function setSumEnabledAction(studyId: string, enabled: boolean) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+  await prisma.study.update({ where: { id: study.id }, data: { sumEnabled: enabled } })
+  revalidatePath(`/studies/${studyId}`)
+}
+
+// Enunciado customizado da SEQ (null = volta ao padrão do idioma).
+export async function updateSumStatementAction(studyId: string, statement: string | null) {
+  const { study } = await getStudyOrThrow(studyId)
+  blockIfLive(study, studyId, "missions")
+  await prisma.study.update({
+    where: { id: study.id },
+    data: { sumStatement: statement?.trim() || null },
+  })
+  revalidatePath(`/studies/${studyId}`)
+}
+
 export async function deleteSusBlockAction(studyId: string, blockId: string) {
   const { study } = await getStudyOrThrow(studyId)
   blockIfLive(study, studyId, "missions")
@@ -349,6 +374,7 @@ interface CreateMissionInput {
   goalScreenId?: string | null
   paths?: string[][] // cada caminho: sequência de screenIds (start..final)
   questions?: MissionQuestionInput[] // perguntas de acompanhamento da missão
+  idealTimeMs?: number | null // SUM: override do tempo ideal (ms); nulo = KLM
 }
 
 // Cria as perguntas de acompanhamento de uma missão (ordem = posição na lista).
@@ -415,6 +441,7 @@ export async function createMissionAction(
       description,
       startScreenId,
       successType: input.successType,
+      idealTimeMs: normalizeIdealTime(input.idealTimeMs),
     },
   })
 
@@ -479,7 +506,13 @@ export async function updateMissionAction(
 
   await prisma.mission.update({
     where: { id: missionId },
-    data: { task, description, startScreenId, successType: input.successType },
+    data: {
+      task,
+      description,
+      startScreenId,
+      successType: input.successType,
+      idealTimeMs: normalizeIdealTime(input.idealTimeMs),
+    },
   })
 
   // Substitui critério de sucesso (remove o antigo, recria o novo)

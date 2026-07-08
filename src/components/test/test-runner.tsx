@@ -47,6 +47,9 @@ interface Props {
   thanksMessage?: string | null
   // SUS: enunciados customizados (ausente = padrão do idioma).
   susStatements?: string[]
+  // SUM: coleta da SEQ (só implementada no runner do Figma por enquanto).
+  sumEnabled?: boolean
+  sumStatement?: string
 }
 
 interface BufferedEvent {

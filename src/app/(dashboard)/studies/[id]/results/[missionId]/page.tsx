@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath } from "@/lib/path"
 import { median, lostness, lostnessBand } from "@/lib/metrics"
+import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs } from "@/lib/sum"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
@@ -75,6 +76,13 @@ export default async function MissionResultsPage({
     include: { session: true },
     orderBy: { session: { startedAt: "asc" } },
   })
+
+  // SUM: respostas SEQ (facilidade) desta tarefa, por sessão.
+  const sumResponses = await prisma.sumResponse.findMany({
+    where: { missionId, session: { studyId: id } },
+    select: { sessionId: true, ease: true },
+  })
+  const easeBySession = new Map(sumResponses.map((r) => [r.sessionId, r.ease]))
 
   // Numeração estável "Testador N" por ordem de chegada no study
   const studySessions = await prisma.session.findMany({
@@ -245,6 +253,29 @@ export default async function MissionResultsPage({
   const medLostness = median(lostnessVals)
   const lostBand = lostnessBand(medLostness)
 
+  // ── SUM (Single Usability Metric) — só quando a coleta está ligada ──
+  // Toques ideais ~ maior caminho exato (transições). Tempo ideal = override
+  // da missão OU estimativa KLM. SUM por participante e média da tarefa.
+  const idealTaps = mission.paths.length
+    ? Math.max(...mission.paths.map((p) => Math.max(0, p.steps.length - 1)))
+    : 0
+  const missionIdealMs = sumIdealMs(mission.idealTimeMs, idealTaps)
+  const sumBreakdowns = study.sumEnabled
+    ? results.map((r) =>
+        sumScore({
+          completed: r.outcome === "direct" || r.outcome === "indirect",
+          indirect: r.outcome === "indirect",
+          durationMs: r.durationMs,
+          misclicks: r.misclickCount,
+          ease: easeBySession.get(r.sessionId) ?? null,
+          idealMs: missionIdealMs,
+          idealTaps,
+        })
+      )
+    : []
+  const sumAvg = sumBreakdowns.length ? sumAverage(sumBreakdowns) : null
+  const sumV = sumAvg ? sumVerdict(sumAvg.score) : null
+
   // ── Agrupar caminhos por desfecho ──
   type PathGroup = {
     bucket: "direct" | "indirect" | "unfinished"
@@ -353,6 +384,50 @@ export default async function MissionResultsPage({
               </p>
             )}
           </div>
+
+          {/* ── SUM (Single Usability Metric) ── */}
+          {sumAvg && sumV && (
+            <div>
+              <p className="text-label-medium text-on-surface-variant mb-3">
+                SUM · MÉTRICA DE USABILIDADE
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_2fr] gap-4">
+                <Kpi
+                  big
+                  label="SUM da tarefa"
+                  value={formatPct(sumAvg.score)}
+                  sub={sumV.label}
+                  info="Single Usability Metric — média de até 4 dimensões (Conclusão, Tempo, Erros, Satisfação), 0–100%. Faixas: ≥80 Excelente · 65–79 Bom · 50–64 Regular · <50 Problema."
+                />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Kpi
+                    label="Conclusão"
+                    value={formatPct(sumAvg.completion)}
+                    sub="concluíram"
+                    info="Proporção que concluiu a tarefa (direto ou indireto)."
+                  />
+                  <Kpi
+                    label="Tempo"
+                    value={sumAvg.time == null ? "—" : formatPct(sumAvg.time)}
+                    sub={sumAvg.time == null ? "sem tempo ideal" : `ideal ${Math.round(missionIdealMs / 1000)}s`}
+                    info="Eficiência = tempo ideal / tempo real (0–100%). Tempo ideal via KLM (do caminho exato) ou override da missão."
+                  />
+                  <Kpi
+                    label="Erros"
+                    value={sumAvg.errors == null ? "—" : formatPct(sumAvg.errors)}
+                    sub={sumAvg.errors == null ? "sem caminho" : "misclicks + desvios"}
+                    info="1 − erros/oportunidades. Erros = misclicks + desvio do caminho; oportunidades ~ toques do caminho ideal."
+                  />
+                  <Kpi
+                    label="Satisfação"
+                    value={sumAvg.satisfaction == null ? "—" : formatPct(sumAvg.satisfaction)}
+                    sub={`SEQ · ${easeBySession.size} resp.`}
+                    info="Pergunta SEQ (facilidade, 1–7) normalizada para 0–100%."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Métricas de apoio (cards menores) ── */}
           <div>

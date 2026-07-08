@@ -20,6 +20,7 @@ import { StudyBuilder, type BuilderBlock } from "@/components/study/builder/stud
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import { susStatementsFor, SUS_STATEMENTS, SUS_OPTIONS } from "@/lib/sus"
+import { seqStatementFor, SEQ_STATEMENT, SEQ_ANCHORS } from "@/lib/sum"
 import {
   ArrowLeft,
   Trash2,
@@ -101,6 +102,7 @@ export default async function StudyPage({
             startScreenId: m.startScreenId,
             goalScreenId: m.goals[0]?.goalScreenId ?? null,
             paths: m.paths.map((p) => p.steps.map((s) => s.screenId)),
+            idealTimeMs: m.idealTimeMs,
             questions: m.questions.map((q) => ({
               type: q.type as "open" | "choice" | "rating" | "binary",
               title: q.title,
@@ -342,6 +344,12 @@ export default async function StudyPage({
               statements: susStatementsFor(susLang, study.susStatements),
               scaleOptions: SUS_OPTIONS[susLang],
               defaultStatements: SUS_STATEMENTS[susLang],
+            }}
+            sum={{
+              enabled: study.sumEnabled,
+              statement: seqStatementFor(susLang, study.sumStatement),
+              defaultStatement: SEQ_STATEMENT[susLang],
+              anchors: SEQ_ANCHORS[susLang],
             }}
           />
         </TabsContent>

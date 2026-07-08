@@ -19,10 +19,12 @@ import {
   GripVertical,
   Trash2,
   CheckCircle2,
+  Gauge,
 } from "lucide-react"
 import { MissionForm, type MissionInitial, type Screen as MissionFormScreen } from "@/components/mission/mission-form"
 import { WelcomeEditor } from "@/components/study/builder/welcome-editor"
 import { ThanksEditor } from "@/components/study/builder/thanks-editor"
+import { SumEditor } from "@/components/study/builder/sum-editor"
 import { QuestionEditor, type QuestionInitial } from "@/components/study/builder/question-editor"
 import { SusEditor } from "@/components/study/builder/sus-editor"
 import {
@@ -31,6 +33,7 @@ import {
   deleteQuestionAction,
   deleteSusBlockAction,
   addSusBlockAction,
+  setSumEnabledAction,
 } from "@/app/(dashboard)/studies/[id]/actions"
 
 function isRedirect(e: unknown) {
@@ -50,7 +53,7 @@ const qLabel: Record<string, string> = {
   binary: "Sim / Não",
 }
 
-type Selection = "welcome" | "thanks" | "new-mission" | "new-question" | string
+type Selection = "welcome" | "thanks" | "sum" | "new-mission" | "new-question" | string
 
 export function StudyBuilder({
   studyId,
@@ -63,6 +66,7 @@ export function StudyBuilder({
   missionScreens,
   figmaFileKey,
   sus,
+  sum,
 }: {
   studyId: string
   editable: boolean
@@ -74,6 +78,7 @@ export function StudyBuilder({
   missionScreens: MissionFormScreen[]
   figmaFileKey: string | null
   sus: { statements: string[]; scaleOptions: string[]; defaultStatements: string[] }
+  sum: { enabled: boolean; statement: string; defaultStatement: string; anchors: { low: string; high: string } }
 }) {
   const router = useRouter()
   // Abre no bloco recém-salvo (se veio na URL e ainda existe); senão, boas-vindas.
@@ -150,6 +155,21 @@ export function StudyBuilder({
   }
 
   const hasSus = items.some((b) => b.kind === "sus")
+
+  // ── ativar SUM (coleta em todas as tarefas) ──
+  function addSum() {
+    startTransition(async () => {
+      try {
+        await setSumEnabledAction(studyId, true)
+        toast.success("SUM adicionada")
+        setSel("sum")
+        router.refresh()
+      } catch (e) {
+        if (isRedirect(e)) throw e
+        toast.error("Não foi possível adicionar a SUM.")
+      }
+    })
+  }
 
   // ── item da lista ──
   function Row({
@@ -299,8 +319,19 @@ export function StudyBuilder({
                   <p className="text-label-small text-on-surface-variant">Questionário padrão de usabilidade</p>
                 </div>
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={addSum} disabled={sum.enabled}>
+                <Gauge className="h-4 w-4 mr-2" />
+                <div>
+                  <p className="text-body-medium">SUM {sum.enabled ? "(já adicionada)" : ""}</p>
+                  <p className="text-label-small text-on-surface-variant">Métrica de usabilidade por tarefa</p>
+                </div>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+
+        {sum.enabled && (
+          <Row id="sum" icon={Gauge} label="Métrica SUM" sub="Após cada tarefa" />
         )}
 
         <Row id="thanks" icon={CheckCircle2} label="Obrigado" sub="Tela final" />
@@ -327,6 +358,15 @@ export function StudyBuilder({
             defaultTitle={thanks.defaultTitle}
             defaultMessage={thanks.defaultMessage}
           />
+        ) : sel === "sum" ? (
+          <SumEditor
+            studyId={studyId}
+            editable={editable}
+            statement={sum.statement}
+            defaultStatement={sum.defaultStatement}
+            anchors={sum.anchors}
+            onRemoved={() => setSel("welcome")}
+          />
         ) : sel === "new-mission" ? (
           <MissionForm
             studyId={studyId}
@@ -334,6 +374,7 @@ export function StudyBuilder({
             screens={missionScreens}
             figmaFileKey={figmaFileKey}
             stickyFooter
+            sumEnabled={sum.enabled}
           />
         ) : sel === "new-question" ? (
           <QuestionEditor studyId={studyId} editable={editable} onSaved={() => setSel("welcome")} />
@@ -347,6 +388,7 @@ export function StudyBuilder({
             screens={missionScreens}
             figmaFileKey={figmaFileKey}
             stickyFooter
+            sumEnabled={sum.enabled}
           />
         ) : selectedBlock?.kind === "question" ? (
           <QuestionEditor
