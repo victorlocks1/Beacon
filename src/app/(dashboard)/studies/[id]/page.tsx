@@ -159,7 +159,7 @@ export default async function StudyPage({
   const activeTab = tab === "missions" ? "missions" : "prototype"
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-[1500px] mx-auto">
       <Suspense fallback={null}>
         <MissionSavedToast />
       </Suspense>

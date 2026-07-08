@@ -175,7 +175,7 @@ export default async function ReviewPage({
     }))
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link
           href={isOwner ? `/studies/${studyId}` : "/projects"}

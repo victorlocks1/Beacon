@@ -38,7 +38,7 @@ export default async function ProjectsPage() {
   })
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-headline-large text-on-surface">Projetos</h1>
         <CreateProjectDialog />

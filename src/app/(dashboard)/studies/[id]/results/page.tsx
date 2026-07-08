@@ -146,7 +146,7 @@ export default async function ResultsOverviewPage({
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
         <Link
           href={`/studies/${id}`}

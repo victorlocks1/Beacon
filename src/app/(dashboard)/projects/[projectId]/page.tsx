@@ -47,7 +47,7 @@ export default async function ProjectStudiesPage({
   const studies = project.studies
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center gap-3 mb-2">
         <Link href="/projects" className={buttonVariants({ variant: "ghost", size: "icon" })}>
           <ArrowLeft className="h-4 w-4" />
