@@ -206,14 +206,26 @@ export default async function MissionResultsPage({
     arr.push({ x: e.xNorm, y: e.yNorm, type: e.type })
     pointsByScreen.set(e.screenId, arr)
   }
-  const heatmapScreens = screens
-    .filter((s) => pointsByScreen.has(s.id))
+  // Heatmap por tela: mostra TODAS as telas VISITADAS (não só as clicadas). A
+  // tela inicial da tarefa entra sempre (mesmo sem evento). Telas sem clique
+  // aparecem normalmente (só a imagem, sem overlay). Ordem = 1ª visita.
+  const firstSeenAt = new Map<string, number>()
+  firstSeenAt.set(mission.startScreenId, -1) // inicial sempre primeiro
+  for (const e of events) {
+    const t = Number(e.timestampMs)
+    const prev = firstSeenAt.get(e.screenId)
+    if (prev === undefined || t < prev) firstSeenAt.set(e.screenId, t)
+  }
+  const heatmapScreens = [...firstSeenAt.keys()]
+    .map((sid) => screenById.get(sid))
+    .filter((s): s is NonNullable<typeof s> => !!s)
+    .sort((a, b) => (firstSeenAt.get(a.id)! - firstSeenAt.get(b.id)!) || a.order - b.order)
     .map((s) => ({
       id: s.id,
       name: s.name,
       order: s.order,
       imageUrl: s.imageUrl,
-      points: pointsByScreen.get(s.id)!,
+      points: pointsByScreen.get(s.id) ?? [],
       firstClickPoints: firstClickByScreen.get(s.id) ?? [],
     }))
 
@@ -513,7 +525,7 @@ export default async function MissionResultsPage({
             </p>
             {heatmapScreens.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum clique registrado nas telas.
+                Nenhuma tela visitada ainda.
               </p>
             ) : (
               <HeatmapViewer screens={heatmapScreens} deviceType={deviceType} />
