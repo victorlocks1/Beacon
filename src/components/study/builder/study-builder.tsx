@@ -221,9 +221,9 @@ export function StudyBuilder({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start lg:items-stretch lg:h-full lg:min-h-0">
+    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start lg:h-full lg:min-h-0">
       {/* ── Coluna 1: lista de blocos (rola por dentro) ── */}
-      <div className="space-y-2 lg:h-full lg:overflow-y-auto lg:pr-1 no-scrollbar">
+      <div className="space-y-2 lg:max-h-full lg:overflow-y-auto lg:pr-1 no-scrollbar">
         <Row id="welcome" icon={Sparkles} label="Boas-vindas" sub="Tela inicial" />
 
         {items.map((b, i) =>
@@ -300,7 +300,7 @@ export function StudyBuilder({
 
       {/* ── Coluna 2: editor — altura acompanha o conteúdo, com teto = tela
           (rolagem interna quando passa; botão de salvar sempre visível) ── */}
-      <div className="rounded-2xl border border-outline-variant bg-surface px-6 pt-6 pb-8 lg:pb-0 min-h-[300px] lg:min-h-0 lg:h-full lg:overflow-y-auto lg:overflow-x-hidden no-scrollbar">
+      <div className="rounded-2xl border border-outline-variant bg-surface px-6 pt-6 pb-8 lg:pb-0 min-h-[300px] lg:max-h-full lg:overflow-y-auto lg:overflow-x-hidden no-scrollbar">
         {sel === "welcome" ? (
           <WelcomeEditor
             studyId={studyId}
