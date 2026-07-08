@@ -122,14 +122,17 @@ export async function setSumEnabledAction(studyId: string, enabled: boolean) {
   revalidatePath(`/studies/${studyId}`)
 }
 
-// Enunciado customizado da SEQ (null = volta ao padrão do idioma).
-export async function updateSumStatementAction(studyId: string, statement: string | null) {
+// Enunciados customizados do ASQ (3). null = volta ao padrão do idioma.
+export async function updateSumStatementsAction(studyId: string, statements: string[] | null) {
   const { study } = await getStudyOrThrow(studyId)
   blockIfLive(study, studyId, "missions")
-  await prisma.study.update({
-    where: { id: study.id },
-    data: { sumStatement: statement?.trim() || null },
-  })
+  if (statements === null) {
+    await prisma.study.update({ where: { id: study.id }, data: { sumStatements: Prisma.DbNull } })
+  } else {
+    const clean = statements.map((s) => s.trim())
+    if (clean.length !== 3 || clean.some((s) => !s)) throw new Error("SUM precisa de 3 perguntas.")
+    await prisma.study.update({ where: { id: study.id }, data: { sumStatements: clean } })
+  }
   revalidatePath(`/studies/${studyId}`)
 }
 

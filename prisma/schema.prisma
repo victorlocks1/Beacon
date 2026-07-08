@@ -49,10 +49,10 @@ model Study {
   // Tela de agradecimento customizável (nulo = usa o padrão do idioma)
   thanksTitle    String?
   thanksMessage  String?
-  // SUM: coleta a pergunta SEQ (facilidade) após cada tarefa. sumStatement =
-  // enunciado customizado da SEQ (nulo = padrão do idioma).
+  // SUM: coleta o ASQ (3 perguntas) após cada tarefa. sumStatements = enunciados
+  // customizados (array de 3). Nulo = padrão do idioma.
   sumEnabled     Boolean     @default(false)
-  sumStatement   String?
+  sumStatements  Json?
   // SUS: enunciados customizados (array de 10). Nulo = usa o padrão do idioma.
   susStatements  Json?
   // Código de compartilhamento (link) para o time interno entrar como membro
@@ -347,14 +347,14 @@ model SusResponse {
   createdAt DateTime @default(now())
 }
 
-// SUM: resposta SEQ (facilidade, 1..7) de UMA tarefa, por sessão.
+// SUM: respostas do ASQ (3 perguntas, 1..7) de UMA tarefa, por sessão.
 model SumResponse {
   id        String   @id @default(cuid())
   sessionId String
   session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   missionId String
   mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
-  ease      Int      // SEQ: 1 (muito difícil) .. 7 (muito fácil)
+  values    Int[]    // 3 respostas (1..7) na ordem: tempo, informação, facilidade
   createdAt DateTime @default(now())
 
   @@unique([sessionId, missionId])

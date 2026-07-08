@@ -4,27 +4,51 @@
 //   1. Conclusão   — concluiu a tarefa? (direto/indireto = sim)
 //   2. Tempo       — tempo real vs. tempo ideal (KLM)
 //   3. Erros       — misclicks + desvio, sobre as oportunidades de erro
-//   4. Satisfação  — SEQ (Single Ease Question), escala 1..7
+//   4. Satisfação  — ASQ (After-Scenario Questionnaire): 3 perguntas 1..7
 // A SUM da tarefa é a MÉDIA das dimensões coletadas (pesos iguais).
 // ─────────────────────────────────────────────────────────────────────────
 
 export type SumLang = "pt" | "es"
 
-// Pergunta SEQ padrão por idioma (editável pelo criador).
-export const SEQ_STATEMENT: Record<SumLang, string> = {
-  pt: "De modo geral, quão fácil ou difícil foi concluir esta tarefa?",
-  es: "En general, ¿qué tan fácil o difícil fue completar esta tarea?",
+export const SUM_QUESTION_COUNT = 3
+
+// As 3 perguntas do ASQ (ordem: tempo, informação, facilidade), por idioma.
+// Editáveis pelo criador.
+export const ASQ_STATEMENTS: Record<SumLang, string[]> = {
+  pt: [
+    "Como você avalia o tempo que levou para concluir a tarefa?",
+    "Como você avalia a quantidade de informações disponíveis para concluir a tarefa?",
+    "Como você avalia a facilidade para concluir a tarefa?",
+  ],
+  es: [
+    "¿Cómo evalúas el tiempo que te llevó completar la tarea?",
+    "¿Cómo evalúas la cantidad de información disponible para completar la tarea?",
+    "¿Cómo evalúas la facilidad para completar la tarea?",
+  ],
 }
 
-// Âncoras das pontas da escala SEQ (1 e 7).
-export const SEQ_ANCHORS: Record<SumLang, { low: string; high: string }> = {
-  pt: { low: "Muito difícil", high: "Muito fácil" },
-  es: { low: "Muy difícil", high: "Muy fácil" },
+// Rótulos curtos de cada dimensão do ASQ (p/ tabelas/resultados).
+export const ASQ_LABELS: Record<SumLang, string[]> = {
+  pt: ["Tempo", "Informação", "Facilidade"],
+  es: ["Tiempo", "Información", "Facilidad"],
 }
 
-export function seqStatementFor(lang: SumLang, custom?: string | null): string {
-  const c = custom?.trim()
-  return c && c.length > 0 ? c : SEQ_STATEMENT[lang]
+// Âncoras das pontas da escala (1 e 7).
+export const ASQ_ANCHORS: Record<SumLang, { low: string; high: string }> = {
+  pt: { low: "Muito ruim", high: "Muito bom" },
+  es: { low: "Muy malo", high: "Muy bueno" },
+}
+
+// Enunciados resolvidos: custom (array de 3 válido) ou padrão do idioma.
+export function asqStatementsFor(lang: SumLang, custom?: unknown): string[] {
+  if (
+    Array.isArray(custom) &&
+    custom.length === SUM_QUESTION_COUNT &&
+    custom.every((s) => typeof s === "string" && s.trim().length > 0)
+  ) {
+    return (custom as string[]).map((s) => s.trim())
+  }
+  return ASQ_STATEMENTS[lang]
 }
 
 // ── KLM: tempo ideal (execução perfeita, sem erros) ──
@@ -52,7 +76,8 @@ export interface SumInput {
   indirect: boolean // desviou do caminho (conta como 1 erro de navegação)
   durationMs: number
   misclicks: number
-  ease?: number | null // resposta SEQ 1..7 (ausente = dimensão não coletada)
+  // respostas do ASQ (1..7 cada). Vazio/ausente = dimensão não coletada.
+  satisfactionValues?: number[] | null
   idealMs: number // tempo ideal (KLM ou override); 0 = sem dimensão Tempo
   idealTaps: number // oportunidades de erro (~ toques do caminho ideal)
 }
@@ -83,10 +108,12 @@ export function sumScore(i: SumInput): SumBreakdown {
     errors = clamp01(1 - errCount / opportunities) * 100
   }
 
-  // Satisfação: SEQ normalizada (1..7 → 0..100).
+  // Satisfação: média das 3 respostas do ASQ (1..7 → 0..100 cada).
   let satisfaction: number | null = null
-  if (typeof i.ease === "number" && i.ease >= 1) {
-    satisfaction = clamp01((i.ease - 1) / 6) * 100
+  const vals = (i.satisfactionValues ?? []).filter((v) => typeof v === "number" && v >= 1)
+  if (vals.length > 0) {
+    const norm = vals.map((v) => clamp01((v - 1) / 6) * 100)
+    satisfaction = norm.reduce((a, b) => a + b, 0) / norm.length
   }
 
   const parts = [completion, time, errors, satisfaction].filter(

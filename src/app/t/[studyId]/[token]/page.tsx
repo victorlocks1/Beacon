@@ -5,7 +5,7 @@ import { FigmaFlowRunner } from "@/components/test/figma-flow-runner"
 import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { tt, type Lang } from "@/lib/i18n"
 import { susStatementsFor } from "@/lib/sus"
-import { seqStatementFor } from "@/lib/sum"
+import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
 
 export default async function TestRunPage({
   params,
@@ -195,7 +195,8 @@ export default async function TestRunPage({
         thanksMessage={study.thanksMessage}
         susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
         sumEnabled={study.sumEnabled}
-        sumStatement={seqStatementFor(lang === "es" ? "es" : "pt", study.sumStatement)}
+        sumStatements={asqStatementsFor(lang === "es" ? "es" : "pt", study.sumStatements)}
+        sumAnchors={ASQ_ANCHORS[lang === "es" ? "es" : "pt"]}
         goalsByMission={goalsByMission}
         startNodeByMission={startNodeByMission}
         successTypeByMission={successTypeByMission}
@@ -215,7 +216,6 @@ export default async function TestRunPage({
       thanksMessage={study.thanksMessage}
       susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
       sumEnabled={study.sumEnabled}
-      sumStatement={seqStatementFor(lang === "es" ? "es" : "pt", study.sumStatement)}
       screens={screens.map((s) => ({
         id: s.id,
         name: s.name,

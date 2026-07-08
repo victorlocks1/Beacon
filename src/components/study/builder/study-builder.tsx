@@ -78,7 +78,13 @@ export function StudyBuilder({
   missionScreens: MissionFormScreen[]
   figmaFileKey: string | null
   sus: { statements: string[]; scaleOptions: string[]; defaultStatements: string[] }
-  sum: { enabled: boolean; statement: string; defaultStatement: string; anchors: { low: string; high: string } }
+  sum: {
+    enabled: boolean
+    statements: string[]
+    defaultStatements: string[]
+    labels: string[]
+    anchors: { low: string; high: string }
+  }
 }) {
   const router = useRouter()
   // Abre no bloco recém-salvo (se veio na URL e ainda existe); senão, boas-vindas.
@@ -362,8 +368,9 @@ export function StudyBuilder({
           <SumEditor
             studyId={studyId}
             editable={editable}
-            statement={sum.statement}
-            defaultStatement={sum.defaultStatement}
+            statements={sum.statements}
+            defaultStatements={sum.defaultStatements}
+            labels={sum.labels}
             anchors={sum.anchors}
             onRemoved={() => setSel("welcome")}
           />

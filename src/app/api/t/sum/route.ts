@@ -1,21 +1,22 @@
 import { prisma } from "@/lib/db"
+import { SUM_QUESTION_COUNT } from "@/lib/sum"
 
-// Grava a resposta SEQ (facilidade, 1..7) de UMA tarefa da sessão (SUM).
+// Grava as 3 respostas do ASQ (1..7) de UMA tarefa da sessão (SUM).
 export async function POST(request: Request) {
-  let body: { token?: string; missionId?: string; ease?: number }
+  let body: { token?: string; missionId?: string; values?: number[] }
   try {
     body = await request.json()
   } catch {
     return Response.json({ ok: false, error: "invalid_body" }, { status: 400 })
   }
 
-  const { token, missionId, ease } = body
+  const { token, missionId, values } = body
   if (
     !token ||
     !missionId ||
-    !Number.isInteger(ease) ||
-    (ease as number) < 1 ||
-    (ease as number) > 7
+    !Array.isArray(values) ||
+    values.length !== SUM_QUESTION_COUNT ||
+    values.some((v) => !Number.isInteger(v) || v < 1 || v > 7)
   ) {
     return Response.json({ ok: false, error: "missing_fields" }, { status: 400 })
   }
@@ -38,8 +39,8 @@ export async function POST(request: Request) {
 
   await prisma.sumResponse.upsert({
     where: { sessionId_missionId: { sessionId: session.id, missionId } },
-    create: { sessionId: session.id, missionId, ease: ease as number },
-    update: { ease: ease as number },
+    create: { sessionId: session.id, missionId, values },
+    update: { values },
   })
 
   return Response.json({ ok: true })

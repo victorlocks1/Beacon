@@ -20,7 +20,7 @@ import { StudyBuilder, type BuilderBlock } from "@/components/study/builder/stud
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import { susStatementsFor, SUS_STATEMENTS, SUS_OPTIONS } from "@/lib/sus"
-import { seqStatementFor, SEQ_STATEMENT, SEQ_ANCHORS } from "@/lib/sum"
+import { asqStatementsFor, ASQ_STATEMENTS, ASQ_ANCHORS, ASQ_LABELS } from "@/lib/sum"
 import {
   ArrowLeft,
   Trash2,
@@ -347,9 +347,10 @@ export default async function StudyPage({
             }}
             sum={{
               enabled: study.sumEnabled,
-              statement: seqStatementFor(susLang, study.sumStatement),
-              defaultStatement: SEQ_STATEMENT[susLang],
-              anchors: SEQ_ANCHORS[susLang],
+              statements: asqStatementsFor(susLang, study.sumStatements),
+              defaultStatements: ASQ_STATEMENTS[susLang],
+              labels: ASQ_LABELS[susLang],
+              anchors: ASQ_ANCHORS[susLang],
             }}
           />
         </TabsContent>

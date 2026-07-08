@@ -77,12 +77,12 @@ export default async function MissionResultsPage({
     orderBy: { session: { startedAt: "asc" } },
   })
 
-  // SUM: respostas SEQ (facilidade) desta tarefa, por sessão.
+  // SUM: respostas do ASQ (3 × 1..7) desta tarefa, por sessão.
   const sumResponses = await prisma.sumResponse.findMany({
     where: { missionId, session: { studyId: id } },
-    select: { sessionId: true, ease: true },
+    select: { sessionId: true, values: true },
   })
-  const easeBySession = new Map(sumResponses.map((r) => [r.sessionId, r.ease]))
+  const asqBySession = new Map(sumResponses.map((r) => [r.sessionId, r.values]))
 
   // Numeração estável "Testador N" por ordem de chegada no study
   const studySessions = await prisma.session.findMany({
@@ -260,21 +260,29 @@ export default async function MissionResultsPage({
     ? Math.max(...mission.paths.map((p) => Math.max(0, p.steps.length - 1)))
     : 0
   const missionIdealMs = sumIdealMs(mission.idealTimeMs, idealTaps)
-  const sumBreakdowns = study.sumEnabled
-    ? results.map((r) =>
-        sumScore({
-          completed: r.outcome === "direct" || r.outcome === "indirect",
-          indirect: r.outcome === "indirect",
+  const sumRows = study.sumEnabled
+    ? results.map((r) => {
+        const asq = asqBySession.get(r.sessionId) ?? null
+        return {
+          tester: testerNumber.get(r.sessionId) ?? 0,
+          outcome: r.outcome,
           durationMs: r.durationMs,
-          misclicks: r.misclickCount,
-          ease: easeBySession.get(r.sessionId) ?? null,
-          idealMs: missionIdealMs,
-          idealTaps,
-        })
-      )
+          asq,
+          breakdown: sumScore({
+            completed: r.outcome === "direct" || r.outcome === "indirect",
+            indirect: r.outcome === "indirect",
+            durationMs: r.durationMs,
+            misclicks: r.misclickCount,
+            satisfactionValues: asq,
+            idealMs: missionIdealMs,
+            idealTaps,
+          }),
+        }
+      })
     : []
-  const sumAvg = sumBreakdowns.length ? sumAverage(sumBreakdowns) : null
+  const sumAvg = sumRows.length ? sumAverage(sumRows.map((r) => r.breakdown)) : null
   const sumV = sumAvg ? sumVerdict(sumAvg.score) : null
+  const asqRespondents = sumResponses.length
 
   // ── Agrupar caminhos por desfecho ──
   type PathGroup = {
@@ -337,12 +345,15 @@ export default async function MissionResultsPage({
       </div>
 
       <Tabs defaultValue="geral">
-        {mission.questions.length > 0 && (
+        {(mission.questions.length > 0 || sumAvg) && (
           <TabsList className="mb-6">
             <TabsTrigger value="geral">Geral</TabsTrigger>
-            <TabsTrigger value="questions">
-              Perguntas realizadas ({mission.questions.length})
-            </TabsTrigger>
+            {sumAvg && <TabsTrigger value="sum">SUM</TabsTrigger>}
+            {mission.questions.length > 0 && (
+              <TabsTrigger value="questions">
+                Perguntas realizadas ({mission.questions.length})
+              </TabsTrigger>
+            )}
           </TabsList>
         )}
 
@@ -384,50 +395,6 @@ export default async function MissionResultsPage({
               </p>
             )}
           </div>
-
-          {/* ── SUM (Single Usability Metric) ── */}
-          {sumAvg && sumV && (
-            <div>
-              <p className="text-label-medium text-on-surface-variant mb-3">
-                SUM · MÉTRICA DE USABILIDADE
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_2fr] gap-4">
-                <Kpi
-                  big
-                  label="SUM da tarefa"
-                  value={formatPct(sumAvg.score)}
-                  sub={sumV.label}
-                  info="Single Usability Metric — média de até 4 dimensões (Conclusão, Tempo, Erros, Satisfação), 0–100%. Faixas: ≥80 Excelente · 65–79 Bom · 50–64 Regular · <50 Problema."
-                />
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Kpi
-                    label="Conclusão"
-                    value={formatPct(sumAvg.completion)}
-                    sub="concluíram"
-                    info="Proporção que concluiu a tarefa (direto ou indireto)."
-                  />
-                  <Kpi
-                    label="Tempo"
-                    value={sumAvg.time == null ? "—" : formatPct(sumAvg.time)}
-                    sub={sumAvg.time == null ? "sem tempo ideal" : `ideal ${Math.round(missionIdealMs / 1000)}s`}
-                    info="Eficiência = tempo ideal / tempo real (0–100%). Tempo ideal via KLM (do caminho exato) ou override da missão."
-                  />
-                  <Kpi
-                    label="Erros"
-                    value={sumAvg.errors == null ? "—" : formatPct(sumAvg.errors)}
-                    sub={sumAvg.errors == null ? "sem caminho" : "misclicks + desvios"}
-                    info="1 − erros/oportunidades. Erros = misclicks + desvio do caminho; oportunidades ~ toques do caminho ideal."
-                  />
-                  <Kpi
-                    label="Satisfação"
-                    value={sumAvg.satisfaction == null ? "—" : formatPct(sumAvg.satisfaction)}
-                    sub={`SEQ · ${easeBySession.size} resp.`}
-                    info="Pergunta SEQ (facilidade, 1–7) normalizada para 0–100%."
-                  />
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ── Métricas de apoio (cards menores) ── */}
           <div>
@@ -621,6 +588,79 @@ export default async function MissionResultsPage({
         </div>
       )}
         </TabsContent>
+
+        {sumAvg && sumV && (
+          <TabsContent value="sum">
+            <div className="space-y-8">
+              {/* Nota SUM + as 4 dimensões */}
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.1fr)_2fr] gap-4">
+                <Kpi
+                  big
+                  label="SUM da tarefa"
+                  value={formatPct(sumAvg.score)}
+                  sub={sumV.label}
+                  info="Single Usability Metric — média de até 4 dimensões (Conclusão, Tempo, Erros, Satisfação), 0–100%. Faixas: ≥80 Excelente · 65–79 Bom · 50–64 Regular · <50 Problema."
+                />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Kpi label="Conclusão" value={formatPct(sumAvg.completion)} sub="concluíram"
+                    info="Proporção que concluiu a tarefa (direto ou indireto)." />
+                  <Kpi label="Tempo"
+                    value={sumAvg.time == null ? "—" : formatPct(sumAvg.time)}
+                    sub={sumAvg.time == null ? "sem tempo ideal" : `ideal ${Math.round(missionIdealMs / 1000)}s`}
+                    info="Eficiência = tempo ideal / tempo real. Tempo ideal via KLM (caminho exato) ou override da missão." />
+                  <Kpi label="Erros"
+                    value={sumAvg.errors == null ? "—" : formatPct(sumAvg.errors)}
+                    sub={sumAvg.errors == null ? "sem caminho" : "misclicks + desvios"}
+                    info="1 − erros/oportunidades. Erros = misclicks + desvio; oportunidades ~ toques do caminho ideal." />
+                  <Kpi label="Satisfação"
+                    value={sumAvg.satisfaction == null ? "—" : formatPct(sumAvg.satisfaction)}
+                    sub={`ASQ · ${asqRespondents} resp.`}
+                    info="Média das 3 perguntas do ASQ (1–7) normalizada para 0–100%." />
+                </div>
+              </div>
+
+              {/* Tabela por participante */}
+              {sumRows.length > 0 && (
+                <div>
+                  <p className="text-label-medium text-on-surface-variant mb-3">POR PARTICIPANTE</p>
+                  <div className="overflow-x-auto rounded-2xl border border-outline-variant">
+                    <table className="w-full text-body-small">
+                      <thead>
+                        <tr className="border-b border-outline-variant text-on-surface-variant">
+                          <th className="text-left font-medium px-4 py-2.5">Participante</th>
+                          <th className="text-right font-medium px-3 py-2.5">Conclusão</th>
+                          <th className="text-right font-medium px-3 py-2.5">Tempo</th>
+                          <th className="text-right font-medium px-3 py-2.5">Erros</th>
+                          <th className="text-right font-medium px-3 py-2.5">Satisf.</th>
+                          <th className="text-right font-medium px-4 py-2.5">SUM</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sumRows
+                          .slice()
+                          .sort((a, b) => a.tester - b.tester)
+                          .map((r) => {
+                            const b = r.breakdown
+                            const cell = (v: number | null) => (v == null ? "—" : formatPct(v))
+                            return (
+                              <tr key={r.tester} className="border-b border-outline-variant last:border-0">
+                                <td className="px-4 py-2.5 text-on-surface">Testador {r.tester}</td>
+                                <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b.completion)}</td>
+                                <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b.time)}</td>
+                                <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b.errors)}</td>
+                                <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b.satisfaction)}</td>
+                                <td className="px-4 py-2.5 text-right text-on-surface font-medium">{formatPct(b.score)}</td>
+                              </tr>
+                            )
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
 
         {mission.questions.length > 0 && (
           <TabsContent value="questions">

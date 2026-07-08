@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowRight, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatPct } from "@/lib/format"
 import { susVerdict, SUS_THRESHOLD } from "@/lib/sus"
+import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, type SumBreakdown } from "@/lib/sum"
 import { ResetDataButton } from "@/components/study/reset-data-button"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
@@ -28,7 +29,7 @@ export default async function ResultsOverviewPage({
       blocks: {
         where: { type: "mission" },
         orderBy: { order: "asc" },
-        include: { mission: true },
+        include: { mission: { include: { paths: { include: { steps: { select: { screenId: true } } } } } } },
       },
       _count: { select: { sessions: true } },
     },
@@ -63,6 +64,42 @@ export default async function ResultsOverviewPage({
   const susAvg = susResponses.length
     ? Math.round((susResponses.reduce((a, r) => a + r.score, 0) / susResponses.length) * 10) / 10
     : 0
+
+  // ── SUM — só se a coleta está ligada no estudo ──
+  const sumEnabled = study.sumEnabled
+  const sumResponses = sumEnabled
+    ? await prisma.sumResponse.findMany({
+        where: { session: { studyId: id } },
+        select: { sessionId: true, missionId: true, values: true },
+      })
+    : []
+  const asqByKey = new Map(sumResponses.map((r) => [`${r.sessionId}:${r.missionId}`, r.values]))
+  const allSumBreakdowns: SumBreakdown[] = []
+  const sumByMission = new Map<string, SumBreakdown>()
+  if (sumEnabled) {
+    for (const m of missions) {
+      const rs = results.filter((r) => r.missionId === m.id)
+      const idealTaps = m.paths.length
+        ? Math.max(...m.paths.map((p) => Math.max(0, p.steps.length - 1)))
+        : 0
+      const idealMs = sumIdealMs(m.idealTimeMs, idealTaps)
+      const rows = rs.map((r) =>
+        sumScore({
+          completed: r.outcome === "direct" || r.outcome === "indirect",
+          indirect: r.outcome === "indirect",
+          durationMs: r.durationMs,
+          misclicks: r.misclickCount,
+          satisfactionValues: asqByKey.get(`${r.sessionId}:${m.id}`) ?? null,
+          idealMs,
+          idealTaps,
+        })
+      )
+      allSumBreakdowns.push(...rows)
+      if (rows.length) sumByMission.set(m.id, sumAverage(rows))
+    }
+  }
+  const sumOverall = allSumBreakdowns.length ? sumAverage(allSumBreakdowns) : null
+  const sumOverallV = sumOverall ? sumVerdict(sumOverall.score) : null
 
   // Sessões encerradas de fato (finishedAt OU inativas além do timeout) — mesma
   // regra da página de detalhe. Necessário para o denominador correto da taxa de
@@ -173,6 +210,7 @@ export default async function ResultsOverviewPage({
         <TabsList className="mb-6">
           <TabsTrigger value="missions">Missões ({missions.length})</TabsTrigger>
           <TabsTrigger value="questions">Perguntas ({freeQuestions.length})</TabsTrigger>
+          {sumOverall && <TabsTrigger value="sum">SUM</TabsTrigger>}
           {hasSus && <TabsTrigger value="sus">SUS</TabsTrigger>}
         </TabsList>
 
@@ -256,6 +294,62 @@ export default async function ResultsOverviewPage({
           )}
         </TabsContent>
 
+        {/* ── SUM (todas as tarefas) ── */}
+        {sumOverall && sumOverallV && (
+          <TabsContent value="sum">
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.1fr)_2fr] gap-4">
+                <SumKpi big label="SUM do estudo" value={formatPct(sumOverall.score)} sub={sumOverallV.label}
+                  info="Média da SUM entre todas as tarefas (todas as execuções). Faixas: ≥80 Excelente · 65–79 Bom · 50–64 Regular · <50 Problema." />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <SumKpi label="Conclusão" value={sumOverall.completion == null ? "—" : formatPct(sumOverall.completion)} />
+                  <SumKpi label="Tempo" value={sumOverall.time == null ? "—" : formatPct(sumOverall.time)} />
+                  <SumKpi label="Erros" value={sumOverall.errors == null ? "—" : formatPct(sumOverall.errors)} />
+                  <SumKpi label="Satisfação" value={sumOverall.satisfaction == null ? "—" : formatPct(sumOverall.satisfaction)} />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-label-medium text-on-surface-variant mb-3">POR TAREFA</p>
+                <div className="overflow-x-auto rounded-2xl border border-outline-variant">
+                  <table className="w-full text-body-small">
+                    <thead>
+                      <tr className="border-b border-outline-variant text-on-surface-variant">
+                        <th className="text-left font-medium px-4 py-2.5">Tarefa</th>
+                        <th className="text-right font-medium px-3 py-2.5">Conclusão</th>
+                        <th className="text-right font-medium px-3 py-2.5">Tempo</th>
+                        <th className="text-right font-medium px-3 py-2.5">Erros</th>
+                        <th className="text-right font-medium px-3 py-2.5">Satisf.</th>
+                        <th className="text-right font-medium px-4 py-2.5">SUM</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {missions.map((m, i) => {
+                        const b = sumByMission.get(m.id)
+                        const cell = (v: number | null | undefined) => (v == null ? "—" : formatPct(v))
+                        return (
+                          <tr key={m.id} className="border-b border-outline-variant last:border-0">
+                            <td className="px-4 py-2.5 text-on-surface max-w-[22rem] truncate">
+                              {i + 1}. {m.task}
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b?.completion)}</td>
+                            <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b?.time)}</td>
+                            <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b?.errors)}</td>
+                            <td className="px-3 py-2.5 text-right text-on-surface-variant">{cell(b?.satisfaction)}</td>
+                            <td className="px-4 py-2.5 text-right text-on-surface font-medium">
+                              {b ? formatPct(b.score) : "—"}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        )}
+
         {/* ── SUS ── */}
         {hasSus && (
           <TabsContent value="sus">
@@ -263,6 +357,33 @@ export default async function ResultsOverviewPage({
           </TabsContent>
         )}
       </Tabs>
+    </div>
+  )
+}
+
+function SumKpi({
+  label,
+  value,
+  sub,
+  info,
+  big = false,
+}: {
+  label: string
+  value: string
+  sub?: string
+  info?: string
+  big?: boolean
+}) {
+  return (
+    <div className={"relative border border-outline-variant rounded-2xl bg-surface-container-low " + (big ? "p-6" : "p-4")}>
+      {info && (
+        <div className="absolute top-2.5 right-2.5">
+          <MetricInfo text={info} />
+        </div>
+      )}
+      <p className={(big ? "text-display-small" : "text-headline-small") + " text-on-surface"}>{value}</p>
+      <p className={(big ? "text-title-small" : "text-body-small") + " text-on-surface-variant mt-1"}>{label}</p>
+      {sub && <p className="text-label-small text-on-surface-variant/70 mt-0.5">{sub}</p>}
     </div>
   )
 }

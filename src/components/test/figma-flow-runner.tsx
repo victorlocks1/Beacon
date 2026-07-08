@@ -59,7 +59,8 @@ export function FigmaFlowRunner({
   thanksMessage,
   susStatements,
   sumEnabled,
-  sumStatement,
+  sumStatements,
+  sumAnchors,
   goalsByMission,
   startNodeByMission,
   successTypeByMission,
@@ -75,8 +76,9 @@ export function FigmaFlowRunner({
   thanksTitle?: string | null
   thanksMessage?: string | null
   susStatements?: string[]
-  sumEnabled?: boolean // SUM: coleta a SEQ após cada tarefa
-  sumStatement?: string // enunciado da SEQ (resolvido por idioma)
+  sumEnabled?: boolean // SUM: coleta o ASQ (3 perguntas) após cada tarefa
+  sumStatements?: string[] // enunciados do ASQ (resolvidos por idioma)
+  sumAnchors?: { low: string; high: string } // âncoras da escala 1..7
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   successTypeByMission: Record<string, "screen" | "path"> // critério de sucesso da missão
@@ -97,8 +99,9 @@ export function FigmaFlowRunner({
   // nota de estrelas embutida no feedback de sucesso (quando a próxima pergunta
   // é de estrelas, respondemos ali mesmo pra poupar um clique)
   const [inlineRating, setInlineRating] = useState(0)
-  // SUM: nota SEQ (1..7) coletada no feedback de conclusão de cada tarefa
-  const [sumEase, setSumEase] = useState(0)
+  // SUM: respostas do ASQ (3 × 1..7) coletadas no feedback de cada tarefa
+  const [sumValues, setSumValues] = useState<number[]>([0, 0, 0])
+  const sumAnswered = sumValues.every((v) => v >= 1)
 
   const step = steps[stepIndex]
   const mission = step?.kind === "mission" ? step.mission : null
@@ -272,22 +275,22 @@ export function FigmaFlowRunner({
     advance()
   }, [advance])
 
-  // SUM: grava a SEQ da tarefa (coletada no feedback de conclusão) e segue.
+  // SUM: grava o ASQ da tarefa (coletado no feedback de conclusão) e segue.
   const continueWithSum = useCallback(
     (missionId: string) => {
-      if (sumEase > 0) {
+      if (sumValues.every((v) => v >= 1)) {
         fetch("/api/t/sum", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, missionId, ease: sumEase }),
+          body: JSON.stringify({ token, missionId, values: sumValues }),
           keepalive: true,
         }).catch(() => {})
       }
-      setSumEase(0)
+      setSumValues([0, 0, 0])
       setCompletion(null)
       advance()
     },
-    [sumEase, token, advance]
+    [sumValues, token, advance]
   )
 
   // Continua a partir do feedback de sucesso quando a próxima pergunta é de
@@ -526,7 +529,7 @@ export function FigmaFlowRunner({
     startNodeRef.current = currentStartNode
     pendingPressRef.current = null
     postNavRef.current = 0
-    setSumEase(0)
+    setSumValues([0, 0, 0])
     // inicializa o rastreador do caminho exato (início já conta como 1º passo)
     matchRef.current = (expectedPathsByMission[mission.id] ?? []).map((steps) => ({
       steps,
@@ -675,15 +678,20 @@ export function FigmaFlowRunner({
                     </p>
                   </div>
 
-                  {/* SUM: SEQ 1..7 embutida no feedback (coletada após cada tarefa) */}
+                  {/* SUM: ASQ (3 perguntas 1..7) embutido no feedback da tarefa */}
                   {sumEnabled && (
-                    <div className="pt-1">
-                      <SeqScale
-                        statement={sumStatement || ""}
-                        value={sumEase}
-                        onChange={setSumEase}
-                        lang={lang === "es" ? "es" : "pt"}
-                      />
+                    <div className="space-y-5 pt-1">
+                      {(sumStatements ?? []).map((st, idx) => (
+                        <SeqScale
+                          key={idx}
+                          statement={st}
+                          value={sumValues[idx] ?? 0}
+                          onChange={(v) =>
+                            setSumValues((prev) => prev.map((p, j) => (j === idx ? v : p)))
+                          }
+                          anchors={sumAnchors ?? { low: "", high: "" }}
+                        />
+                      ))}
                     </div>
                   )}
 
@@ -723,7 +731,7 @@ export function FigmaFlowRunner({
                   {sumEnabled ? (
                     <Button
                       onClick={() => continueWithSum(step.mission.id)}
-                      disabled={sumEase === 0}
+                      disabled={!sumAnswered}
                       className="h-12 px-6"
                       size="lg"
                     >
