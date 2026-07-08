@@ -620,7 +620,7 @@ export function FigmaFlowRunner({
                       style={{ animation: "beaconFill 3.2s cubic-bezier(0.22,1,0.36,1) forwards" }}
                     />
                   </div>
-                  <span className="text-body-small text-on-surface-variant">{s.loadingPrototype}</span>
+                  <span className="text-title-medium text-on-surface">{s.loadingPrototype}</span>
                   <style>{`@keyframes beaconFill{0%{width:6%}55%{width:64%}100%{width:92%}}`}</style>
                 </div>
               )}
