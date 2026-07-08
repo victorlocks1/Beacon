@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
-import { reconstructPath } from "@/lib/path"
+import { reconstructPath, classifyExactPath } from "@/lib/path"
 import { median, lostness, lostnessBand } from "@/lib/metrics"
 import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs } from "@/lib/sum"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
@@ -109,6 +109,42 @@ export default async function MissionResultsPage({
     orderBy: { timestampMs: "asc" },
   })
 
+  // Caminho percorrido por sessão (a partir dos eventos de navegação).
+  const startScreenId = mission.startScreenId
+  const navsBySession = new Map<string, { targetScreenId: string | null }[]>()
+  for (const e of events) {
+    if (e.type !== "navigate") continue
+    const arr = navsBySession.get(e.sessionId) ?? []
+    arr.push({ targetScreenId: e.targetScreenId })
+    navsBySession.set(e.sessionId, arr)
+  }
+  const pathCache = new Map<string, string[]>()
+  function pathFor(sessionId: string): string[] {
+    const cached = pathCache.get(sessionId)
+    if (cached) return cached
+    const path = reconstructPath(navsBySession.get(sessionId) ?? [])
+    if (path.length === 0) path.push(startScreenId)
+    pathCache.set(sessionId, path)
+    return path
+  }
+
+  // Reclassifica o desfecho pela regra ATUAL, a partir do caminho gravado (SEM
+  // alterar o banco — recálculo em tela). Só reavalia sucessos automáticos
+  // (direct/indirect) de caminho exato; desistência (given_up), abandono e
+  // missões de tela-alvo permanecem como estão.
+  const isPath = mission.successType === "path"
+  const expectedPaths = mission.paths.map((p) => p.steps.map((s) => s.screenId))
+  type Oc = "direct" | "indirect" | "given_up" | "unfinished"
+  const effOutcome = new Map<string, Oc>()
+  for (const r of results) {
+    let o: Oc = r.outcome
+    if (isPath && (r.outcome === "direct" || r.outcome === "indirect")) {
+      o = classifyExactPath(pathFor(r.sessionId), expectedPaths) ?? "unfinished"
+    }
+    effOutcome.set(r.sessionId, o)
+  }
+  const oc = (r: { sessionId: string }): Oc => effOutcome.get(r.sessionId) ?? "unfinished"
+
   // ── Classificação por sessão que INICIOU a tarefa (exclusão em ordem) ──
   // 1) concluída (resultado direct/indirect) 2) declarada (given_up)
   // 3) perdida (iniciou, sem resultado, e sessão encerrada) — o resto fica "em aberto".
@@ -122,9 +158,10 @@ export default async function MissionResultsPage({
   const stateBySession = new Map<string, TaskState>()
   for (const sid of startedSessionIds) {
     const r = resultBySession.get(sid)
-    if (r && r.outcome === "direct") stateBySession.set(sid, "completed")
-    else if (r && r.outcome === "indirect") stateBySession.set(sid, "indirect")
-    else if (r && r.outcome === "given_up") stateBySession.set(sid, "declared")
+    const o = r ? oc(r) : null
+    if (o === "direct") stateBySession.set(sid, "completed")
+    else if (o === "indirect") stateBySession.set(sid, "indirect")
+    else if (o === "given_up") stateBySession.set(sid, "declared")
     else if (sessionEnded.get(sid)) stateBySession.set(sid, "lost")
     else stateBySession.set(sid, "open")
   }
@@ -141,7 +178,6 @@ export default async function MissionResultsPage({
   const indirectRate = ended ? (counts.indirect / ended) * 100 : 0
   const declaredRate = ended ? (counts.declared / ended) * 100 : 0
   const lostRate = ended ? (counts.lost / ended) * 100 : 0
-  const isPath = mission.successType === "path"
 
   // Esforço (sobre quem tem resultado registrado)
   const totalClicks = results.reduce((a, r) => a + r.clickCount, 0)
@@ -150,9 +186,9 @@ export default async function MissionResultsPage({
   // Duração: MEDIANA (tempos são enviesados à direita), separando quem concluiu
   // (direto/indireto) de quem NÃO concluiu (desistiu; perdidas não têm duração).
   const completeDurations = results
-    .filter((r) => r.outcome === "direct" || r.outcome === "indirect")
+    .filter((r) => oc(r) === "direct" || oc(r) === "indirect")
     .map((r) => r.durationMs)
-  const failDurations = results.filter((r) => r.outcome === "given_up").map((r) => r.durationMs)
+  const failDurations = results.filter((r) => oc(r) === "given_up").map((r) => r.durationMs)
   const medComplete = median(completeDurations)
   const medFail = median(failDurations)
 
@@ -229,25 +265,6 @@ export default async function MissionResultsPage({
       firstClickPoints: firstClickByScreen.get(s.id) ?? [],
     }))
 
-  // ── Caminho por sessão (computado uma vez) ──
-  const startScreenId = mission.startScreenId
-  const navsBySession = new Map<string, { targetScreenId: string | null }[]>()
-  for (const e of events) {
-    if (e.type !== "navigate") continue
-    const arr = navsBySession.get(e.sessionId) ?? []
-    arr.push({ targetScreenId: e.targetScreenId })
-    navsBySession.set(e.sessionId, arr)
-  }
-  const pathCache = new Map<string, string[]>()
-  function pathFor(sessionId: string): string[] {
-    const cached = pathCache.get(sessionId)
-    if (cached) return cached
-    const path = reconstructPath(navsBySession.get(sessionId) ?? [])
-    if (path.length === 0) path.push(startScreenId)
-    pathCache.set(sessionId, path)
-    return path
-  }
-
   // ── Lostness (só caminho exato): compara telas visitadas com o caminho ótimo.
   //    N = únicas visitadas, S = total (com revisitas), R = mínimo do caminho ótimo.
   const optimalLens = mission.paths
@@ -275,14 +292,15 @@ export default async function MissionResultsPage({
   const sumRows = study.sumEnabled
     ? results.map((r) => {
         const asq = asqBySession.get(r.sessionId) ?? null
+        const o = oc(r)
         return {
           tester: testerNumber.get(r.sessionId) ?? 0,
-          outcome: r.outcome,
+          outcome: o,
           durationMs: r.durationMs,
           asq,
           breakdown: sumScore({
-            completed: r.outcome === "direct" || r.outcome === "indirect",
-            indirect: r.outcome === "indirect",
+            completed: o === "direct" || o === "indirect",
+            indirect: o === "indirect",
             durationMs: r.durationMs,
             misclicks: r.misclickCount,
             satisfactionValues: asq,
@@ -305,9 +323,11 @@ export default async function MissionResultsPage({
   }
   // Sessões abandonadas (iniciaram, não concluíram nem desistiram, e encerraram):
   // não têm MissionResult, mas TÊM caminho (eventos de navegação). Entram na
-  // análise para entender o que a pessoa tentou fazer.
+  // análise para entender o que a pessoa tentou fazer. Excluímos quem TEM
+  // MissionResult (já entra pelo loop de results — inclusive os reclassificados),
+  // para não contar em dobro.
   const lostSessionIds = [...stateBySession.entries()]
-    .filter(([, st]) => st === "lost")
+    .filter(([sid, st]) => st === "lost" && !resultBySession.has(sid))
     .map(([sid]) => sid)
   // Duração aproximada (último evento) e misclicks das abandonadas, a partir dos eventos.
   const lastEventMsBySession = new Map<string, number>()
@@ -321,7 +341,7 @@ export default async function MissionResultsPage({
 
   const groupMap = new Map<string, PathGroup>()
   for (const r of results) {
-    const bucket = outcomeBucket[r.outcome]
+    const bucket = outcomeBucket[oc(r)]
     const path = pathFor(r.sessionId)
     const key = `${bucket}|${path.join(">")}`
     const g = groupMap.get(key)
@@ -364,8 +384,8 @@ export default async function MissionResultsPage({
     ...results.map((r) => ({
       id: r.sessionId,
       label: `Testador ${testerNumber.get(r.sessionId) ?? "?"}`,
-      bucket: outcomeBucket[r.outcome],
-      badgeText: r.outcome === "given_up" ? "Desistiu" : undefined,
+      bucket: outcomeBucket[oc(r)],
+      badgeText: oc(r) === "given_up" ? "Desistiu" : undefined,
       durationMs: r.durationMs,
       misclickCount: r.misclickCount,
       thumbs: thumbsFor(pathFor(r.sessionId)),

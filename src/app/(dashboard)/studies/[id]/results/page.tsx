@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatPct } from "@/lib/format"
+import { reconstructPath, classifyExactPath } from "@/lib/path"
 import { susVerdict, SUS_THRESHOLD } from "@/lib/sus"
 import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, type SumBreakdown } from "@/lib/sum"
 import { ResetDataButton } from "@/components/study/reset-data-button"
@@ -43,6 +44,42 @@ export default async function ResultsOverviewPage({
   const results = await prisma.missionResult.findMany({
     where: { session: { studyId: id } },
   })
+
+  // Reclassificação em tela (sem tocar no banco): reconstrói o caminho por
+  // (missão, sessão) para reavaliar sucessos de CAMINHO EXATO pela regra atual.
+  const navEvents = await prisma.event.findMany({
+    where: { session: { studyId: id }, type: "navigate" },
+    select: { missionId: true, sessionId: true, targetScreenId: true },
+    orderBy: { timestampMs: "asc" },
+  })
+  const navByKey = new Map<string, { targetScreenId: string | null }[]>()
+  for (const e of navEvents) {
+    if (!e.missionId) continue
+    const k = `${e.missionId}:${e.sessionId}`
+    const arr = navByKey.get(k) ?? []
+    arr.push({ targetScreenId: e.targetScreenId })
+    navByKey.set(k, arr)
+  }
+  const missionMeta = new Map(
+    missions.map((m) => [
+      m.id,
+      {
+        isPath: m.successType === "path",
+        start: m.startScreenId,
+        expected: m.paths.map((p) => p.steps.map((s) => s.screenId)),
+      },
+    ])
+  )
+  type Oc = "direct" | "indirect" | "given_up" | "unfinished"
+  function effOutcomeOf(r: { sessionId: string; missionId: string; outcome: Oc }): Oc {
+    const meta = missionMeta.get(r.missionId)
+    if (!meta || !meta.isPath) return r.outcome
+    if (r.outcome !== "direct" && r.outcome !== "indirect") return r.outcome
+    const nav = navByKey.get(`${r.missionId}:${r.sessionId}`) ?? []
+    const path = reconstructPath(nav)
+    if (path.length === 0) path.push(meta.start)
+    return classifyExactPath(path, meta.expected) ?? "unfinished"
+  }
 
   // Telas do Figma ainda sem imagem (import ao vivo) — para o botão de heatmap.
   const screensMissingImage = await prisma.screen.count({
@@ -83,17 +120,18 @@ export default async function ResultsOverviewPage({
         ? Math.max(...m.paths.map((p) => Math.max(0, p.steps.length - 1)))
         : 0
       const idealMs = sumIdealMs(m.idealTimeMs, idealTaps)
-      const rows = rs.map((r) =>
-        sumScore({
-          completed: r.outcome === "direct" || r.outcome === "indirect",
-          indirect: r.outcome === "indirect",
+      const rows = rs.map((r) => {
+        const o = effOutcomeOf(r)
+        return sumScore({
+          completed: o === "direct" || o === "indirect",
+          indirect: o === "indirect",
           durationMs: r.durationMs,
           misclicks: r.misclickCount,
           satisfactionValues: asqByKey.get(`${r.sessionId}:${m.id}`) ?? null,
           idealMs,
           idealTaps,
         })
-      )
+      })
       allSumBreakdowns.push(...rows)
       if (rows.length) sumByMission.set(m.id, sumAverage(rows))
     }
@@ -161,9 +199,10 @@ export default async function ResultsOverviewPage({
     let completed = 0, indirect = 0, declared = 0, lost = 0
     for (const sid of started) {
       const r = resultBySession.get(sid)
-      if (r && r.outcome === "direct") completed++
-      else if (r && r.outcome === "indirect") indirect++
-      else if (r && r.outcome === "given_up") declared++
+      const o = r ? effOutcomeOf(r) : null
+      if (o === "direct") completed++
+      else if (o === "indirect") indirect++
+      else if (o === "given_up") declared++
       else if (sessionEnded.get(sid)) lost++
     }
     const ended = completed + indirect + declared + lost
