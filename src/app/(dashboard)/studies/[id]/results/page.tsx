@@ -235,10 +235,13 @@ export default async function ResultsOverviewPage({
           <h1 className="text-headline-small text-on-surface">Resultados</h1>
           <p className="text-body-medium text-on-surface-variant mt-0.5">{study.title}</p>
         </div>
-        <Badge variant="secondary" className="gap-1.5">
-          <Users className="h-3.5 w-3.5" />
-          {study._count.sessions} sessão(ões) · {finishedSessions} concluída(s)
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant="secondary" className="gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            {study._count.sessions} iniciaram · {finishedSessions} concluíram
+          </Badge>
+          <MetricInfo text={`Iniciaram = pessoas que clicaram em "Empezar" e começaram o teste (inclui quem desistiu no meio, quem só abriu, e testes internos seus). Concluíram = chegaram até o final, respondendo todas as etapas. Aqui: ${finishedSessions} de ${study._count.sessions}${study._count.sessions ? ` (${Math.round((finishedSessions / study._count.sessions) * 100)}%)` : ""} completaram o teste inteiro.`} />
+        </div>
         {screensMissingImage > 0 && (
           <FigmaImagesAutoLoad studyId={id} pending={screensMissingImage} />
         )}
