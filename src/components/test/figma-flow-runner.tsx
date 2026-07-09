@@ -811,11 +811,11 @@ export function FigmaFlowRunner({
         </div>
 
         {/* Protótipo — some ao concluir a tarefa */}
-        <div className="flex items-center justify-center p-2 md:p-3 bg-surface-container overflow-hidden md:h-screen">
+        <div className="flex items-center justify-center p-1 md:p-2 bg-surface-container overflow-hidden md:h-screen">
           {!completion && (
             <div
               className={
-                "relative bg-white rounded-[28px] overflow-hidden transition-opacity duration-300 aspect-[9/20] h-[90vh] max-w-full " +
+                "relative bg-white rounded-[28px] overflow-hidden transition-opacity duration-300 aspect-[9/20] h-[96vh] max-w-full " +
                 (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
               }
               aria-hidden={!taskStarted}
