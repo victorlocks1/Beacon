@@ -674,7 +674,7 @@ export default async function MissionResultsPage({
                   label="SUM da tarefa"
                   value={formatPct(sumAvg.score)}
                   sub={sumV.label}
-                  info="Single Usability Metric — média de até 4 dimensões (Conclusão, Tempo, Erros, Satisfação), 0–100%. Faixas: ≥80 Excelente · 65–79 Bom · 50–64 Regular · <50 Problema."
+                  info="Single Usability Metric — média de até 4 dimensões (Conclusão, Tempo, Erros, Satisfação), 0–100%. Faixas: ≥95 Excelente · 80–94 Satisfatória · 65–79 Regular/atenção · 50–64 Insatisfatória · <50 Crítica."
                 />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Kpi label="Conclusão" value={formatPct(sumAvg.completion)} sub="concluíram"

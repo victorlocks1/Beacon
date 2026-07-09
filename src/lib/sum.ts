@@ -142,9 +142,12 @@ export function sumAverage(rows: SumBreakdown[]): SumBreakdown {
 }
 
 // Faixas de interpretação da SUM (calibráveis).
-export function sumVerdict(score: number): { label: string; band: "great" | "good" | "ok" | "bad" } {
-  if (score >= 80) return { label: "Excelente", band: "great" }
-  if (score >= 65) return { label: "Bom", band: "good" }
-  if (score >= 50) return { label: "Regular", band: "ok" }
-  return { label: "Problema de usabilidade", band: "bad" }
+export function sumVerdict(
+  score: number
+): { label: string; band: "great" | "good" | "ok" | "poor" | "bad" } {
+  if (score >= 95) return { label: "Excelente", band: "great" }
+  if (score >= 80) return { label: "Satisfatória", band: "good" }
+  if (score >= 65) return { label: "Regular / atenção", band: "ok" }
+  if (score >= 50) return { label: "Insatisfatória", band: "poor" }
+  return { label: "Crítica", band: "bad" }
 }

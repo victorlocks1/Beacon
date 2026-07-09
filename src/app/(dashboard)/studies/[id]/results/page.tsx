@@ -342,7 +342,7 @@ export default async function ResultsOverviewPage({
             <div className="space-y-8">
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.1fr)_2fr] gap-4">
                 <SumKpi big label="SUM do estudo" value={formatPct(sumOverall.score)} sub={sumOverallV.label}
-                  info="Média da SUM entre todas as tarefas (todas as execuções). Faixas: ≥80 Excelente · 65–79 Bom · 50–64 Regular · <50 Problema." />
+                  info="Média da SUM entre todas as tarefas (todas as execuções). Faixas: ≥95 Excelente · 80–94 Satisfatória · 65–79 Regular/atenção · 50–64 Insatisfatória · <50 Crítica." />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <SumKpi label="Conclusão" value={sumOverall.completion == null ? "—" : formatPct(sumOverall.completion)} />
                   <SumKpi label="Tempo" value={sumOverall.time == null ? "—" : formatPct(sumOverall.time)} />
