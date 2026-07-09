@@ -8,7 +8,7 @@ import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath, classifyExactPath } from "@/lib/path"
 import { median, lostness, lostnessBand } from "@/lib/metrics"
-import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs } from "@/lib/sum"
+import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, asqStatementsFor, ASQ_LABELS, ASQ_ANCHORS } from "@/lib/sum"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
@@ -313,6 +313,17 @@ export default async function MissionResultsPage({
   const sumAvg = sumRows.length ? sumAverage(sumRows.map((r) => r.breakdown)) : null
   const sumV = sumAvg ? sumVerdict(sumAvg.score) : null
   const asqRespondents = sumResponses.length
+  // Respostas de CADA pergunta do ASQ (média 1–7 + distribuição) para exibir.
+  const sumLang = (study.language ?? "pt") === "es" ? "es" : "pt"
+  const asqTexts = asqStatementsFor(sumLang, study.sumStatements)
+  const asqStats = [0, 1, 2].map((i) => {
+    const vals = sumResponses
+      .map((r) => r.values[i])
+      .filter((v): v is number => typeof v === "number" && v >= 1)
+    const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+    const dist = [1, 2, 3, 4, 5, 6, 7].map((n) => vals.filter((v) => v === n).length)
+    return { text: asqTexts[i], label: ASQ_LABELS[sumLang][i], avg, dist, count: vals.length }
+  })
 
   // ── Agrupar caminhos por desfecho ──
   type PathGroup = {
@@ -693,6 +704,51 @@ export default async function MissionResultsPage({
                     info="Média das 3 perguntas do ASQ (1–7) normalizada para 0–100%." />
                 </div>
               </div>
+
+              {/* Respostas de cada pergunta (ASQ) */}
+              {asqRespondents > 0 && (
+                <div>
+                  <p className="text-label-medium text-on-surface-variant mb-3">
+                    PERGUNTAS (ASQ · escala 1–7)
+                  </p>
+                  <div className="space-y-3">
+                    {asqStats.map((q, i) => {
+                      const max = Math.max(1, ...q.dist)
+                      return (
+                        <div key={i} className="rounded-2xl border border-outline-variant p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-label-small text-on-surface-variant">{q.label}</p>
+                              <p className="text-body-medium text-on-surface">{q.text}</p>
+                            </div>
+                            <span className="shrink-0 text-title-medium text-on-surface">
+                              {q.avg == null ? "—" : q.avg.toFixed(1)}
+                              <span className="text-body-small text-on-surface-variant">/7</span>
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-7 gap-1.5">
+                            {q.dist.map((c, n) => (
+                              <div key={n} className="flex flex-col items-center gap-1">
+                                <div className="w-full h-16 flex items-end rounded bg-surface-container-high overflow-hidden">
+                                  <div
+                                    className="w-full rounded-t bg-primary/70"
+                                    style={{ height: `${(c / max) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-label-small text-on-surface-variant">{n + 1}</span>
+                                <span className="text-label-small text-on-surface-variant/70">{c}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-label-small text-on-surface-variant mt-2">
+                            {q.count} resposta(s) · 1 = {ASQ_ANCHORS[sumLang].low} · 7 = {ASQ_ANCHORS[sumLang].high}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Tabela por participante */}
               {sumRows.length > 0 && (
