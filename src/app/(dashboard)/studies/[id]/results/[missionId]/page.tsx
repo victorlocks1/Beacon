@@ -247,10 +247,25 @@ export default async function MissionResultsPage({
   const lastScreenBySession = new Map<string, string>()
   for (const e of events) lastScreenBySession.set(e.sessionId, e.screenId) // eventos em ordem asc → última = mais recente
   const lostLastScreen = new Map<string, number>()
+  // Engajamento no abandono: por tela de abandono, quantos CLICARAM ali antes de
+  // sair (tentaram → travaram) × quantos NÃO tocaram em nada (desengajaram).
+  const clickScreensBySession = new Map<string, Set<string>>()
+  for (const e of events) {
+    if (e.type !== "click" && e.type !== "misclick") continue
+    const set = clickScreensBySession.get(e.sessionId) ?? new Set<string>()
+    set.add(e.screenId)
+    clickScreensBySession.set(e.sessionId, set)
+  }
+  const lostEngage = new Map<string, { total: number; clicked: number }>()
   for (const [sid, st] of stateBySession) {
     if (st !== "lost") continue
     const sc = lastScreenBySession.get(sid)
-    if (sc) lostLastScreen.set(sc, (lostLastScreen.get(sc) ?? 0) + 1)
+    if (!sc) continue
+    lostLastScreen.set(sc, (lostLastScreen.get(sc) ?? 0) + 1)
+    const cur = lostEngage.get(sc) ?? { total: 0, clicked: 0 }
+    cur.total++
+    if (clickScreensBySession.get(sid)?.has(sc)) cur.clicked++
+    lostEngage.set(sc, cur)
   }
   const nameOf = (sid: string) => screenById.get(sid)?.name ?? "?"
   const giveUpRows = [...giveUpByScreen.entries()].sort((a, b) => b[1] - a[1])
@@ -548,10 +563,13 @@ export default async function MissionResultsPage({
     reportSections.push({
       heading: "Onde as pessoas abandonam",
       kind: "table",
-      columns: ["Situação", "Tela", "Pessoas"],
+      columns: ["Situação", "Tela", "Pessoas", "Clicaram antes de sair", "Não tocaram em nada"],
       rows: [
-        ...giveUpRows.map(([sid, n]) => ["Desistiu (declarado)", nameOf(sid), n] as (string | number)[]),
-        ...lostRows.map(([sid, n]) => ["Última tela vista (perdida)", nameOf(sid), n] as (string | number)[]),
+        ...giveUpRows.map(([sid, n]) => ["Desistiu (declarado)", nameOf(sid), n, "—", "—"] as (string | number)[]),
+        ...lostRows.map(([sid, n]) => {
+          const clicked = lostEngage.get(sid)?.clicked ?? 0
+          return ["Última tela vista (perdida)", nameOf(sid), n, clicked, n - clicked] as (string | number)[]
+        }),
       ],
     })
   }
@@ -788,14 +806,29 @@ export default async function MissionResultsPage({
                   {lostRows.length === 0 ? (
                     <p className="text-body-small text-on-surface-variant">Nenhuma sessão perdida.</p>
                   ) : (
-                    <div className="space-y-1.5">
-                      {lostRows.map(([sid, n]) => (
-                        <div key={sid} className="flex items-center justify-between text-body-medium">
-                          <span className="text-on-surface truncate">{nameOf(sid)}</span>
-                          <span className="text-on-surface-variant">{n}×</span>
-                        </div>
-                      ))}
+                    <div className="space-y-2">
+                      {lostRows.map(([sid, n]) => {
+                        const eng = lostEngage.get(sid)
+                        const clicked = eng?.clicked ?? 0
+                        const noClick = n - clicked
+                        return (
+                          <div key={sid}>
+                            <div className="flex items-center justify-between text-body-medium">
+                              <span className="text-on-surface truncate">{nameOf(sid)}</span>
+                              <span className="text-on-surface-variant">{n}×</span>
+                            </div>
+                            <p className="text-label-small text-on-surface-variant/80">
+                              {clicked} clicaram antes de sair · {noClick} não tocaram em nada
+                            </p>
+                          </div>
+                        )
+                      })}
                     </div>
+                  )}
+                  {lostRows.length > 0 && (
+                    <p className="text-label-small text-on-surface-variant/70 mt-2">
+                      Clicaram = tentaram e travaram (descoberta/próximo passo) · Não tocaram = desengajaram (fricção do teste).
+                    </p>
                   )}
                 </div>
               </div>
