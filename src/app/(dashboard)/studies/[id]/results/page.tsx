@@ -214,6 +214,9 @@ export default async function ResultsOverviewPage({
       : 0
     return {
       started: started.size,
+      concluded: completed + indirect, // concluíram ESTA tarefa (direto + indireto)
+      declared, // desistiram (clicaram em "Não consegui")
+      lost, // abandonaram (encerraram sem concluir nem desistir)
       // Sucesso = concluiu = DIRETO + INDIRETO (ambos completaram o caminho exato)
       completionRate: ended ? ((completed + indirect) / ended) * 100 : 0,
       lostRate: ended ? (lost / ended) * 100 : 0,
@@ -291,7 +294,30 @@ export default async function ResultsOverviewPage({
                           Ainda sem respostas.
                         </p>
                       ) : (
-                        <div className="grid grid-cols-4 gap-3 mt-6">
+                        <>
+                        {/* Funil absoluto desta tarefa (independe de terminar o teste) */}
+                        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-small">
+                          <span className="text-on-surface font-medium">{s.started}</span>
+                          <span className="text-on-surface-variant">iniciaram</span>
+                          <span className="text-on-surface-variant/50">·</span>
+                          <span className="text-on-surface font-medium">{s.concluded}</span>
+                          <span className="text-on-surface-variant">concluíram</span>
+                          {s.declared > 0 && (
+                            <>
+                              <span className="text-on-surface-variant/50">·</span>
+                              <span className="text-on-surface font-medium">{s.declared}</span>
+                              <span className="text-on-surface-variant">desistiram</span>
+                            </>
+                          )}
+                          {s.lost > 0 && (
+                            <>
+                              <span className="text-on-surface-variant/50">·</span>
+                              <span className="text-on-surface font-medium">{s.lost}</span>
+                              <span className="text-on-surface-variant">abandonaram</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-4 gap-3 mt-4">
                           <Stat
                             label="Conclusão"
                             value={formatPct(s.completionRate)}
@@ -313,6 +339,7 @@ export default async function ResultsOverviewPage({
                             info="Tempo médio da tarefa (início até concluir/desistir), só das sessões com resultado."
                           />
                         </div>
+                        </>
                       )}
                     </Link>
                 )

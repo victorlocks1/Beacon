@@ -455,6 +455,35 @@ export default async function MissionResultsPage({
         <div className="space-y-8">
           {/* ── Destaques: taxa de sucesso + tempo na tarefa (as 2 principais) ── */}
           <div>
+            {/* Funil absoluto DESTA tarefa (independe de terminar o teste inteiro) */}
+            <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-medium">
+              <span className="text-on-surface font-medium">{startedSessionIds.size}</span>
+              <span className="text-on-surface-variant">iniciaram esta tarefa</span>
+              <span className="text-on-surface-variant/50">·</span>
+              <span className="text-on-surface font-medium">{successCount}</span>
+              <span className="text-on-surface-variant">concluíram</span>
+              {counts.declared > 0 && (
+                <>
+                  <span className="text-on-surface-variant/50">·</span>
+                  <span className="text-on-surface font-medium">{counts.declared}</span>
+                  <span className="text-on-surface-variant">desistiram</span>
+                </>
+              )}
+              {counts.lost > 0 && (
+                <>
+                  <span className="text-on-surface-variant/50">·</span>
+                  <span className="text-on-surface font-medium">{counts.lost}</span>
+                  <span className="text-on-surface-variant">abandonaram</span>
+                </>
+              )}
+              {counts.open > 0 && (
+                <>
+                  <span className="text-on-surface-variant/50">·</span>
+                  <span className="text-on-surface font-medium">{counts.open}</span>
+                  <span className="text-on-surface-variant">em aberto</span>
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Kpi
                 big
