@@ -30,12 +30,28 @@ export interface ImportRegion {
 }
 // Geometria (normalizada sobre a tela) de um frame ROLÁVEL do embed vivo. Serve
 // para posicionar no heatmap cliques cuja posição vem relativa ao frame interno.
-export type ScrollFrameGeom = {
+// Uma peça do conteúdo rolável, posicionada em coordenadas de CONTEÚDO (px,
+// relativas ao canto do frame rolável). `url` é preenchida na exportação.
+export type ScrollFramePiece = {
   figmaId: string
+  url?: string
   x: number
   y: number
   w: number
   h: number
+}
+
+export type ScrollFrameGeom = {
+  figmaId: string
+  x: number // viewport box normalizado na tela
+  y: number
+  w: number
+  h: number
+  axis?: "horizontal" | "vertical" | "both"
+  // Conteúdo rolável (quando transborda o viewport → há conteúdo escondido):
+  contentW?: number // largura total do conteúdo em px (a "tira" desenrolada)
+  contentH?: number // altura total do conteúdo em px
+  pieces?: ScrollFramePiece[] // peças da tira, em coords de conteúdo (px)
 }
 
 export interface ImportScreen {
@@ -427,10 +443,32 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
       // mesmo que o conteúdo não transborde agora — o embed pode reportá-lo como
       // `nearestScrollingFrameId` de um clique, e aí precisamos da origem dele na
       // tela para posicionar o ponto (origem + posição-no-viewport).
-      if (overflowToScroll(n.overflowDirection) !== "none") {
+      const axis = overflowToScroll(n.overflowDirection)
+      if (axis !== "none") {
         const gc = relCoordsRaw(n.absoluteBoundingBox, screen)
         if (gc && gc.w >= 0.005 && gc.h >= 0.005) {
-          scrollFrames.push({ figmaId: n.id, x: gc.x, y: gc.y, w: gc.w, h: gc.h })
+          const entry: ScrollFrameGeom = { figmaId: n.id, x: gc.x, y: gc.y, w: gc.w, h: gc.h, axis }
+          // Se o conteúdo TRANSBORDA (há conteúdo escondido), guarda as peças em
+          // coords de CONTEÚDO (px, relativas ao canto do frame) + o tamanho total.
+          // Isso permite montar a "tira desenrolada" e o heatmap do que fica oculto.
+          const det = detectScrollRegion(n)
+          const fb = n.absoluteBoundingBox
+          if (det && fb) {
+            const pieces = det.pieceIds
+              .map((id) => {
+                const pb = idx.byId[id]?.absoluteBoundingBox
+                return pb
+                  ? { figmaId: id, x: pb.x - fb.x, y: pb.y - fb.y, w: pb.width, h: pb.height }
+                  : null
+              })
+              .filter((p): p is ScrollFramePiece => p != null)
+            if (pieces.length) {
+              entry.pieces = pieces
+              entry.contentW = Math.max(...pieces.map((p) => p.x + p.w))
+              entry.contentH = Math.max(...pieces.map((p) => p.y + p.h))
+            }
+          }
+          scrollFrames.push(entry)
         }
       }
       // scroll interno (sub-frame rolável, menor que a tela)

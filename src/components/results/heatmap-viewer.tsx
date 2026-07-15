@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ScrollStripHeatmap } from "@/components/results/scroll-strip-heatmap"
 
 interface Point {
   x: number
@@ -49,9 +50,13 @@ function ramp(t: number): [number, number, number] {
 export function HeatmapViewer({
   screens,
   deviceType,
+  studyId,
+  missionId,
 }: {
   screens: ScreenData[]
   deviceType: DeviceType
+  studyId?: string // + missionId → mostra o painel de carrossel/conteúdo escondido
+  missionId?: string
 }) {
   const [selectedId, setSelectedId] = useState(screens[0]?.id)
   const [mode, setMode] = useState<Mode>("heatmap")
@@ -223,6 +228,11 @@ export function HeatmapViewer({
           </svg>
         )}
       </div>
+
+      {/* Carrossel / conteúdo rolável escondido (carrega sob demanda p/ a tela atual) */}
+      {studyId && missionId && (
+        <ScrollStripHeatmap studyId={studyId} missionId={missionId} screenId={screen.id} />
+      )}
 
       {/* Legenda */}
       <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">

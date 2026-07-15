@@ -123,6 +123,44 @@ async function downloadAndUpload(
   return supabase.storage.from("screens").getPublicUrl(path).data.publicUrl
 }
 
+// Exporta as PEÇAS do conteúdo rolável (carrossel/tira) de cada frame com scroll
+// e injeta as urls públicas nas `pieces` de `scrollFrames`. É isso que permite
+// desenhar a "tira desenrolada" e o heatmap do conteúdo escondido nos resultados.
+// Falha silenciosa (rate limit etc.) — sem tira, o resto do import segue normal.
+async function exportScrollStrips(
+  studyId: string,
+  token: string,
+  fileKey: string,
+  screens: ImportScreen[]
+): Promise<void> {
+  try {
+    const ids = [
+      ...new Set(
+        screens.flatMap((s) =>
+          (s.scrollFrames ?? []).flatMap((f) => (f.pieces ?? []).map((p) => p.figmaId))
+        )
+      ),
+    ]
+    if (!ids.length) return
+    const exported = await figmaGetImages(token, fileKey, ids, { scale: 2, format: "png" })
+    const urls: Record<string, string> = {}
+    for (let i = 0; i < ids.length; i += 4) {
+      const batch = ids.slice(i, i + 4)
+      await Promise.all(
+        batch.map(async (id, j) => {
+          const src = exported[id]
+          if (src) urls[id] = await downloadAndUpload(studyId, src, 20000 + i + j)
+        })
+      )
+    }
+    for (const s of screens)
+      for (const f of s.scrollFrames ?? [])
+        for (const p of f.pieces ?? []) if (urls[p.figmaId]) p.url = urls[p.figmaId]
+  } catch {
+    /* sem tiras desta vez — não quebra o import */
+  }
+}
+
 type ImportResult =
   | { ok: true; screens: number; hotspots: number }
   | { ok: false; error: string }
@@ -153,10 +191,13 @@ export async function figmaLiveImportAction(
 ): Promise<ImportResult> {
   try {
     if (!selected.length) return { ok: false, error: "Nenhuma tela selecionada." }
-    const { study } = await getOwnedEditableStudy(studyId)
+    const { study, userId } = await getOwnedEditableStudy(studyId)
 
     const screens = [...selected].sort((a, b) => Number(b.isStart) - Number(a.isStart))
     const startNodeId = (screens.find((s) => s.isStart) ?? screens[0])?.figmaId ?? null
+
+    // exporta as tiras dos conteúdos roláveis (carrossel) → urls nas pieces
+    await exportScrollStrips(studyId, await getDecryptedToken(userId), fileKey, screens)
 
     const proto =
       study.prototype ??
@@ -270,6 +311,9 @@ export async function figmaRefreshAction(
       return { ok: false, error: "Nenhuma tela encontrada ao reler o protótipo." }
     }
 
+    // exporta as tiras dos conteúdos roláveis (carrossel) → urls nas pieces
+    await exportScrollStrips(studyId, token, proto.figmaFileKey, fresh)
+
     const existing = proto.screens
     const byNode = new Map(existing.filter((s) => s.figmaNodeId).map((s) => [s.figmaNodeId!, s]))
 
@@ -340,6 +384,9 @@ async function figmaImportImpl(
 
   // ordena: tela inicial primeiro (se houver)
   const screens = [...selected].sort((a, b) => Number(b.isStart) - Number(a.isStart))
+
+  // tiras dos conteúdos roláveis (carrossel) → urls nas pieces de scrollFrames
+  await exportScrollStrips(studyId, token, fileKey, screens)
 
   // 1) exporta as imagens em alta (scale 2) e re-hospeda no Supabase
   const exportUrls = await figmaGetImages(

@@ -847,7 +847,7 @@ export default async function MissionResultsPage({
                 Nenhuma tela visitada ainda.
               </p>
             ) : (
-              <HeatmapViewer screens={heatmapScreens} deviceType={deviceType} />
+              <HeatmapViewer screens={heatmapScreens} deviceType={deviceType} studyId={id} missionId={missionId} />
             )}
           </section>
 
