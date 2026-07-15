@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { PathRecorder } from "@/components/mission/path-recorder"
 import { FigmaPathRecorder } from "@/components/mission/figma-path-recorder"
+import { type PathStepInput } from "@/components/mission/path-steps-editor"
 import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { klmIdealMs } from "@/lib/sum"
 import { QuestionDialog, type QuestionInput } from "@/components/question/question-dialog"
@@ -63,7 +64,7 @@ export interface MissionInitial {
   successType: SuccessType
   startScreenId: string
   goalScreenId: string | null
-  paths: string[][]
+  paths: PathStepInput[][]
   idealTimeMs?: number | null
   questions?: QuestionInput[]
 }
@@ -88,7 +89,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
   const [successType, setSuccessType] = useState<SuccessType>(initial?.successType ?? "screen")
   const [startScreenId, setStartScreenId] = useState<string>(initial?.startScreenId ?? "")
   const [goalScreenId, setGoalScreenId] = useState<string>(initial?.goalScreenId ?? "")
-  const [paths, setPaths] = useState<string[][]>(initial?.paths ?? [])
+  const [paths, setPaths] = useState<PathStepInput[][]>(initial?.paths ?? [])
   // SUM: tempo ideal em SEGUNDOS (override do KLM); vazio = estima automático.
   const [idealTimeSec, setIdealTimeSec] = useState(
     initial?.idealTimeMs ? String(Math.round(initial.idealTimeMs / 1000)) : ""

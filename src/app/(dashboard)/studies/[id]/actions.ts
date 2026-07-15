@@ -396,15 +396,50 @@ interface MissionQuestionInput {
   options?: string[]
 }
 
+// Passo de um caminho exato: a tela + flags de robustez (opcional / "qualquer do grupo").
+interface MissionPathStepInput {
+  screenId: string
+  optional?: boolean // testador pode pular sem virar "indireto"
+  matchByName?: boolean // casa qualquer tela com o mesmo nome (ex.: qualquer Preview Profile)
+}
+
 interface CreateMissionInput {
   task: string
   description?: string | null
   startScreenId: string
   successType: "screen" | "path"
   goalScreenId?: string | null
-  paths?: string[][] // cada caminho: sequência de screenIds (start..final)
+  paths?: MissionPathStepInput[][] // cada caminho: passos (start..objetivo)
   questions?: MissionQuestionInput[] // perguntas de acompanhamento da missão
   idealTimeMs?: number | null // SUM: override do tempo ideal (ms); nulo = KLM
+}
+
+// Mantém só os caminhos válidos: ≥2 passos e todas as telas pertencem ao study.
+function validExactPaths(
+  paths: MissionPathStepInput[][] | undefined,
+  ownScreenIds: Set<string>
+): MissionPathStepInput[][] {
+  return (paths ?? []).filter(
+    (p) => p.length >= 2 && p.every((st) => ownScreenIds.has(st.screenId))
+  )
+}
+
+// Cria os MissionPath + PathStep (com optional/matchByName) de uma missão de caminho.
+async function saveExactPaths(missionId: string, paths: MissionPathStepInput[][]) {
+  for (let i = 0; i < paths.length; i++) {
+    const missionPath = await prisma.missionPath.create({
+      data: { missionId, label: `Caminho ${i + 1}` },
+    })
+    await prisma.pathStep.createMany({
+      data: paths[i].map((st, order) => ({
+        missionPathId: missionPath.id,
+        screenId: st.screenId,
+        order,
+        optional: !!st.optional,
+        matchByName: !!st.matchByName,
+      })),
+    })
+  }
 }
 
 // Cria as perguntas de acompanhamento de uma missão (ordem = posição na lista).
@@ -454,10 +489,7 @@ export async function createMissionAction(
   if (input.successType === "screen") {
     if (!input.goalScreenId || !ownScreenIds.has(input.goalScreenId)) return
   } else {
-    const validPaths = (input.paths ?? []).filter(
-      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
-    )
-    if (validPaths.length === 0) return
+    if (validExactPaths(input.paths, ownScreenIds).length === 0) return
   }
 
   const block = await prisma.block.create({
@@ -480,22 +512,7 @@ export async function createMissionAction(
       data: { missionId: mission.id, goalScreenId: input.goalScreenId! },
     })
   } else {
-    const validPaths = (input.paths ?? []).filter(
-      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
-    )
-    for (let i = 0; i < validPaths.length; i++) {
-      const path = validPaths[i]
-      const missionPath = await prisma.missionPath.create({
-        data: { missionId: mission.id, label: `Caminho ${i + 1}` },
-      })
-      await prisma.pathStep.createMany({
-        data: path.map((screenId, order) => ({
-          missionPathId: missionPath.id,
-          screenId,
-          order,
-        })),
-      })
-    }
+    await saveExactPaths(mission.id, validExactPaths(input.paths, ownScreenIds))
   }
 
   await createMissionQuestions(mission.id, input.questions)
@@ -528,10 +545,7 @@ export async function updateMissionAction(
   if (input.successType === "screen") {
     if (!input.goalScreenId || !ownScreenIds.has(input.goalScreenId)) return
   } else {
-    const validPaths = (input.paths ?? []).filter(
-      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
-    )
-    if (validPaths.length === 0) return
+    if (validExactPaths(input.paths, ownScreenIds).length === 0) return
   }
 
   await prisma.mission.update({
@@ -554,22 +568,7 @@ export async function updateMissionAction(
       data: { missionId, goalScreenId: input.goalScreenId! },
     })
   } else {
-    const validPaths = (input.paths ?? []).filter(
-      (p) => p.length >= 2 && p.every((sid) => ownScreenIds.has(sid))
-    )
-    for (let i = 0; i < validPaths.length; i++) {
-      const path = validPaths[i]
-      const missionPath = await prisma.missionPath.create({
-        data: { missionId, label: `Caminho ${i + 1}` },
-      })
-      await prisma.pathStep.createMany({
-        data: path.map((screenId, order) => ({
-          missionPathId: missionPath.id,
-          screenId,
-          order,
-        })),
-      })
-    }
+    await saveExactPaths(missionId, validExactPaths(input.paths, ownScreenIds))
   }
 
   // Substitui as perguntas de acompanhamento (remove as antigas, recria)

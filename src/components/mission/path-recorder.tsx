@@ -2,10 +2,11 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { Play, Check, X, Trash2, Flag } from "lucide-react"
+import { Play, Check, X, Flag } from "lucide-react"
 import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
 import { PrototypeStage, type StageScreen } from "@/components/prototype/stage"
+import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
 type RecorderScreen = StageScreen & { order: number }
 
@@ -13,8 +14,8 @@ interface Props {
   screens: RecorderScreen[]
   startScreenId: string | null
   deviceType: DeviceType
-  paths: string[][]
-  onChange: (paths: string[][]) => void
+  paths: PathStepInput[][]
+  onChange: (paths: PathStepInput[][]) => void
 }
 
 export function PathRecorder({
@@ -26,6 +27,9 @@ export function PathRecorder({
 }: Props) {
   const [recording, setRecording] = useState<string[] | null>(null)
   const screenById = new Map(screens.map((s) => [s.id, s]))
+  const countByName = new Map<string, number>()
+  for (const s of screens) countByName.set(s.name, (countByName.get(s.name) ?? 0) + 1)
+  const nameCount = (id: string) => countByName.get(screenById.get(id)?.name ?? "") ?? 0
 
   function startRecording() {
     if (!startScreenId) return
@@ -34,7 +38,7 @@ export function PathRecorder({
 
   function finalize() {
     if (!recording || recording.length < 2) return
-    onChange([...paths, recording])
+    onChange([...paths, toSteps(recording)])
     setRecording(null)
   }
 
@@ -53,38 +57,8 @@ export function PathRecorder({
 
   return (
     <div className="space-y-4">
-      {/* Caminhos já salvos */}
-      {paths.length > 0 && (
-        <div className="space-y-2">
-          {paths.map((path, i) => (
-            <div
-              key={i}
-              className="flex items-start justify-between gap-3 border rounded-lg p-2.5 bg-muted/30"
-            >
-              <div className="flex items-center gap-1 flex-wrap text-xs">
-                <span className="font-medium mr-1">Caminho {i + 1}:</span>
-                {path.map((sid, idx) => (
-                  <span key={idx} className="flex items-center gap-1">
-                    <span className="px-1.5 py-0.5 rounded bg-background border">
-                      {name(sid)}
-                    </span>
-                    {idx < path.length - 1 && (
-                      <span className="text-muted-foreground">→</span>
-                    )}
-                  </span>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => onChange(paths.filter((_, idx) => idx !== i))}
-                className="text-red-400 hover:text-red-600 shrink-0"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Caminhos já salvos (com toggles de opcional / qualquer do grupo) */}
+      <SavedPaths paths={paths} onChange={onChange} screenName={name} nameCount={nameCount} />
 
       {/* Gravação ativa */}
       {recording ? (

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatPct } from "@/lib/format"
-import { reconstructPath, classifyExactPath } from "@/lib/path"
+import { reconstructPath, classifyExactPath, buildExactPaths } from "@/lib/path"
 import { susVerdict, SUS_THRESHOLD } from "@/lib/sus"
 import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, ASQ_LABELS, type SumBreakdown } from "@/lib/sum"
 import { ExportButton } from "@/components/results/export-button"
@@ -32,7 +32,15 @@ export default async function ResultsOverviewPage({
       blocks: {
         where: { type: "mission" },
         orderBy: { order: "asc" },
-        include: { mission: { include: { paths: { include: { steps: { select: { screenId: true } } } } } } },
+        include: {
+          mission: {
+            include: {
+              paths: {
+                include: { steps: { select: { screenId: true, optional: true, matchByName: true }, orderBy: { order: "asc" } } },
+              },
+            },
+          },
+        },
       },
       _count: { select: { sessions: true } },
     },
@@ -62,13 +70,18 @@ export default async function ResultsOverviewPage({
     arr.push({ targetScreenId: e.targetScreenId })
     navByKey.set(k, arr)
   }
+  // Telas do estudo (id + nome) para expandir "qualquer tela do grupo" (matchByName).
+  const studyScreens = await prisma.screen.findMany({
+    where: { prototype: { studyId: id } },
+    select: { id: true, name: true },
+  })
   const missionMeta = new Map(
     missions.map((m) => [
       m.id,
       {
         isPath: m.successType === "path",
         start: m.startScreenId,
-        expected: m.paths.map((p) => p.steps.map((s) => s.screenId)),
+        expected: buildExactPaths(m.paths, studyScreens),
       },
     ])
   )

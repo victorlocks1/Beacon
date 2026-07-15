@@ -10,6 +10,7 @@ import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
 import { SusView } from "@/components/test/sus-view"
 import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
+import { type PathStepDef } from "@/lib/path"
 
 interface WelcomeInfo {
   title: string
@@ -82,7 +83,7 @@ export function FigmaFlowRunner({
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   successTypeByMission: Record<string, "screen" | "path"> // critério de sucesso da missão
-  expectedPathsByMission: Record<string, string[][]> // caminhos esperados (screenId)
+  expectedPathsByMission: Record<string, PathStepDef[][]> // caminhos esperados (passos c/ opcional/wildcard)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
 }) {
   const s = tt(lang)
@@ -149,7 +150,7 @@ export function FigmaFlowRunner({
   const postNavRef = useRef(0)
   // rastreador do caminho exato: por caminho esperado, progresso contíguo + se
   // manteve limpo (sem desvio). len = telas consecutivas certas a partir do início.
-  const matchRef = useRef<{ steps: string[]; len: number; clean: boolean }[]>([])
+  const matchRef = useRef<{ steps: PathStepDef[]; len: number; clean: boolean }[]>([])
   const pathRef = useRef<string[]>([]) // caminho em screenIds
   const clickCountRef = useRef(0)
   const misclickCountRef = useRef(0)
@@ -487,8 +488,25 @@ export function FigmaFlowRunner({
               let directHit = false
               for (const m of matchRef.current) {
                 if (m.steps.length < 2) continue
-                if (scr.id === m.steps[m.len]) m.len++
-                else m.clean = false
+                if (m.len < m.steps.length) {
+                  // tenta casar a tela atual, pulando passos OPCIONAIS que ela não
+                  // casa (ex.: o testador não abriu o perfil e foi direto ao objetivo).
+                  let advanced = false
+                  while (m.len < m.steps.length) {
+                    const step = m.steps[m.len]
+                    if (step.ids.includes(scr.id)) {
+                      m.len++
+                      advanced = true
+                      break
+                    }
+                    if (step.optional) {
+                      m.len++ // pula o opcional e testa o próximo passo com a mesma tela
+                      continue
+                    }
+                    break // passo obrigatório não casou → é tela extra/desvio
+                  }
+                  if (!advanced && m.len < m.steps.length) m.clean = false
+                }
                 if (m.len === m.steps.length) {
                   reachedGoal = true
                   if (m.clean) directHit = true
@@ -548,7 +566,7 @@ export function FigmaFlowRunner({
     // inicializa o rastreador do caminho exato (início já conta como 1º passo)
     matchRef.current = (expectedPathsByMission[mission.id] ?? []).map((steps) => ({
       steps,
-      len: steps[0] === mission.startScreenId ? 1 : 0,
+      len: steps[0]?.ids.includes(mission.startScreenId) ? 1 : 0,
       clean: true,
     }))
     startedRef.current = true

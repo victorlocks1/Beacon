@@ -45,7 +45,13 @@ export default async function EditMissionPage({
     successType: mission.successType as "screen" | "path",
     startScreenId: mission.startScreenId,
     goalScreenId: mission.goals[0]?.goalScreenId ?? null,
-    paths: mission.paths.map((p) => p.steps.map((s) => s.screenId)),
+    paths: mission.paths.map((p) =>
+      p.steps.map((s) => ({
+        screenId: s.screenId,
+        optional: s.optional,
+        matchByName: s.matchByName,
+      }))
+    ),
     questions: mission.questions.map((q) => ({
       type: q.type as "open" | "choice" | "rating" | "binary",
       title: q.title,

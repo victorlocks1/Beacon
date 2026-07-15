@@ -101,7 +101,13 @@ export default async function StudyPage({
             successType: m.successType as "screen" | "path",
             startScreenId: m.startScreenId,
             goalScreenId: m.goals[0]?.goalScreenId ?? null,
-            paths: m.paths.map((p) => p.steps.map((s) => s.screenId)),
+            paths: m.paths.map((p) =>
+              p.steps.map((s) => ({
+                screenId: s.screenId,
+                optional: s.optional,
+                matchByName: s.matchByName,
+              }))
+            ),
             idealTimeMs: m.idealTimeMs,
             questions: m.questions.map((q) => ({
               type: q.type as "open" | "choice" | "rating" | "binary",

@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
-import { reconstructPath, classifyExactPath } from "@/lib/path"
+import { reconstructPath, classifyExactPath, buildExactPaths } from "@/lib/path"
 import { median, lostness, lostnessBand } from "@/lib/metrics"
 import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, asqStatementsFor, ASQ_LABELS, ASQ_ANCHORS, type SumBreakdown } from "@/lib/sum"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
@@ -135,7 +135,7 @@ export default async function MissionResultsPage({
   // (direct/indirect) de caminho exato; desistência (given_up), abandono e
   // missões de tela-alvo permanecem como estão.
   const isPath = mission.successType === "path"
-  const expectedPaths = mission.paths.map((p) => p.steps.map((s) => s.screenId))
+  const expectedPaths = buildExactPaths(mission.paths, screens)
   type Oc = "direct" | "indirect" | "given_up" | "unfinished"
   const effOutcome = new Map<string, Oc>()
   for (const r of results) {
@@ -185,7 +185,7 @@ export default async function MissionResultsPage({
   //    quem ALCANÇOU a tela-objetivo por uma rota diferente do caminho definido
   //    ("chegou por fora") de quem NUNCA chegou nela ("se perdeu"). ──
   const goalScreenIds = new Set(
-    expectedPaths.map((p) => p[p.length - 1]).filter((s): s is string => !!s)
+    expectedPaths.flatMap((p) => p[p.length - 1]?.ids ?? [])
   )
   let offPathReached = 0 // não-sucesso que alcançou a tela-objetivo por fora do caminho
   let neverReached = 0 // não-sucesso que nunca chegou na tela-objetivo

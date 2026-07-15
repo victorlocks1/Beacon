@@ -319,6 +319,13 @@ model PathStep {
   screenId      String
   screen        Screen      @relation(fields: [screenId], references: [id], onDelete: Cascade)
   order         Int
+  // Passo OPCIONAL: o testador pode passar por ele ou não sem virar "indireto"
+  // (ex.: abrir o perfil da consultora antes do WhatsApp — tanto faz).
+  optional      Boolean     @default(false)
+  // "Qualquer tela do grupo": casa com QUALQUER tela que tenha o MESMO nome desta
+  // (ex.: qualquer "Preview Profile", independentemente de qual consultora). Assim
+  // o criador não precisa enumerar cada frame/variação na mão.
+  matchByName   Boolean     @default(false)
 }
 
 model Session {

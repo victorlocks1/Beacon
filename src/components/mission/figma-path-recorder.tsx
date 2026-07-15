@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { Play, Check, X, Trash2, Flag } from "lucide-react"
+import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
 import { figmaEmbedUrl } from "@/lib/figma-embed"
+import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
 interface RecorderScreen {
   id: string
@@ -17,8 +18,8 @@ interface Props {
   fileKey: string
   screens: RecorderScreen[]
   startScreenId: string | null
-  paths: string[][]
-  onChange: (paths: string[][]) => void
+  paths: PathStepInput[][]
+  onChange: (paths: PathStepInput[][]) => void
 }
 
 // Grava o caminho esperado navegando no protótipo VIVO do Figma (embed). Cada
@@ -32,6 +33,10 @@ export function FigmaPathRecorder({ fileKey, screens, startScreenId, paths, onCh
   // figmaNodeId → screenId (para traduzir os eventos do embed)
   const screenByNode: Record<string, string> = {}
   for (const s of screens) if (s.figmaNodeId) screenByNode[s.figmaNodeId] = s.id
+  // quantas telas compartilham cada nome (para oferecer "qualquer do grupo")
+  const countByName = new Map<string, number>()
+  for (const s of screens) countByName.set(s.name, (countByName.get(s.name) ?? 0) + 1)
+  const nameCount = (id: string) => countByName.get(screenById.get(id)?.name ?? "") ?? 0
 
   const startNodeId = startScreenId ? screenById.get(startScreenId)?.figmaNodeId ?? null : null
 
@@ -48,7 +53,7 @@ export function FigmaPathRecorder({ fileKey, screens, startScreenId, paths, onCh
 
   function finalize() {
     if (!recording || recording.length < 2) return
-    onChange([...paths, recording])
+    onChange([...paths, toSteps(recording)])
     setRecording(null)
     setEmbedSrc(null)
   }
@@ -85,34 +90,8 @@ export function FigmaPathRecorder({ fileKey, screens, startScreenId, paths, onCh
 
   return (
     <div className="space-y-4">
-      {/* Caminhos já salvos */}
-      {paths.length > 0 && (
-        <div className="space-y-2">
-          {paths.map((path, i) => (
-            <div
-              key={i}
-              className="flex items-start justify-between gap-3 border rounded-lg p-2.5 bg-muted/30"
-            >
-              <div className="flex items-center gap-1 flex-wrap text-xs">
-                <span className="font-medium mr-1">Caminho {i + 1}:</span>
-                {path.map((sid, idx) => (
-                  <span key={idx} className="flex items-center gap-1">
-                    <span className="px-1.5 py-0.5 rounded bg-background border">{name(sid)}</span>
-                    {idx < path.length - 1 && <span className="text-muted-foreground">→</span>}
-                  </span>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => onChange(paths.filter((_, idx) => idx !== i))}
-                className="text-red-400 hover:text-red-600 shrink-0"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Caminhos já salvos (com toggles de opcional / qualquer do grupo) */}
+      <SavedPaths paths={paths} onChange={onChange} screenName={name} nameCount={nameCount} />
 
       {recording ? (
         <div className="space-y-3 border rounded-xl p-3">

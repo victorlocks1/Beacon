@@ -6,6 +6,7 @@ import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { tt, type Lang } from "@/lib/i18n"
 import { susStatementsFor } from "@/lib/sus"
 import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
+import { buildExactPaths, type PathStepDef } from "@/lib/path"
 
 export default async function TestRunPage({
   params,
@@ -74,7 +75,7 @@ export default async function TestRunPage({
           startScreenId: string
           goalScreenIds: string[]
           successType: "screen" | "path"
-          paths: string[][] // sequências de screenId (caminho exato)
+          paths: PathStepDef[][] // passos do caminho exato (c/ opcional/wildcard)
         }
       }
     | {
@@ -134,7 +135,7 @@ export default async function TestRunPage({
             startScreenId: m.startScreenId,
             goalScreenIds,
             successType: m.successType as "screen" | "path",
-            paths: m.paths.map((p) => p.steps.map((s) => s.screenId)),
+            paths: buildExactPaths(m.paths, screens),
           },
         },
         ...m.questions.map(toQuestionStep),
@@ -169,8 +170,8 @@ export default async function TestRunPage({
     const goalsByMission: Record<string, string[]> = {}
     const startNodeByMission: Record<string, string | null> = {}
     const successTypeByMission: Record<string, "screen" | "path"> = {}
-    // Caminhos esperados como sequências de screenId (rastreador do caminho exato)
-    const expectedPathsByMission: Record<string, string[][]> = {}
+    // Caminhos esperados (passos c/ opcional/wildcard) — rastreador do caminho exato
+    const expectedPathsByMission: Record<string, PathStepDef[][]> = {}
     for (const st of testSteps) {
       if (st.kind === "mission") {
         goalsByMission[st.mission.id] = st.mission.goalScreenIds

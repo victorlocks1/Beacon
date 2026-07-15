@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db"
-import { reconstructPath, arraysEqual, dedupeConsecutive } from "@/lib/path"
+import { reconstructPath, dedupeConsecutive, buildExactPaths, classifyExactPath } from "@/lib/path"
 
 type Outcome = "direct" | "indirect" | "unfinished" | "given_up"
 
@@ -68,9 +68,12 @@ export async function POST(request: Request) {
       })
       actual = reconstructPath(navEvents)
     }
-    const expectedPaths = mission.paths.map((p) => p.steps.map((s) => s.screenId))
-    const matches = expectedPaths.some((exp) => arraysEqual(exp, actual))
-    outcome = matches ? "direct" : "indirect"
+    const screens = await prisma.screen.findMany({
+      where: { prototype: { studyId: session.studyId } },
+      select: { id: true, name: true },
+    })
+    const expectedPaths = buildExactPaths(mission.paths, screens)
+    outcome = classifyExactPath(actual, expectedPaths) ?? "unfinished"
   }
 
   // Evita duplicar resultado
