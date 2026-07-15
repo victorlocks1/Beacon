@@ -14,6 +14,8 @@ import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FigmaImagesAutoLoad } from "@/components/results/load-figma-images-button"
+import { ExportButton } from "@/components/results/export-button"
+import { questionReportSection, type Report, type ReportSection } from "@/lib/report"
 
 const outcomeBucket: Record<string, "direct" | "indirect" | "unfinished"> = {
   direct: "direct",
@@ -412,6 +414,114 @@ export default async function MissionResultsPage({
     })),
   ]
 
+  // ── Relatório exportável desta missão (Excel / PDF / Markdown) ──
+  const nameOfPath = (path: string[]) =>
+    path.map((sid) => screenById.get(sid)?.name ?? "?").join(" → ")
+  const reportSections: ReportSection[] = [
+    {
+      heading: "Resumo",
+      kind: "keyvalue",
+      pairs: [
+        ["Iniciaram", String(startedSessionIds.size)],
+        ["Concluíram", `${successCount} (${formatPct(completionRate)})`],
+        ["Direto", `${counts.completed} (${formatPct(directRate)})`],
+        ["Indireto", `${counts.indirect} (${formatPct(indirectRate)})`],
+        ["Desistiram", `${counts.declared} (${formatPct(declaredRate)})`],
+        ["Abandonaram", `${counts.lost} (${formatPct(lostRate)})`],
+        ["Em aberto", String(counts.open)],
+        ["Duração mediana (concluíram)", completeDurations.length ? formatDuration(medComplete) : "—"],
+        ["Duração mediana (não concluíram)", failDurations.length ? formatDuration(medFail) : "—"],
+        ["Misclick rate", formatPct(misclickRate)],
+        ["Nunca clicaram", String(neverClicked)],
+        ["Lostness (mediana)", lostnessVals.length ? `${medLostness.toFixed(2)} (${lostBand.label})` : "—"],
+      ],
+    },
+  ]
+  if (sumAvg && sumV) {
+    reportSections.push({
+      heading: "SUM da tarefa",
+      kind: "keyvalue",
+      pairs: [
+        ["Nota SUM", `${formatPct(sumAvg.score)} (${sumV.label})`],
+        ["Conclusão", formatPct(sumAvg.completion)],
+        ["Tempo", sumAvg.time == null ? "—" : formatPct(sumAvg.time)],
+        ["Erros", sumAvg.errors == null ? "—" : formatPct(sumAvg.errors)],
+        ["Satisfação (ASQ)", sumAvg.satisfaction == null ? "—" : formatPct(sumAvg.satisfaction)],
+      ],
+    })
+    for (const q of asqStats) {
+      reportSections.push({
+        heading: `ASQ · ${q.label}: ${q.text}`,
+        kind: "table",
+        columns: ["Nota (1–7)", "Respostas"],
+        rows: [
+          ...q.dist.map((c, i) => [String(i + 1), c] as (string | number)[]),
+          ["Média", q.avg == null ? "—" : q.avg.toFixed(1)],
+          ["Total", q.count],
+        ],
+      })
+    }
+    reportSections.push({
+      heading: "SUM por participante",
+      kind: "table",
+      columns: ["Participante", "Conclusão", "Tempo", "Erros", "Satisfação", "SUM"],
+      rows: sumRows
+        .slice()
+        .sort((a, b) => a.tester - b.tester)
+        .map((r) => {
+          const c = (v: number | null) => (v == null ? "—" : formatPct(v))
+          return [
+            `Testador ${r.tester}`,
+            c(r.breakdown.completion),
+            c(r.breakdown.time),
+            c(r.breakdown.errors),
+            c(r.breakdown.satisfaction),
+            formatPct(r.breakdown.score),
+          ]
+        }),
+    })
+  }
+  for (const q of mission.questions) {
+    reportSections.push(
+      questionReportSection({
+        type: q.type,
+        title: q.title,
+        options: q.options,
+        answers: q.answers,
+      })
+    )
+  }
+  if (pathGroups.length > 0) {
+    reportSections.push({
+      heading: "Caminhos percorridos",
+      kind: "table",
+      columns: ["Desfecho", "Caminho", "Pessoas", "Duração média"],
+      rows: pathGroups.map((g) => [
+        bucketLabel[g.bucket],
+        nameOfPath(g.path),
+        g.count,
+        g.count ? formatDuration(Math.round(g.totalDuration / g.count)) : "—",
+      ]),
+    })
+  }
+  reportSections.push({
+    heading: "Sessões individuais",
+    kind: "table",
+    columns: ["Participante", "Desfecho", "Duração", "Misclicks"],
+    rows: sessionRows.map((r) => [
+      r.label,
+      r.badgeText ?? bucketLabel[r.bucket],
+      formatDuration(r.durationMs),
+      r.misclickCount,
+    ]),
+  })
+  const missionReport: Report = {
+    title: `Missão: ${mission.task}`,
+    subtitle: study.title,
+    sections: reportSections,
+  }
+  const reportFilename = `beacon-missao-${mission.task.slice(0, 40).replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").toLowerCase() || "tarefa"}`
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -427,6 +537,9 @@ export default async function MissionResultsPage({
         </div>
         {screensMissingImage > 0 && (
           <FigmaImagesAutoLoad studyId={id} pending={screensMissingImage} />
+        )}
+        {startedSessionIds.size > 0 && (
+          <ExportButton report={missionReport} filename={reportFilename} />
         )}
       </div>
 

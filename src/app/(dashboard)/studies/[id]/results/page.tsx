@@ -9,7 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath, classifyExactPath } from "@/lib/path"
 import { susVerdict, SUS_THRESHOLD } from "@/lib/sus"
-import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, type SumBreakdown } from "@/lib/sum"
+import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, ASQ_LABELS, type SumBreakdown } from "@/lib/sum"
+import { ExportButton } from "@/components/results/export-button"
+import { questionReportSection, type Report, type ReportSection } from "@/lib/report"
 import { ResetDataButton } from "@/components/study/reset-data-button"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
@@ -188,6 +190,63 @@ export default async function ResultsOverviewPage({
   // dentro do detalhe da missão correspondente.
   const freeQuestions = questions.filter((q) => !q.missionId)
 
+  // ── Relatório exportável: perguntas gerais ──
+  const generalQuestionsReport: Report = {
+    title: `Perguntas gerais — ${study.title}`,
+    subtitle: `${freeQuestions.length} pergunta(s) avulsa(s)`,
+    sections: freeQuestions.map((q) =>
+      questionReportSection({ type: q.type, title: q.title, options: q.options, answers: q.answers })
+    ),
+  }
+
+  // ── Relatório exportável: SUM (geral do estudo) ──
+  const sumLang = (study.language ?? "pt") === "es" ? "es" : "pt"
+  const sumReportSections: ReportSection[] = []
+  if (sumOverall && sumOverallV) {
+    const c = (v: number | null | undefined) => (v == null ? "—" : formatPct(v))
+    sumReportSections.push({
+      heading: "SUM do estudo",
+      kind: "keyvalue",
+      pairs: [
+        ["Nota SUM", `${formatPct(sumOverall.score)} (${sumOverallV.label})`],
+        ["Conclusão", c(sumOverall.completion)],
+        ["Tempo", c(sumOverall.time)],
+        ["Erros", c(sumOverall.errors)],
+        ["Satisfação (ASQ)", c(sumOverall.satisfaction)],
+      ],
+    })
+    sumReportSections.push({
+      heading: "SUM por tarefa",
+      kind: "table",
+      columns: ["Tarefa", "Conclusão", "Tempo", "Erros", "Satisfação", "SUM"],
+      rows: missions.map((m, i) => {
+        const b = sumByMission.get(m.id)
+        return [`${i + 1}. ${m.task}`, c(b?.completion), c(b?.time), c(b?.errors), c(b?.satisfaction), b ? formatPct(b.score) : "—"]
+      }),
+    })
+    // ASQ geral (todas as respostas do estudo), por pergunta
+    for (let i = 0; i < 3; i++) {
+      const vals = sumResponses.map((r) => r.values[i]).filter((v): v is number => typeof v === "number" && v >= 1)
+      const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+      const dist = [1, 2, 3, 4, 5, 6, 7].map((n) => vals.filter((v) => v === n).length)
+      sumReportSections.push({
+        heading: `ASQ · ${ASQ_LABELS[sumLang][i]}`,
+        kind: "table",
+        columns: ["Nota (1–7)", "Respostas"],
+        rows: [
+          ...dist.map((cnt, n) => [String(n + 1), cnt] as (string | number)[]),
+          ["Média", avg == null ? "—" : avg.toFixed(1)],
+          ["Total", vals.length],
+        ],
+      })
+    }
+  }
+  const sumReport: Report = {
+    title: `SUM — ${study.title}`,
+    subtitle: "Métrica de usabilidade (geral do estudo)",
+    sections: sumReportSections,
+  }
+
   function statsFor(missionId: string) {
     const rs = results.filter((r) => r.missionId === missionId)
     const resultBySession = new Map(rs.map((r) => [r.sessionId, r]))
@@ -356,6 +415,9 @@ export default async function ResultsOverviewPage({
             </div>
           ) : (
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <ExportButton report={generalQuestionsReport} filename={`beacon-perguntas-gerais`} />
+              </div>
               {freeQuestions.map((q, i) => (
                 <QuestionResultCard key={q.id} studyId={id} index={i} question={q} />
               ))}
@@ -367,6 +429,9 @@ export default async function ResultsOverviewPage({
         {sumOverall && sumOverallV && (
           <TabsContent value="sum">
             <div className="space-y-8">
+              <div className="flex justify-end">
+                <ExportButton report={sumReport} filename={`beacon-sum-${study.title.slice(0, 30).replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").toLowerCase() || "estudo"}`} />
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.1fr)_2fr] gap-4">
                 <SumKpi big label="SUM do estudo" value={formatPct(sumOverall.score)} sub={sumOverallV.label}
                   info="Média da SUM entre todas as tarefas (todas as execuções). Faixas: ≥95 Excelente · 80–94 Satisfatória · 65–79 Regular/atenção · 50–64 Insatisfatória · <50 Crítica." />
