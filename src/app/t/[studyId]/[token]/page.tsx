@@ -161,10 +161,18 @@ export default async function TestRunPage({
     // mapeia figmaNodeId → tela (id + tamanho) e monta os objetivos por missão
     const screenByNode: Record<string, { id: string; w: number; h: number }> = {}
     const screenToNode: Record<string, string> = {}
+    // figmaNodeId da tela → { figmaNodeId do frame rolável → origem/tam } (p/ heatmap)
+    const scrollFrameGeomByScreen: Record<string, Record<string, { x: number; y: number; w: number; h: number }>> = {}
     for (const sc of screens) {
       if (sc.figmaNodeId) {
         screenByNode[sc.figmaNodeId] = { id: sc.id, w: sc.width, h: sc.height }
         screenToNode[sc.id] = sc.figmaNodeId
+        const frames = (sc.scrollFrames as { figmaId: string; x: number; y: number; w: number; h: number }[] | null) ?? []
+        if (frames.length) {
+          scrollFrameGeomByScreen[sc.figmaNodeId] = Object.fromEntries(
+            frames.map((f) => [f.figmaId, { x: f.x, y: f.y, w: f.w, h: f.h }])
+          )
+        }
       }
     }
     const goalsByMission: Record<string, string[]> = {}
@@ -203,6 +211,7 @@ export default async function TestRunPage({
         successTypeByMission={successTypeByMission}
         expectedPathsByMission={expectedPathsByMission}
         screenByNode={screenByNode}
+        scrollFrameGeomByScreen={scrollFrameGeomByScreen}
       />
     )
   }

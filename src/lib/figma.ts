@@ -28,6 +28,16 @@ export interface ImportRegion {
   // exportada e reposicionada na escala da base. Vazio p/ fixed.
   pieces?: RegionPiece[]
 }
+// Geometria (normalizada sobre a tela) de um frame ROLÁVEL do embed vivo. Serve
+// para posicionar no heatmap cliques cuja posição vem relativa ao frame interno.
+export type ScrollFrameGeom = {
+  figmaId: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface ImportScreen {
   figmaId: string
   name: string
@@ -37,6 +47,7 @@ export interface ImportScreen {
   isStart: boolean
   hotspots: ImportHotspot[]
   regions: ImportRegion[]
+  scrollFrames: ScrollFrameGeom[] // frames roláveis (overflowDirection≠NONE) → geometria
   thumbUrl?: string
 }
 
@@ -376,6 +387,7 @@ function overlayPositionOf(
 function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart" | "thumbUrl"> {
   const hotspots: ImportHotspot[] = []
   const regions: ImportRegion[] = []
+  const scrollFrames: ScrollFrameGeom[] = []
 
   function walk(n: FigNode, depthFixed: boolean) {
     if (n !== screen) {
@@ -410,6 +422,16 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
       if (!depthFixed && n.scrollBehavior === "FIXED") {
         const coords = relCoords(n, screen)
         if (coords && coords.w >= 0.5) regions.push({ kind: "fixed", coords, axis: "both" })
+      }
+      // Geometria de QUALQUER frame com scroll configurado (overflowDirection≠NONE),
+      // mesmo que o conteúdo não transborde agora — o embed pode reportá-lo como
+      // `nearestScrollingFrameId` de um clique, e aí precisamos da origem dele na
+      // tela para posicionar o ponto (origem + posição-no-viewport).
+      if (overflowToScroll(n.overflowDirection) !== "none") {
+        const gc = relCoordsRaw(n.absoluteBoundingBox, screen)
+        if (gc && gc.w >= 0.005 && gc.h >= 0.005) {
+          scrollFrames.push({ figmaId: n.id, x: gc.x, y: gc.y, w: gc.w, h: gc.h })
+        }
       }
       // scroll interno (sub-frame rolável, menor que a tela)
       const det = detectScrollRegion(n)
@@ -447,6 +469,7 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
     scroll: overflowToScroll(screen.overflowDirection),
     hotspots,
     regions,
+    scrollFrames,
   }
 }
 

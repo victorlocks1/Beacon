@@ -189,6 +189,7 @@ export async function figmaLiveImportAction(
           width: s.width || 360,
           height: s.height || 800,
           scroll: s.scroll,
+          scrollFrames: s.scrollFrames,
         },
       })
     }
@@ -295,6 +296,7 @@ export async function figmaRefreshAction(
             width: s.width || 360,
             height: s.height || 800,
             scroll: s.scroll,
+            scrollFrames: s.scrollFrames,
           },
         })
         added++
@@ -385,6 +387,7 @@ async function figmaImportImpl(
         width: s.width || 360,
         height: s.height || 800,
         scroll: s.scroll,
+        scrollFrames: s.scrollFrames,
       },
     })
     idMap[s.figmaId] = created.id

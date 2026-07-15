@@ -177,6 +177,10 @@ model Screen {
   height           Float
   scroll           ScrollMode     @default(none)
   scrollRegions    ScrollRegion[]
+  // Geometria dos frames ROLÁVEIS do embed vivo (overflowDirection≠NONE), p/
+  // posicionar no heatmap cliques dentro de carrossel/scroll. Mapa
+  // { figmaNodeId: {x,y,w,h} } com origem/tamanho NORMALIZADOS sobre a tela.
+  scrollFrames     Json?
   hotspots         Hotspot[]      @relation("ScreenHotspots")
   incomingHotspots Hotspot[]     @relation("HotspotTarget")
   missionStarts    Mission[]     @relation("MissionStartScreen")
