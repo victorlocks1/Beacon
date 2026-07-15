@@ -181,6 +181,26 @@ export default async function MissionResultsPage({
   const declaredRate = ended ? (counts.declared / ended) * 100 : 0
   const lostRate = ended ? (counts.lost / ended) * 100 : 0
 
+  // ── Caminho exato: entre quem NÃO teve sucesso (desistiu/abandonou), separa
+  //    quem ALCANÇOU a tela-objetivo por uma rota diferente do caminho definido
+  //    ("chegou por fora") de quem NUNCA chegou nela ("se perdeu"). ──
+  const goalScreenIds = new Set(
+    expectedPaths.map((p) => p[p.length - 1]).filter((s): s is string => !!s)
+  )
+  let offPathReached = 0 // não-sucesso que alcançou a tela-objetivo por fora do caminho
+  let neverReached = 0 // não-sucesso que nunca chegou na tela-objetivo
+  if (isPath && goalScreenIds.size > 0) {
+    for (const sid of startedSessionIds) {
+      const st = stateBySession.get(sid)
+      if (st !== "lost" && st !== "declared") continue // só os encerrados sem sucesso
+      const reached = pathFor(sid).some((s) => goalScreenIds.has(s))
+      if (reached) offPathReached++
+      else neverReached++
+    }
+  }
+  const notSuccessEnded = counts.declared + counts.lost
+  const offPathRate = notSuccessEnded ? (offPathReached / notSuccessEnded) * 100 : 0
+
   // Esforço (sobre quem tem resultado registrado)
   const totalClicks = results.reduce((a, r) => a + r.clickCount, 0)
   const totalMisclicks = results.reduce((a, r) => a + r.misclickCount, 0)
@@ -428,6 +448,12 @@ export default async function MissionResultsPage({
         ["Indireto", `${counts.indirect} (${formatPct(indirectRate)})`],
         ["Desistiram", `${counts.declared} (${formatPct(declaredRate)})`],
         ["Abandonaram", `${counts.lost} (${formatPct(lostRate)})`],
+        ...(isPath
+          ? ([
+              ["Chegou ao objetivo por fora do caminho", String(offPathReached)],
+              ["Não chegou ao objetivo (se perdeu)", String(neverReached)],
+            ] as [string, string][])
+          : []),
         ["Em aberto", String(counts.open)],
         ["Duração mediana (concluíram)", completeDurations.length ? formatDuration(medComplete) : "—"],
         ["Duração mediana (não concluíram)", failDurations.length ? formatDuration(medFail) : "—"],
@@ -597,6 +623,17 @@ export default async function MissionResultsPage({
                 </>
               )}
             </div>
+            {/* Caminho exato: entre os não-sucesso, quem chegou ao objetivo por fora */}
+            {isPath && notSuccessEnded > 0 && (
+              <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-small text-on-surface-variant">
+                <span>Dos que não tiveram sucesso:</span>
+                <span className="text-on-surface font-medium">{offPathReached}</span>
+                <span>chegaram ao objetivo por outro caminho</span>
+                <span className="text-on-surface-variant/50">·</span>
+                <span className="text-on-surface font-medium">{neverReached}</span>
+                <span>se perderam (não chegaram)</span>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Kpi
                 big
@@ -656,6 +693,14 @@ export default async function MissionResultsPage({
                 sub={`${counts.lost} de ${ended}`}
                 info="Abandono silencioso: iniciou mas não concluiu nem desistiu, e a sessão encerrou (fim do teste ou inatividade > 30 min)."
               />
+              {isPath && notSuccessEnded > 0 && (
+                <Kpi
+                  label="Chegou por fora"
+                  value={String(offPathReached)}
+                  sub={`de ${notSuccessEnded} sem sucesso`}
+                  info="Caminho exato: entre quem NÃO teve sucesso, quantos ALCANÇARAM a tela-objetivo por uma rota diferente do caminho definido. Sinal de que o objetivo é alcançável, mas por outro caminho. Os demais não-sucesso nunca chegaram na tela-objetivo (se perderam)."
+                />
+              )}
               <Kpi
                 label="Duração — não concl."
                 value={failDurations.length ? formatDuration(medFail) : "—"}
