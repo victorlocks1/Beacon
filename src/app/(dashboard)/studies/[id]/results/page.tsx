@@ -104,7 +104,8 @@ export default async function ResultsOverviewPage({
     ? Math.round((susResponses.reduce((a, r) => a + r.score, 0) / susResponses.length) * 10) / 10
     : 0
 
-  // ── SUM — só se a coleta está ligada no estudo ──
+  // ── SUM: só a coleta de respostas aqui; o cálculo vem depois (precisa de
+  //    sessionEnded/startedByMission para incluir os abandonos silenciosos). ──
   const sumEnabled = study.sumEnabled
   const sumResponses = sumEnabled
     ? await prisma.sumResponse.findMany({
@@ -113,33 +114,6 @@ export default async function ResultsOverviewPage({
       })
     : []
   const asqByKey = new Map(sumResponses.map((r) => [`${r.sessionId}:${r.missionId}`, r.values]))
-  const allSumBreakdowns: SumBreakdown[] = []
-  const sumByMission = new Map<string, SumBreakdown>()
-  if (sumEnabled) {
-    for (const m of missions) {
-      const rs = results.filter((r) => r.missionId === m.id)
-      const idealTaps = m.paths.length
-        ? Math.max(...m.paths.map((p) => Math.max(0, p.steps.length - 1)))
-        : 0
-      const idealMs = sumIdealMs(m.idealTimeMs, idealTaps)
-      const rows = rs.map((r) => {
-        const o = effOutcomeOf(r)
-        return sumScore({
-          completed: o === "direct" || o === "indirect",
-          indirect: o === "indirect",
-          durationMs: r.durationMs,
-          misclicks: r.misclickCount,
-          satisfactionValues: asqByKey.get(`${r.sessionId}:${m.id}`) ?? null,
-          idealMs,
-          idealTaps,
-        })
-      })
-      allSumBreakdowns.push(...rows)
-      if (rows.length) sumByMission.set(m.id, sumAverage(rows))
-    }
-  }
-  const sumOverall = allSumBreakdowns.length ? sumAverage(allSumBreakdowns) : null
-  const sumOverallV = sumOverall ? sumVerdict(sumOverall.score) : null
 
   // Sessões encerradas de fato (finishedAt OU inativas além do timeout) — mesma
   // regra da página de detalhe. Necessário para o denominador correto da taxa de
@@ -168,6 +142,43 @@ export default async function ResultsOverviewPage({
     set.add(e.sessionId)
     startedByMission.set(e.missionId, set)
   }
+
+  // ── SUM (cálculo): dimensão CONCLUSÃO usa a mesma régua do funil — inclui os
+  //    abandonos silenciosos (iniciaram + encerraram, sem resultado) como
+  //    conclusão 0. As outras dimensões só olham quem tem dado. ──
+  const allSumBreakdowns: SumBreakdown[] = []
+  const sumByMission = new Map<string, SumBreakdown>()
+  if (sumEnabled) {
+    for (const m of missions) {
+      const rs = results.filter((r) => r.missionId === m.id)
+      const idealTaps = m.paths.length
+        ? Math.max(...m.paths.map((p) => Math.max(0, p.steps.length - 1)))
+        : 0
+      const idealMs = sumIdealMs(m.idealTimeMs, idealTaps)
+      const rows = rs.map((r) => {
+        const o = effOutcomeOf(r)
+        return sumScore({
+          completed: o === "direct" || o === "indirect",
+          indirect: o === "indirect",
+          durationMs: r.durationMs,
+          misclicks: r.misclickCount,
+          satisfactionValues: asqByKey.get(`${r.sessionId}:${m.id}`) ?? null,
+          idealMs,
+          idealTaps,
+        })
+      })
+      // abandonos silenciosos desta missão (iniciaram + encerraram, sem resultado)
+      const resultSids = new Set(rs.map((r) => r.sessionId))
+      const started = startedByMission.get(m.id) ?? new Set<string>()
+      const abandons = [...started].filter((sid) => !resultSids.has(sid) && sessionEnded.get(sid)).length
+      for (let i = 0; i < abandons; i++)
+        rows.push({ completion: 0, time: null, errors: null, satisfaction: null, score: 0 })
+      allSumBreakdowns.push(...rows)
+      if (rows.length) sumByMission.set(m.id, sumAverage(rows))
+    }
+  }
+  const sumOverall = allSumBreakdowns.length ? sumAverage(allSumBreakdowns) : null
+  const sumOverallV = sumOverall ? sumVerdict(sumOverall.score) : null
 
   const questionsRaw = await prisma.question.findMany({
     where: {

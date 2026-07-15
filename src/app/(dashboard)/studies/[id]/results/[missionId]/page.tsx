@@ -8,7 +8,7 @@ import { ArrowLeft } from "lucide-react"
 import { formatDuration, formatPct } from "@/lib/format"
 import { reconstructPath, classifyExactPath } from "@/lib/path"
 import { median, lostness, lostnessBand } from "@/lib/metrics"
-import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, asqStatementsFor, ASQ_LABELS, ASQ_ANCHORS } from "@/lib/sum"
+import { sumScore, sumAverage, sumVerdict, idealTimeMs as sumIdealMs, asqStatementsFor, ASQ_LABELS, ASQ_ANCHORS, type SumBreakdown } from "@/lib/sum"
 import { HeatmapViewer } from "@/components/results/heatmap-viewer"
 import { MetricInfo } from "@/components/results/metric-info"
 import { QuestionResultCard } from "@/components/results/question-result-card"
@@ -332,7 +332,21 @@ export default async function MissionResultsPage({
         }
       })
     : []
-  const sumAvg = sumRows.length ? sumAverage(sumRows.map((r) => r.breakdown)) : null
+  // ALINHAMENTO (a): a dimensão CONCLUSÃO do SUM usa a MESMA régua do funil —
+  // inclui os abandonos silenciosos (iniciaram + encerraram, sem resultado) como
+  // conclusão 0. Eles não têm dado das outras dimensões (ficam null). Assim a
+  // conclusão do SUM = concluíram ÷ todos que tentaram (não superestima).
+  const sumSilentAbandons = study.sumEnabled
+    ? [...startedSessionIds].filter((sid) => !resultBySession.has(sid) && sessionEnded.get(sid)).length
+    : 0
+  const sumAllBreakdowns: SumBreakdown[] = [
+    ...sumRows.map((r) => r.breakdown),
+    ...Array.from(
+      { length: sumSilentAbandons },
+      (): SumBreakdown => ({ completion: 0, time: null, errors: null, satisfaction: null, score: 0 })
+    ),
+  ]
+  const sumAvg = sumAllBreakdowns.length ? sumAverage(sumAllBreakdowns) : null
   const sumV = sumAvg ? sumVerdict(sumAvg.score) : null
   const asqRespondents = sumResponses.length
   // Respostas de CADA pergunta do ASQ (média 1–7 + distribuição) para exibir.
@@ -875,8 +889,8 @@ export default async function MissionResultsPage({
                   info="Single Usability Metric — média de até 4 dimensões (Conclusão, Tempo, Erros, Satisfação), 0–100%. Faixas: ≥95 Excelente · 80–94 Satisfatória · 65–79 Regular/atenção · 50–64 Insatisfatória · <50 Crítica."
                 />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Kpi label="Conclusão" value={formatPct(sumAvg.completion)} sub="concluíram"
-                    info="Proporção que concluiu a tarefa (direto ou indireto)." />
+                  <Kpi label="Conclusão" value={formatPct(sumAvg.completion)} sub="de todos que tentaram"
+                    info="Proporção que concluiu a tarefa (direto ou indireto) sobre TODOS que iniciaram/encerraram a tarefa — mesma régua do funil. O abandono silencioso conta como conclusão 0 (não superestima)." />
                   <Kpi label="Tempo"
                     value={sumAvg.time == null ? "—" : formatPct(sumAvg.time)}
                     sub={sumAvg.time == null ? "sem tempo ideal" : `ideal ${Math.round(missionIdealMs / 1000)}s`}
