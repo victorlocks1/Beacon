@@ -23,12 +23,13 @@ export function arraysEqual(a: string[], b: string[]): boolean {
 }
 
 /**
- * Reclassifica uma execução de CAMINHO EXATO a partir do caminho percorrido,
- * pela regra atual: precisa percorrer TODAS as telas de um caminho definido, na
- * ordem (subsequência), terminando na tela-objetivo (última do caminho).
- *  • "direct"   = percorreu um caminho exatamente igual (sem telas extras)
- *  • "indirect" = percorreu todas as telas do caminho, na ordem, com telas extras
- *  • null       = não percorreu nenhum caminho (pulou tela-chave) → não é sucesso
+ * Reclassifica uma execução de CAMINHO EXATO a partir do caminho percorrido.
+ *  • "direct"   = percorreu o caminho exato até a tela-objetivo SEM desvio — o
+ *                 caminho definido é um PREFIXO do caminho real. Navegação DEPOIS
+ *                 de chegar no objetivo é ignorada (a tarefa já concluiu ali).
+ *  • "indirect" = passou por todas as telas do caminho, na ordem (subsequência),
+ *                 mas com desvios/telas extras no meio antes do objetivo.
+ *  • null       = não percorreu nenhum caminho (pulou tela-chave) → não é sucesso.
  * `actual` deve vir sem repetições consecutivas (reconstructPath já garante).
  */
 export function classifyExactPath(
@@ -38,8 +39,10 @@ export function classifyExactPath(
   let indirect = false
   for (const p of expectedPaths) {
     if (p.length < 2) continue
-    if (arraysEqual(actual, p)) return "direct"
-    // subsequência: todas as telas de `p` aparecem em `actual`, na ordem
+    // DIRETO: o caminho definido é um prefixo do caminho real (chegou no objetivo
+    // limpo, sem telas extras até ali; o que fez depois não importa).
+    if (p.length <= actual.length && p.every((x, i) => actual[i] === x)) return "direct"
+    // INDIRETO: todas as telas de `p` aparecem em `actual`, na ordem (subsequência).
     let i = 0
     for (const s of actual) {
       if (i < p.length && s === p[i]) i++
