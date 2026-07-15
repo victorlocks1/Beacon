@@ -282,7 +282,13 @@ export async function figmaRefreshAction(
       if (cur) {
         await prisma.screen.update({
           where: { id: cur.id },
-          data: { name: s.name, width: s.width || 360, height: s.height || 800, scroll: s.scroll },
+          data: {
+            name: s.name,
+            width: s.width || 360,
+            height: s.height || 800,
+            scroll: s.scroll,
+            scrollFrames: s.scrollFrames, // preenche a geometria dos frames roláveis
+          },
         })
         updated++
       } else {
