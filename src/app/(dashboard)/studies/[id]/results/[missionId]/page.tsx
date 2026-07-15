@@ -544,6 +544,17 @@ export default async function MissionResultsPage({
       ]),
     })
   }
+  if (giveUpRows.length > 0 || lostRows.length > 0) {
+    reportSections.push({
+      heading: "Onde as pessoas abandonam",
+      kind: "table",
+      columns: ["Situação", "Tela", "Pessoas"],
+      rows: [
+        ...giveUpRows.map(([sid, n]) => ["Desistiu (declarado)", nameOf(sid), n] as (string | number)[]),
+        ...lostRows.map(([sid, n]) => ["Última tela vista (perdida)", nameOf(sid), n] as (string | number)[]),
+      ],
+    })
+  }
   reportSections.push({
     heading: "Sessões individuais",
     kind: "table",
