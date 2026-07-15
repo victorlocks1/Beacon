@@ -64,10 +64,16 @@ export function HeatmapViewer({
     mode === "firstclick" ? screen?.firstClickPoints ?? [] : screen?.points ?? []
 
   useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    // Limpa SEMPRE ao (re)entrar — evita que o heatmap da tela anterior fique
+    // "preso" no canvas ao trocar/voltar de tela (imagem em cache).
+    const ctx0 = canvas.getContext("2d")
+    if (ctx0) ctx0.clearRect(0, 0, canvas.width, canvas.height)
+
     if ((mode !== "heatmap" && mode !== "firstclick") || !screen) return
     const img = imgRef.current
-    const canvas = canvasRef.current
-    if (!img || !canvas) return
+    if (!img) return
     const pts = mode === "firstclick" ? screen.firstClickPoints ?? [] : screen.points
 
     function draw() {
@@ -105,12 +111,18 @@ export function HeatmapViewer({
       ctx.putImageData(imgData, 0, 0)
     }
 
-    if (img.complete) draw()
+    // Só desenha com a imagem REALMENTE carregada (dimensões corretas). Caso
+    // contrário, aguarda o onload — e o handler é limpo no cleanup para nunca
+    // disparar um desenho defasado depois de trocar de tela.
+    if (img.complete && img.naturalWidth > 0) draw()
     else img.onload = draw
 
     const ro = new ResizeObserver(draw)
     ro.observe(img)
-    return () => ro.disconnect()
+    return () => {
+      ro.disconnect()
+      img.onload = null
+    }
   }, [mode, screen])
 
   if (!screen) {
@@ -181,6 +193,7 @@ export function HeatmapViewer({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
+          key={screen.id}
           ref={imgRef}
           src={screen.imageUrl}
           alt={screen.name}
