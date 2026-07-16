@@ -10,7 +10,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Strip } from "@/components/results/scroll-strip-heatmap"
-import { getScrollStrips, type ScrollStrip } from "@/app/(dashboard)/studies/[id]/results/scroll-actions"
+import {
+  getScrollStrips,
+  getOverlayPoints,
+  type ScrollStrip,
+  type OverlayPoint,
+} from "@/app/(dashboard)/studies/[id]/results/scroll-actions"
 
 interface Point {
   x: number
@@ -24,6 +29,7 @@ interface ScreenData {
   imageUrl: string
   points: Point[]
   firstClickPoints?: Point[] // primeiro toque de cada participante (modo "first click")
+  isOverlay?: boolean // bottomsheet/modal: usa pontos fiéis (via elemento) sob demanda
 }
 
 type Mode = "heatmap" | "clicks" | "firstclick" | "image"
@@ -89,6 +95,25 @@ export function HeatmapViewer({
   const pageStrip = strips?.find((s) => s.isPage) ?? null
   const nestedStrips = strips?.filter((s) => !s.isPage) ?? []
 
+  // OVERLAY (bottomsheet/modal): pontos FIÉIS via geometria do elemento, sob
+  // demanda. Substituem os pontos gravados (que caem no lugar errado em overlay).
+  const [overlayPoints, setOverlayPoints] = useState<OverlayPoint[] | null>(null)
+  useEffect(() => {
+    if (!studyId || !missionId || !screen?.isOverlay) {
+      setOverlayPoints(null)
+      return
+    }
+    let alive = true
+    setOverlayPoints(null)
+    getOverlayPoints(studyId, missionId, screen.id).then((r) => {
+      if (alive) setOverlayPoints(r.ok ? r.points : null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [studyId, missionId, screen])
+  const overlayReady = !!screen?.isOverlay && overlayPoints != null
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -100,7 +125,12 @@ export function HeatmapViewer({
     if ((mode !== "heatmap" && mode !== "firstclick") || !screen) return
     const img = imgRef.current
     if (!img) return
-    const pts = mode === "firstclick" ? screen.firstClickPoints ?? [] : screen.points
+    // overlay usa os pontos fiéis (via elemento); senão os gravados
+    const pts = overlayReady
+      ? overlayPoints!
+      : mode === "firstclick"
+        ? screen.firstClickPoints ?? []
+        : screen.points
 
     function draw() {
       const w = img!.clientWidth
@@ -149,7 +179,7 @@ export function HeatmapViewer({
       ro.disconnect()
       img.onload = null
     }
-  }, [mode, screen])
+  }, [mode, screen, overlayReady, overlayPoints])
 
   if (!screen) {
     return (
@@ -159,8 +189,10 @@ export function HeatmapViewer({
     )
   }
 
-  const clickCount = screen.points.filter((p) => p.type === "click").length
-  const misclickCount = screen.points.filter((p) => p.type === "misclick").length
+  // contagens: overlay usa os pontos fiéis; senão os gravados
+  const basePoints = overlayReady ? overlayPoints! : screen.points
+  const clickCount = basePoints.filter((p) => p.type === "click").length
+  const misclickCount = basePoints.filter((p) => p.type === "misclick").length
   const firstClickCount = (screen.firstClickPoints ?? []).length
 
   return (
@@ -241,7 +273,7 @@ export function HeatmapViewer({
 
           {mode === "clicks" && (
             <svg className="absolute inset-0 w-full h-full pointer-events-none">
-              {screen.points.map((p, i) => (
+              {basePoints.map((p, i) => (
                 <circle
                   key={i}
                   cx={`${p.x * 100}%`}

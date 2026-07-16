@@ -15,6 +15,79 @@ export type ScrollStrip = {
   points: StripPoint[]
 }
 
+export type OverlayPoint = { x: number; y: number; type: "click" | "misclick" }
+
+// Heatmap FIEL de uma OVERLAY (bottomsheet/modal): o embed manda a posição do
+// clique relativa ao ELEMENTO, não à tela. Aqui plotamos em
+// origem_do_elemento (Screen.nodeBoxes) + posição_dentro_dele, e descartamos os
+// cliques cujo elemento não pertence à overlay (vazam da tela de trás).
+// Retorna null quando a tela não é overlay (sem nodeBoxes).
+export async function getOverlayPoints(
+  studyId: string,
+  missionId: string,
+  screenId: string
+): Promise<{ ok: true; points: OverlayPoint[] | null } | { ok: false; error: string }> {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return { ok: false, error: "unauthorized" }
+    const screen = await prisma.screen.findFirst({
+      where: { id: screenId, prototype: { study: { id: studyId, ownerId: session.user.id } } },
+      select: { figmaNodeId: true, width: true, height: true, nodeBoxes: true },
+    })
+    if (!screen?.figmaNodeId) return { ok: false, error: "screen_not_found" }
+    const boxes = screen.nodeBoxes as Record<string, [number, number]> | null
+    if (!boxes) return { ok: true, points: null } // não é overlay
+
+    const screenNodes = new Set(
+      (
+        await prisma.screen.findMany({
+          where: { prototype: { studyId } },
+          select: { figmaNodeId: true },
+        })
+      )
+        .map((s) => s.figmaNodeId)
+        .filter((n): n is string => !!n)
+    )
+    const raw = await prisma.figmaEventLog.findMany({
+      where: { missionId, session: { studyId } },
+      select: { sessionId: true, type: true, data: true, clientTsMs: true, missionId: true },
+      orderBy: { clientTsMs: "asc" },
+    })
+    const bySession = new Map<string, RawFigmaEvent[]>()
+    for (const e of raw) {
+      const arr = bySession.get(e.sessionId) ?? []
+      arr.push({
+        type: e.type,
+        data: e.data as Record<string, unknown> | null,
+        clientTsMs: Number(e.clientTsMs),
+        missionId: e.missionId,
+      })
+      bySession.set(e.sessionId, arr)
+    }
+    const w = screen.width || 1
+    const h = screen.height || 1
+    const points: OverlayPoint[] = []
+    for (const events of bySession.values()) {
+      for (const cl of extractCountedClicks(events, (id) => screenNodes.has(id))) {
+        if (cl.presentedNode !== screen.figmaNodeId || !cl.targetNode) continue
+        const origin = boxes[cl.targetNode]
+        if (!origin) continue // elemento não é da overlay (ex.: tela de trás) → descarta
+        const x = origin[0] + cl.tx / w
+        const y = origin[1] + cl.ty / h
+        if (x < -0.02 || x > 1.02 || y < -0.02 || y > 1.02) continue
+        points.push({
+          x: Math.max(0, Math.min(1, x)),
+          y: Math.max(0, Math.min(1, y)),
+          type: cl.handled ? "click" : "misclick",
+        })
+      }
+    }
+    return { ok: true, points }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "failed" }
+  }
+}
+
 // Calcula, para uma TELA, as tiras roláveis (carrossel) com conteúdo escondido e o
 // heatmap desenrolado de cada uma — posição do clique = viewport + offset de scroll,
 // normalizada pelo tamanho do conteúdo. Lê o log cru (FigmaEventLog) sob demanda.

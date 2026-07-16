@@ -22,6 +22,9 @@ export type CountedClick = {
   vy: number
   ox: number // offset de scroll (px)
   oy: number
+  targetNode: string | undefined // targetNodeId (elemento clicado)
+  tx: number // posição DENTRO do elemento clicado (px)
+  ty: number
   handled: boolean
   tMs: number
 }
@@ -49,6 +52,9 @@ export function extractCountedClicks(
     y: number
     ox: number
     oy: number
+    tgt: string | undefined
+    tx: number
+    ty: number
     handled: boolean
     nodeId: string | undefined
     sfId: string | undefined
@@ -68,6 +74,9 @@ export function extractCountedClicks(
       vy: p.y,
       ox: p.ox,
       oy: p.oy,
+      targetNode: p.tgt,
+      tx: p.tx,
+      ty: p.ty,
       handled: p.handled,
       tMs: p.t,
     })
@@ -85,12 +94,14 @@ export function extractCountedClicks(
 
     if (e.type === "MOUSE_PRESS_OR_RELEASE") {
       const sfPos = asPt(d.nearestScrollingFrameMousePosition)
-      const pos = sfPos ?? asPt(d.targetNodeMousePosition) ?? { x: 0, y: 0 }
+      const tgtPos = asPt(d.targetNodeMousePosition)
+      const pos = sfPos ?? tgtPos ?? { x: 0, y: 0 }
       const off = asPt(d.nearestScrollingFrameOffset) ?? { x: 0, y: 0 }
       const px = pos.x
       const py = pos.y
       const sfId = (d.nearestScrollingFrameId as string | undefined) || undefined
       const presentedId = (d.presentedNodeId as string | undefined) || undefined
+      const tgtId = (d.targetNodeId as string | undefined) || undefined
       const handled = d.handled !== false
       const tNow = e.clientTsMs
 
@@ -101,7 +112,20 @@ export function extractCountedClicks(
         if (Math.abs(px - p.x) > 14 || Math.abs(py - p.y) > 14) continue // arraste
         emit(p)
       } else {
-        pending = { t: tNow, x: px, y: py, ox: off.x, oy: off.y, handled, nodeId: presentedId, sfId, m: e.missionId }
+        pending = {
+          t: tNow,
+          x: px,
+          y: py,
+          ox: off.x,
+          oy: off.y,
+          tgt: tgtId,
+          tx: tgtPos?.x ?? px,
+          ty: tgtPos?.y ?? py,
+          handled,
+          nodeId: presentedId,
+          sfId,
+          m: e.missionId,
+        }
       }
     } else if (e.type === "PRESENTED_NODE_CHANGED") {
       const nodeId = (d.presentedNodeId as string | undefined) || undefined

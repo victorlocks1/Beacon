@@ -231,6 +231,7 @@ export async function figmaLiveImportAction(
           height: s.height || 800,
           scroll: s.scroll,
           scrollFrames: s.scrollFrames,
+          nodeBoxes: s.nodeBoxes,
         },
       })
     }
@@ -331,7 +332,8 @@ export async function figmaRefreshAction(
             width: s.width || 360,
             height: s.height || 800,
             scroll: s.scroll,
-            scrollFrames: s.scrollFrames, // preenche a geometria dos frames roláveis
+            scrollFrames: s.scrollFrames,
+          nodeBoxes: s.nodeBoxes, // preenche a geometria dos frames roláveis
           },
         })
         updated++
@@ -347,6 +349,7 @@ export async function figmaRefreshAction(
             height: s.height || 800,
             scroll: s.scroll,
             scrollFrames: s.scrollFrames,
+          nodeBoxes: s.nodeBoxes,
           },
         })
         added++
@@ -441,6 +444,7 @@ async function figmaImportImpl(
         height: s.height || 800,
         scroll: s.scroll,
         scrollFrames: s.scrollFrames,
+          nodeBoxes: s.nodeBoxes,
       },
     })
     idMap[s.figmaId] = created.id

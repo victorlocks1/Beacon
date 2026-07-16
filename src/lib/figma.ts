@@ -64,6 +64,9 @@ export interface ImportScreen {
   hotspots: ImportHotspot[]
   regions: ImportRegion[]
   scrollFrames: ScrollFrameGeom[] // frames roláveis (overflowDirection≠NONE) → geometria
+  // Só para telas OVERLAY (bottomsheet/modal): nó → origem normalizada [x,y] na
+  // tela. Permite o heatmap fiel (origem do elemento + posição dentro dele).
+  nodeBoxes?: Record<string, [number, number]>
   thumbUrl?: string
 }
 
@@ -541,6 +544,36 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
   }
 }
 
+// Geometria de TODOS os elementos de uma tela (nó → origem normalizada [x,y]).
+// Usado só em overlays: como o embed manda a posição do clique relativa ao
+// elemento, somamos a origem do elemento para posicionar certo na tela.
+function collectNodeBoxes(screen: FigNode, idx: Index): Record<string, [number, number]> {
+  const s = screen.absoluteBoundingBox
+  if (!s || !s.width || !s.height) return {}
+  const out: FigNode[] = []
+  collectDescendants(screen, out)
+  const map: Record<string, [number, number]> = {}
+  for (const n of out) {
+    const b = n.absoluteBoundingBox
+    if (!b) continue
+    map[n.id] = [
+      Math.round(((b.x - s.x) / s.width) * 10000) / 10000,
+      Math.round(((b.y - s.y) / s.height) * 10000) / 10000,
+    ]
+  }
+  return map
+}
+
+// Telas que são OVERLAY = destino de uma interação "Open overlay" do Figma.
+function collectOverlayDests(idx: Index): Set<string> {
+  const out = new Set<string>()
+  for (const n of Object.values(idx.byId)) {
+    const edge = edgeForNode(n)
+    if (edge?.action === "open_overlay" && edge.dest) out.add(screenIdOf(edge.dest, idx))
+  }
+  return out
+}
+
 // coleta todos os edges presentes no índice (source → dest), por tela
 function collectEdges(idx: Index): { sources: Set<string>; dests: Set<string> } {
   const sources = new Set<string>()
@@ -599,11 +632,14 @@ export async function collectImportPlan(
 
   // 4) extrai cada tela
   const startCandidates = new Set([...sources].filter((s) => !dests.has(s)))
+  const overlayDests = collectOverlayDests(idx)
   const screens: ImportScreen[] = []
   for (const id of screenIds) {
     const node = idx.byId[id]
     if (!node || !SCREEN_TYPES.has(node.type)) continue
     const base = extractScreen(node, idx)
+    // OVERLAY (bottomsheet/modal): guarda a geometria dos elementos p/ heatmap fiel
+    if (overlayDests.has(id)) base.nodeBoxes = collectNodeBoxes(node, idx)
     // descarta hotspots navigate/overlay cujo destino ficou fora do conjunto final
     base.hotspots = base.hotspots.filter((h) => {
       if (h.action === "back" || h.action === "close_overlay") return true

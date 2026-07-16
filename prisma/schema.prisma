@@ -181,6 +181,11 @@ model Screen {
   // posicionar no heatmap cliques dentro de carrossel/scroll. Mapa
   // { figmaNodeId: {x,y,w,h} } com origem/tamanho NORMALIZADOS sobre a tela.
   scrollFrames     Json?
+  // Geometria dos ELEMENTOS (nó → origem normalizada [x,y]) — preenchido só para
+  // telas OVERLAY (bottomsheet/modal), onde o embed manda a posição do clique
+  // relativa ao elemento e não à tela. Permite plotar o clique em
+  // origem_do_elemento + posição_dentro_dele (heatmap fiel da overlay).
+  nodeBoxes        Json?
   hotspots         Hotspot[]      @relation("ScreenHotspots")
   incomingHotspots Hotspot[]     @relation("HotspotTarget")
   missionStarts    Mission[]     @relation("MissionStartScreen")

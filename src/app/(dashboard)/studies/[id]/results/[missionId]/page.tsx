@@ -300,6 +300,7 @@ export default async function MissionResultsPage({
       imageUrl: s.imageUrl,
       points: pointsByScreen.get(s.id) ?? [],
       firstClickPoints: firstClickByScreen.get(s.id) ?? [],
+      isOverlay: s.nodeBoxes != null, // overlay → heatmap fiel via elemento
     }))
 
   // ── Lostness (só caminho exato): compara telas visitadas com o caminho ótimo.
