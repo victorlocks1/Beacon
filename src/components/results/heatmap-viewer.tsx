@@ -91,8 +91,11 @@ export function HeatmapViewer({
       alive = false
     }
   }, [studyId, missionId, screen])
-  // Tira da PÁGINA (scroll vertical): quando existe, vira o heatmap principal.
-  const pageStrip = strips?.find((s) => s.isPage) ?? null
+  // Visão de PÁGINA INTEIRA (scroll vertical) DESATIVADA: a reconstrução em
+  // pedaços distorcia os carrosséis internos (cards espremidos/ilegíveis). O
+  // heatmap principal volta a ser o print do viewport (legível). Os carrosséis/
+  // filtros seguem nas tiras horizontais, e as overlays no heatmap fiel.
+  const pageStrip: ScrollStrip | null = null
   const nestedStrips = strips?.filter((s) => !s.isPage) ?? []
 
   // OVERLAY (bottomsheet/modal): pontos FIÉIS via geometria do elemento, sob
