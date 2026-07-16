@@ -22,7 +22,7 @@ function ramp(t: number): [number, number, number] {
   ]
 }
 
-function Strip({ strip }: { strip: ScrollStrip }) {
+export function Strip({ strip }: { strip: ScrollStrip }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [show, setShow] = useState(true)
@@ -75,7 +75,9 @@ function Strip({ strip }: { strip: ScrollStrip }) {
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
-          Conteúdo rolável desenrolado ({strip.axis === "horizontal" ? "horizontal" : strip.axis}) — {strip.points.length} clique(s)
+          {strip.isPage
+            ? `Página inteira (scroll vertical) — ${strip.points.length} clique(s)`
+            : `Conteúdo rolável desenrolado (${strip.axis === "horizontal" ? "horizontal" : strip.axis}) — ${strip.points.length} clique(s)`}
         </span>
         <button
           onClick={() => setShow((s) => !s)}

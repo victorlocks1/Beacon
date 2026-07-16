@@ -499,12 +499,42 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
   walk(screen, false)
 
   const b = screen.absoluteBoundingBox
+  // Scroll da PRÓPRIA PÁGINA (a tela é mais alta/larga que o viewport): o `walk`
+  // pula o nó da tela, então tratamos aqui. Vira uma "tira" cujo figmaId é o da
+  // própria tela — no runtime os cliques com nearestScrollingFrameId == a tela
+  // caem nela, e o heatmap principal passa a mostrar a PÁGINA INTEIRA.
+  const pageAxis = overflowToScroll(screen.overflowDirection)
+  if (pageAxis !== "none" && b) {
+    const det = detectScrollRegion(screen)
+    if (det) {
+      const pieces = det.pieceIds
+        .map((id) => {
+          const pb = idx.byId[id]?.absoluteRenderBounds ?? idx.byId[id]?.absoluteBoundingBox
+          return pb ? { figmaId: id, x: pb.x - b.x, y: pb.y - b.y, w: pb.width, h: pb.height } : null
+        })
+        .filter((p): p is ScrollFramePiece => p != null)
+      if (pieces.length) {
+        scrollFrames.push({
+          figmaId: screen.id,
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 1,
+          axis: pageAxis,
+          contentW: Math.max(b.width, ...pieces.map((p) => p.x + p.w)),
+          contentH: Math.max(b.height, ...pieces.map((p) => p.y + p.h)),
+          pieces,
+        })
+      }
+    }
+  }
+
   return {
     figmaId: screen.id,
     name: screen.name,
     width: Math.round(b?.width ?? 0),
     height: Math.round(b?.height ?? 0),
-    scroll: overflowToScroll(screen.overflowDirection),
+    scroll: pageAxis,
     hotspots,
     regions,
     scrollFrames,

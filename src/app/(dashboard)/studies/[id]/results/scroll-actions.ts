@@ -8,6 +8,7 @@ export type StripPoint = { x: number; y: number; handled: boolean }
 export type ScrollStrip = {
   figmaId: string
   axis: "horizontal" | "vertical" | "both"
+  isPage: boolean // true = scroll da PÁGINA inteira (vira o heatmap principal)
   contentW: number
   contentH: number
   pieces: { url: string; x: number; y: number; w: number; h: number }[]
@@ -92,6 +93,7 @@ export async function getScrollStrips(
       strips: strips.map((f) => ({
         figmaId: f.figmaId,
         axis: f.axis ?? "horizontal",
+        isPage: f.figmaId === screen.figmaNodeId,
         contentW: f.contentW!,
         contentH: f.contentH!,
         pieces: (f.pieces ?? [])

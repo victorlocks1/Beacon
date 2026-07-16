@@ -9,7 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ScrollStripHeatmap } from "@/components/results/scroll-strip-heatmap"
+import { Strip } from "@/components/results/scroll-strip-heatmap"
+import { getScrollStrips, type ScrollStrip } from "@/app/(dashboard)/studies/[id]/results/scroll-actions"
 
 interface Point {
   x: number
@@ -67,6 +68,26 @@ export function HeatmapViewer({
   // pontos ativos conforme o modo (todos os cliques × primeiro toque)
   const activePoints =
     mode === "firstclick" ? screen?.firstClickPoints ?? [] : screen?.points ?? []
+
+  // Tiras roláveis (carrossel + scroll de página) da tela selecionada, sob demanda.
+  const [strips, setStrips] = useState<ScrollStrip[] | null>(null)
+  useEffect(() => {
+    if (!studyId || !missionId || !screen) {
+      setStrips(null)
+      return
+    }
+    let alive = true
+    setStrips(null)
+    getScrollStrips(studyId, missionId, screen.id).then((r) => {
+      if (alive) setStrips(r.ok ? r.strips : [])
+    })
+    return () => {
+      alive = false
+    }
+  }, [studyId, missionId, screen])
+  // Tira da PÁGINA (scroll vertical): quando existe, vira o heatmap principal.
+  const pageStrip = strips?.find((s) => s.isPage) ?? null
+  const nestedStrips = strips?.filter((s) => !s.isPage) ?? []
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -166,7 +187,8 @@ export function HeatmapViewer({
           </SelectContent>
         </Select>
 
-        {/* Toggle de modo */}
+        {/* Toggle de modo (não se aplica à visão de página inteira) */}
+        {!pageStrip && (
         <div className="flex items-center gap-0.5 p-0.5 bg-muted rounded-lg">
           {(["heatmap", "clicks", "firstclick", "image"] as Mode[]).map((m) => (
             <button
@@ -189,52 +211,68 @@ export function HeatmapViewer({
             </button>
           ))}
         </div>
+        )}
       </div>
 
-      {/* Imagem + overlay */}
-      <div
-        className="relative mx-auto border rounded-lg overflow-hidden bg-muted"
-        style={{ maxWidth: deviceMaxWidth[deviceType] }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          key={screen.id}
-          ref={imgRef}
-          src={screen.imageUrl}
-          alt={screen.name}
-          className="w-full h-auto block"
-        />
-
-        {(mode === "heatmap" || mode === "firstclick") && (
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none"
+      {/* Heatmap principal: PÁGINA INTEIRA quando a tela rola verticalmente
+          (mostra tudo, inclusive abaixo do fold, com cliques na posição real);
+          senão, o viewport normal (imagem + overlay). */}
+      {pageStrip ? (
+        <div className="mx-auto" style={{ maxWidth: deviceMaxWidth[deviceType] }}>
+          <Strip strip={pageStrip} />
+        </div>
+      ) : (
+        <div
+          className="relative mx-auto border rounded-lg overflow-hidden bg-muted"
+          style={{ maxWidth: deviceMaxWidth[deviceType] }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            key={screen.id}
+            ref={imgRef}
+            src={screen.imageUrl}
+            alt={screen.name}
+            className="w-full h-auto block"
           />
-        )}
 
-        {mode === "clicks" && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {screen.points.map((p, i) => (
-              <circle
-                key={i}
-                cx={`${p.x * 100}%`}
-                cy={`${p.y * 100}%`}
-                r={6}
-                fill={p.type === "misclick" ? "rgba(239,68,68,0.5)" : "rgba(59,130,246,0.5)"}
-                stroke={p.type === "misclick" ? "#ef4444" : "#3b82f6"}
-                strokeWidth={1}
-              />
-            ))}
-          </svg>
-        )}
-      </div>
+          {(mode === "heatmap" || mode === "firstclick") && (
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+          )}
 
-      {/* Carrossel / conteúdo rolável escondido (carrega sob demanda p/ a tela atual) */}
-      {studyId && missionId && (
-        <ScrollStripHeatmap studyId={studyId} missionId={missionId} screenId={screen.id} />
+          {mode === "clicks" && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+              {screen.points.map((p, i) => (
+                <circle
+                  key={i}
+                  cx={`${p.x * 100}%`}
+                  cy={`${p.y * 100}%`}
+                  r={6}
+                  fill={p.type === "misclick" ? "rgba(239,68,68,0.5)" : "rgba(59,130,246,0.5)"}
+                  stroke={p.type === "misclick" ? "#ef4444" : "#3b82f6"}
+                  strokeWidth={1}
+                />
+              ))}
+            </svg>
+          )}
+        </div>
       )}
 
-      {/* Legenda */}
+      {/* Carrosséis / conteúdo escondido aninhado (barras de filtro, carrosséis) */}
+      {nestedStrips.length > 0 && (
+        <div className="space-y-4 pt-2">
+          <p className="text-sm font-medium text-on-surface">Carrossel / conteúdo escondido</p>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Além da parte visível, estas tiras aparecem inteiras (todos os cards/filtros), com os
+            cliques no conteúdo real — inclusive o que ficava escondido ao rolar.
+          </p>
+          {nestedStrips.map((s) => (
+            <Strip key={s.figmaId} strip={s} />
+          ))}
+        </div>
+      )}
+
+      {/* Legenda (só na visão de viewport; a de página tem contagem própria) */}
+      {!pageStrip && (
       <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
         {mode === "firstclick" ? (
           <span className="flex items-center gap-1.5">
@@ -254,6 +292,7 @@ export function HeatmapViewer({
           </>
         )}
       </div>
+      )}
     </div>
   )
 }
