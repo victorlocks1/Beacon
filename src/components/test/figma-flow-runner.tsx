@@ -68,6 +68,9 @@ export function FigmaFlowRunner({
   expectedPathsByMission,
   screenByNode,
   scrollFrameGeomByScreen,
+  deviceType = "desktop",
+  frameW = 360,
+  frameH = 800,
 }: {
   token: string
   lang: Lang
@@ -90,8 +93,15 @@ export function FigmaFlowRunner({
   // Por tela (não global) porque o mesmo frame pode aparecer sob telas diferentes
   // (bottomsheet sobre a tela de trás) com origens distintas.
   scrollFrameGeomByScreen: Record<string, Record<string, { x: number; y: number; w: number; h: number }>>
+  deviceType?: "desktop" | "tablet" | "mobile" // define proporção/tamanho do quadro do protótipo
+  frameW?: number // dimensões reais do frame do protótipo (para a proporção certa)
+  frameH?: number
 }) {
   const s = tt(lang)
+  // Dispositivo do protótipo: mobile usa o quadro de celular (retrato estreito);
+  // web/tablet usam a proporção REAL do frame (paisagem), sem moldura de celular.
+  const isMobile = deviceType === "mobile"
+  const frameAspect = frameW > 0 && frameH > 0 ? frameW / frameH : isMobile ? 9 / 20 : 16 / 10
   const [stepIndex, setStepIndex] = useState(0)
   const [flowStarted, setFlowStarted] = useState(!welcome)
   const [introDone, setIntroDone] = useState(!howItWorks) // tela "Como funciona"
@@ -687,7 +697,14 @@ export function FigmaFlowRunner({
     // esquerdo vira o feedback (com botão continuar) e o protótipo some.
     const reached = completion === "reached"
     content = (
-      <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
+      <div
+        className={
+          "min-h-screen grid grid-cols-1 " +
+          (isMobile
+            ? "md:grid-cols-2"
+            : "md:grid-cols-[minmax(260px,340px)_1fr]") // web: barra de tarefa fina + protótipo largo
+        }
+      >
         <div className="flex flex-col px-6 py-10 md:px-12 lg:px-16 bg-surface">
           {/* Conteúdo — centralizado */}
           <div className="flex-1 flex flex-col justify-center">
@@ -836,9 +853,13 @@ export function FigmaFlowRunner({
           {!completion && (
             <div
               className={
-                "relative bg-white rounded-[28px] overflow-hidden transition-opacity duration-300 aspect-[9/20] h-[90vh] max-w-full " +
+                "relative bg-white overflow-hidden transition-opacity duration-300 max-w-full " +
+                // mobile: quadro de celular (retrato, altura fixa, cantos arredondados).
+                // web/tablet: preenche a largura, proporção real do frame, sem moldura.
+                (isMobile ? "rounded-[28px] h-[90vh] " : "rounded-xl shadow-sm w-full max-h-[94vh] ") +
                 (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
               }
+              style={{ aspectRatio: `${frameW} / ${frameH}` }}
               aria-hidden={!taskStarted}
             >
               {embedSrc && (

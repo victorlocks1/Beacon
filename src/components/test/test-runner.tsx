@@ -397,7 +397,14 @@ export function TestRunner({
   } else {
     // ─────────── Missão (tela dividida: tarefa | protótipo) ───────────
     content = (
-      <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
+      <div
+        className={
+          "min-h-screen grid grid-cols-1 " +
+          (deviceType === "mobile"
+            ? "md:grid-cols-2"
+            : "md:grid-cols-[minmax(260px,340px)_1fr]") // web: tarefa fina + protótipo largo
+        }
+      >
         {/* Metade esquerda: a tarefa (sem card) */}
         <div className="flex flex-col justify-center px-6 py-10 md:px-12 lg:px-16 bg-surface">
           <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">

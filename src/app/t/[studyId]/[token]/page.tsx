@@ -191,12 +191,20 @@ export default async function TestRunPage({
         expectedPathsByMission[st.mission.id] = st.mission.paths.filter((p) => p.length >= 2)
       }
     }
+    // dimensões de referência do protótipo (todas as telas do frame compartilham),
+    // usadas para dar a proporção correta ao quadro no runner (mobile vs web)
+    const refScreen = screens[0]
+    const frameW = refScreen?.width || 360
+    const frameH = refScreen?.height || 800
     return (
       <FigmaFlowRunner
         token={token}
         lang={lang}
         fileKey={proto!.figmaFileKey!}
         steps={testSteps}
+        deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+        frameW={frameW}
+        frameH={frameH}
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
         howItWorks={null} /* Como funciona agora fica na tela de boas-vindas (entry) */
