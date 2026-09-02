@@ -855,11 +855,25 @@ export function FigmaFlowRunner({
               className={
                 "relative bg-white overflow-hidden transition-opacity duration-300 max-w-full " +
                 // mobile: quadro de celular (retrato, altura fixa, cantos arredondados).
-                // web/tablet: preenche a largura, proporção real do frame, sem moldura.
-                (isMobile ? "rounded-[28px] h-[90vh] " : "rounded-xl shadow-sm w-full max-h-[94vh] ") +
+                // web/tablet: tamanho de teste definido pela TELA (ver style abaixo).
+                (isMobile ? "rounded-[28px] h-[90vh] " : "rounded-xl shadow-sm ") +
                 (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
               }
-              style={{ aspectRatio: `${frameW} / ${frameH}` }}
+              style={
+                isMobile
+                  ? { aspectRatio: `${frameW} / ${frameH}` }
+                  : {
+                      // Web/tablet: o quadro NÃO usa o tamanho em pixels do protótipo.
+                      // Ele assume a proporção real do frame e ocupa o MAIOR tamanho
+                      // que cabe na área — limitado pela altura (88vh) e pela largura
+                      // da coluna (100%). Assim qualquer protótipo (grande ou pequeno)
+                      // é adaptado para caber inteiro, sem cortar nem estourar. O embed
+                      // (scaling=contain) preenche o quadro exatamente.
+                      aspectRatio: `${frameW} / ${frameH}`,
+                      width: `min(100%, calc(88vh * ${frameW} / ${frameH}))`,
+                      maxHeight: "88vh",
+                    }
+              }
               aria-hidden={!taskStarted}
             >
               {embedSrc && (
