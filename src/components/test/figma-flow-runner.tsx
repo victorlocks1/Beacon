@@ -929,18 +929,16 @@ export function FigmaFlowRunner({
           {protoBox}
         </div>
 
-        {/* Briefing (pré-início): cartão à esquerda que desliza pra fora ao iniciar */}
+        {/* Briefing (pré-início): painel de ALTURA CHEIA encostado à esquerda,
+            sobreposto ao protótipo (a imagem fica full por baixo, sem espremer).
+            Desliza pra fora ao iniciar a tarefa. */}
         <div
           className={
-            "absolute inset-y-0 left-0 z-40 flex items-start transition-all duration-500 ease-out " +
-            (taskStarted
-              ? "-translate-x-[110%] opacity-0 pointer-events-none"
-              : "translate-x-0 opacity-100")
+            "absolute inset-y-0 left-0 z-40 flex w-[min(440px,90vw)] flex-col justify-center border-r border-outline-variant bg-surface px-8 py-10 shadow-[4px_0_24px_rgba(0,0,0,0.06)] transition-transform duration-500 ease-out lg:px-12 " +
+            (taskStarted ? "-translate-x-full pointer-events-none" : "translate-x-0")
           }
         >
-          <div className="m-4 w-[min(420px,calc(100vw-2rem))] space-y-6 rounded-[28px] border border-outline-variant bg-surface-container-low elevation-2 p-8">
-            {briefingInner}
-          </div>
+          <div className="w-full space-y-6">{briefingInner}</div>
         </div>
 
         {/* Tarefa como widget flutuante arrastável — durante a tarefa */}
