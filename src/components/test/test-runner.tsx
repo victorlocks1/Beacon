@@ -484,7 +484,7 @@ export function TestRunner({
           {/* Briefing (pré-início): cartão à esquerda que desliza pra fora ao iniciar */}
           <div
             className={
-              "absolute inset-y-0 left-0 z-40 flex items-center transition-all duration-500 ease-out " +
+              "absolute inset-y-0 left-0 z-40 flex items-start transition-all duration-500 ease-out " +
               (taskStarted
                 ? "-translate-x-[110%] opacity-0 pointer-events-none"
                 : "translate-x-0 opacity-100")
