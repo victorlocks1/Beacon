@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { type DeviceType } from "@/lib/device"
 import { dedupeConsecutive } from "@/lib/path"
 import { PrototypeStage, type StageScreen, type StageInteraction } from "@/components/prototype/stage"
+import { FloatingTaskWidget } from "@/components/test/floating-task-widget"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
 import { SusView } from "@/components/test/sus-view"
@@ -396,77 +397,124 @@ export function TestRunner({
     content = <SusView lang={lang} statements={susStatements} onSubmit={submitSus} />
   } else {
     // ─────────── Missão (tela dividida: tarefa | protótipo) ───────────
-    content = (
+    const isMobile = deviceType === "mobile"
+
+    // Cabeçalho da tarefa (rótulo do passo + enunciado) — reutilizado nos layouts.
+    const taskHeader = (
+      <>
+        <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
+          <ClipboardList className="h-4 w-4" />
+          {s.stepOf(stepIndex + 1, steps.length)}
+        </div>
+        <div className="space-y-3">
+          <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
+          {step.mission.description && (
+            <p className="text-body-large text-on-surface-variant">{step.mission.description}</p>
+          )}
+        </div>
+      </>
+    )
+
+    // Protótipo (PNG interativo) — reutilizado nos dois layouts.
+    const stageNode = (
       <div
-        className={
-          "min-h-screen grid grid-cols-1 " +
-          (deviceType === "mobile"
-            ? "md:grid-cols-2"
-            : "md:grid-cols-[minmax(260px,340px)_1fr]") // web: tarefa fina + protótipo largo
-        }
+        className={cn(
+          "transition-opacity duration-300",
+          !started && "opacity-40 pointer-events-none select-none"
+        )}
+        aria-hidden={!started}
       >
-        {/* Metade esquerda: a tarefa (sem card) */}
-        <div className="flex flex-col justify-center px-6 py-10 md:px-12 lg:px-16 bg-surface">
-          <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
-            <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
-              <ClipboardList className="h-4 w-4" />
-              {s.stepOf(stepIndex + 1, steps.length)}
-            </div>
-
-            <div className="space-y-3">
-              <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
-              {step.mission.description && (
-                <p className="text-body-large text-on-surface-variant">
-                  {step.mission.description}
-                </p>
-              )}
-            </div>
-
-            {preview ? (
-              // Revisão: protótipo já interativo; botão para seguir o fluxo.
-              <Button onClick={advance} className="h-12 px-6" size="lg">
-                {isLastStep ? "Concluir revisão" : "Avançar"}
-              </Button>
-            ) : !started ? (
-              <Button onClick={startTask} className="h-12 px-6" size="lg">
-                <Play className="h-4 w-4 mr-2" />
-                {s.startTask}
-              </Button>
-            ) : (
-              // Sempre visível durante a tarefa (desde a 1ª tela), mesmo sem clique.
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-2 text-on-surface-variant"
-                onClick={() => completeMission("gave_up", topRef.current)}
-              >
-                <Flag className="h-3.5 w-3.5 mr-1.5" />
-                {s.giveUp}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Metade direita: o protótipo */}
-        <div className="flex items-center justify-center px-6 py-10 md:px-12 bg-surface-container overflow-auto">
-          <div
-            className={cn(
-              "transition-opacity duration-300",
-              !started && "opacity-40 pointer-events-none select-none"
-            )}
-            aria-hidden={!started}
-          >
-            <PrototypeStage
-              key={step.mission.id}
-              screens={screens}
-              deviceType={deviceType}
-              initialScreenId={step.mission.startScreenId}
-              onInteraction={handleInteraction}
-            />
-          </div>
-        </div>
+        <PrototypeStage
+          key={step.mission.id}
+          screens={screens}
+          deviceType={deviceType}
+          initialScreenId={step.mission.startScreenId}
+          onInteraction={handleInteraction}
+        />
       </div>
     )
+
+    content =
+      isMobile || preview ? (
+        // ─── MOBILE ou PREVIEW (revisão) — layout dividido. Inalterado. ───
+        <div
+          className={
+            "min-h-screen grid grid-cols-1 " +
+            (isMobile ? "md:grid-cols-2" : "md:grid-cols-[minmax(260px,340px)_1fr]")
+          }
+        >
+          <div className="flex flex-col justify-center px-6 py-10 md:px-12 lg:px-16 bg-surface">
+            <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
+              {taskHeader}
+              {preview ? (
+                <Button onClick={advance} className="h-12 px-6" size="lg">
+                  {isLastStep ? "Concluir revisão" : "Avançar"}
+                </Button>
+              ) : !started ? (
+                <Button onClick={startTask} className="h-12 px-6" size="lg">
+                  <Play className="h-4 w-4 mr-2" />
+                  {s.startTask}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 text-on-surface-variant"
+                  onClick={() => completeMission("gave_up", topRef.current)}
+                >
+                  <Flag className="h-3.5 w-3.5 mr-1.5" />
+                  {s.giveUp}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center px-6 py-10 md:px-12 bg-surface-container overflow-auto">
+            {stageNode}
+          </div>
+        </div>
+      ) : (
+        // ─── WEB (teste real) — protótipo em tela cheia + tarefa flutuante ───
+        <div className="relative min-h-screen md:h-screen overflow-hidden bg-surface-container">
+          {/* Protótipo centralizado, ocupando a tela */}
+          <div className="absolute inset-0 flex items-center justify-center overflow-auto p-3 md:p-6">
+            {stageNode}
+          </div>
+
+          {/* Briefing (pré-início): cartão à esquerda que desliza pra fora ao iniciar */}
+          <div
+            className={
+              "absolute inset-y-0 left-0 z-40 flex items-center transition-all duration-500 ease-out " +
+              (taskStarted
+                ? "-translate-x-[110%] opacity-0 pointer-events-none"
+                : "translate-x-0 opacity-100")
+            }
+          >
+            <div className="m-4 w-[min(420px,calc(100vw-2rem))] space-y-6 rounded-[28px] border border-outline-variant bg-surface-container-low elevation-2 p-8">
+              {taskHeader}
+              {!taskStarted && (
+                <Button onClick={startTask} className="h-12 px-6" size="lg">
+                  <Play className="h-4 w-4 mr-2" />
+                  {s.startTask}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Tarefa como widget flutuante arrastável — durante a tarefa */}
+          {taskStarted && (
+            <FloatingTaskWidget
+              stepLabel={s.stepOf(stepIndex + 1, steps.length)}
+              title={step.mission.task}
+              description={step.mission.description}
+              showLabel={s.showInstructions}
+              hideLabel={s.hideInstructions}
+              giveUpLabel={s.giveUp}
+              onGiveUp={() => completeMission("gave_up", topRef.current)}
+            />
+          )}
+        </div>
+      )
   }
 
   return (
