@@ -77,11 +77,16 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
     setBusy(true)
     setError(null)
     try {
-      await saveFigmaTokenAction(token)
+      const res = await saveFigmaTokenAction(token)
+      if (!res.ok) {
+        setError(res.error)
+        toast.error("Não foi possível conectar ao Figma.")
+        return
+      }
       setStep("url")
       toast.success("Figma conectado")
     } catch (e) {
-      setError(msg(e) || "Token inválido. Confira e tente de novo.")
+      setError(msg(e) || "Não foi possível conectar. Tente de novo.")
       toast.error("Não foi possível conectar ao Figma.")
     } finally {
       setBusy(false)
@@ -212,9 +217,30 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
                     </a>{" "}
                     → aba <strong>Security</strong> → <strong>Personal access tokens</strong>.
                   </li>
-                  <li>Gere um token (escopos de leitura: <code>file_content:read</code>).</li>
+                  <li>
+                    Em <strong>Scopes</strong>, marque os dois escopos de leitura abaixo
+                    (as demais permissões podem ficar desmarcadas).
+                  </li>
                   <li>Cole o token aqui — fica salvo e criptografado só na sua conta.</li>
                 </ol>
+                <div className="rounded-xl border border-outline-variant bg-surface-container-high/50 p-3 space-y-2">
+                  <p className="text-label-large text-on-surface font-medium">Marque estes dois escopos:</p>
+                  <div className="flex items-start gap-2 text-body-small">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-on-surface-variant">
+                      <code className="text-on-surface">file_content:read</code> — ler o protótipo e as telas
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2 text-body-small">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="text-on-surface-variant">
+                      <code className="text-on-surface">current_user:read</code> — validar sua conta do Figma
+                    </span>
+                  </div>
+                  <p className="text-label-small text-on-surface-variant pt-0.5">
+                    Faltando qualquer um, a conexão falha com erro de escopo.
+                  </p>
+                </div>
                 <M3TextField
                   label="Personal Access Token"
                   type="password"

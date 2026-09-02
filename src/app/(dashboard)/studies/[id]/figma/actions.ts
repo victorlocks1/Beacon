@@ -49,16 +49,26 @@ export async function getFigmaConnectionAction(): Promise<{ connected: boolean }
   return { connected: !!user?.figmaAccessToken }
 }
 
-export async function saveFigmaTokenAction(token: string): Promise<{ handle: string }> {
-  const userId = await requireUser()
-  const clean = token.trim()
-  if (!clean) throw new Error("Token vazio.")
-  const me = await figmaGetMe(clean) // valida o token (lança se inválido)
-  await prisma.user.update({
-    where: { id: userId },
-    data: { figmaAccessToken: encryptSecret(clean) },
-  })
-  return { handle: me.handle }
+export async function saveFigmaTokenAction(
+  token: string
+): Promise<{ ok: true; handle: string } | { ok: false; error: string }> {
+  try {
+    const userId = await requireUser()
+    const clean = token.trim()
+    if (!clean) return { ok: false, error: "Cole o token antes de conectar." }
+    const me = await figmaGetMe(clean) // valida o token (lança se inválido)
+    await prisma.user.update({
+      where: { id: userId },
+      data: { figmaAccessToken: encryptSecret(clean) },
+    })
+    return { ok: true, handle: me.handle }
+  } catch (e) {
+    if (isNextControlFlow(e)) throw e
+    return {
+      ok: false,
+      error: figmaTokenScopeHint(e) ?? (e instanceof Error ? e.message : "Não foi possível validar o token."),
+    }
+  }
 }
 
 export async function disconnectFigmaAction(): Promise<void> {
@@ -71,6 +81,25 @@ export async function disconnectFigmaAction(): Promise<void> {
 function isNextControlFlow(e: unknown): boolean {
   const digest = (e as { digest?: unknown })?.digest
   return typeof digest === "string" && (digest.startsWith("NEXT_REDIRECT") || digest === "NEXT_NOT_FOUND")
+}
+
+// Detecta erros de token/escopo do Figma (403/401) e devolve uma mensagem que
+// diz exatamente o que fazer — inclusive QUAL escopo faltou, quando o Figma
+// informa (ex.: "Invalid scope(s): current_user:read"). Retorna null quando não
+// é erro de token, pra preservar a mensagem específica de cada action.
+// Contexto: /v1/me exige `current_user:read`; ler protótipo/imagens exige
+// `file_content:read`. A pessoa precisa marcar OS DOIS ao gerar o token.
+function figmaTokenScopeHint(e: unknown): string | null {
+  const raw = e instanceof Error ? e.message : ""
+  if (!/\b40[13]\b/.test(raw)) return null
+  if (/scope/i.test(raw)) {
+    const m = raw.match(/scope[^:]*:\s*([a-z_:, ]+)/i)
+    const missing = m?.[1]?.trim()
+    return `O token do Figma está sem os escopos necessários${
+      missing ? ` (faltou: ${missing})` : ""
+    }. Gere um novo token marcando OS DOIS escopos de leitura: file_content:read e current_user:read.`
+  }
+  return "Token do Figma inválido ou expirado. Gere um novo em figma.com/settings marcando os escopos file_content:read e current_user:read."
 }
 
 type InspectResult =
@@ -102,7 +131,10 @@ export async function figmaInspectAction(studyId: string, url: string): Promise<
     return { ok: true, fileKey, nodeId, screens }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
-    return { ok: false, error: e instanceof Error ? e.message : "Falha ao ler o protótipo." }
+    return {
+      ok: false,
+      error: figmaTokenScopeHint(e) ?? (e instanceof Error ? e.message : "Falha ao ler o protótipo."),
+    }
   }
 }
 
@@ -175,7 +207,10 @@ export async function figmaImportAction(
     return { ok: true, ...r }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
-    return { ok: false, error: e instanceof Error ? e.message : "Falha na importação." }
+    return {
+      ok: false,
+      error: figmaTokenScopeHint(e) ?? (e instanceof Error ? e.message : "Falha na importação."),
+    }
   }
 }
 
@@ -240,7 +275,10 @@ export async function figmaLiveImportAction(
     return { ok: true, screens: screens.length, hotspots: 0 }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
-    return { ok: false, error: e instanceof Error ? e.message : "Falha na importação." }
+    return {
+      ok: false,
+      error: figmaTokenScopeHint(e) ?? (e instanceof Error ? e.message : "Falha na importação."),
+    }
   }
 }
 
