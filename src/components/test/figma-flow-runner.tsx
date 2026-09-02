@@ -8,6 +8,7 @@ import { QuestionView, type StepQuestion, type AnswerPayload } from "@/component
 import { SeqScale } from "@/components/test/seq-scale"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
 import { SusView } from "@/components/test/sus-view"
+import { FloatingTaskWidget } from "@/components/test/floating-task-widget"
 import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 import { type PathStepDef } from "@/lib/path"
@@ -696,140 +697,201 @@ export function FigmaFlowRunner({
     // Missão: tarefa à esquerda, protótipo VIVO à direita. Ao concluir, o painel
     // esquerdo vira o feedback (com botão continuar) e o protótipo some.
     const reached = completion === "reached"
-    content = (
+
+    // Feedback de conclusão (sucesso/desistência + SUM + estrelas + continuar).
+    const feedbackInner = (
+      <>
+        <div
+          className={
+            "inline-flex h-14 w-14 items-center justify-center rounded-2xl " +
+            (reached
+              ? "bg-emerald-600 text-white"
+              : "bg-surface-container-high text-on-surface-variant")
+          }
+        >
+          {reached ? <Check className="h-7 w-7" /> : <Flag className="h-7 w-7" />}
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-headline-medium text-on-surface">
+            {reached ? s.taskDoneTitle : s.taskGaveUpTitle}
+          </h1>
+          <p className="text-body-large text-on-surface-variant">
+            {reached ? s.taskDoneBody : s.taskGaveUpBody}
+          </p>
+        </div>
+
+        {/* SUM: ASQ (3 perguntas 1..7) embutido no feedback da tarefa */}
+        {sumEnabled && (
+          <div className="space-y-5 pt-1">
+            {(sumStatements ?? []).map((st, idx) => (
+              <SeqScale
+                key={idx}
+                statement={st}
+                value={sumValues[idx] ?? 0}
+                onChange={(v) =>
+                  setSumValues((prev) => prev.map((p, j) => (j === idx ? v : p)))
+                }
+                anchors={sumAnchors ?? { low: "", high: "" }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Pergunta de estrelas embutida (próximo passo) — poupa 1 clique.
+            Só quando a SUM não está embutida aqui (evita dois inline). */}
+        {!sumEnabled && inlineRatingQ && (
+          <div className="space-y-2.5 pt-1">
+            <p className="text-title-medium text-on-surface">{inlineRatingQ.title}</p>
+            {inlineRatingQ.description && (
+              <p className="text-body-medium text-on-surface-variant">
+                {inlineRatingQ.description}
+              </p>
+            )}
+            <div className="flex items-center gap-2.5 pt-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setInlineRating(n)}
+                  aria-label={`${n}`}
+                  className="p-1"
+                >
+                  <Star
+                    className={cn(
+                      "h-12 w-12 transition-colors",
+                      n <= inlineRating ? "text-amber-400" : "text-outline-variant"
+                    )}
+                    fill={n <= inlineRating ? "currentColor" : "none"}
+                  />
+                </button>
+              ))}
+            </div>
+            <p className="text-body-small text-on-surface-variant">{s.rateHint}</p>
+          </div>
+        )}
+
+        {sumEnabled ? (
+          <Button
+            onClick={() => continueWithSum(step.mission.id)}
+            disabled={!sumAnswered}
+            className="h-12 px-6"
+            size="lg"
+          >
+            {s.continue}
+          </Button>
+        ) : inlineRatingQ ? (
+          <Button
+            onClick={() => continueWithInlineRating(inlineRatingQ)}
+            disabled={inlineRatingQ.required && inlineRating === 0}
+            className="h-12 px-6"
+            size="lg"
+          >
+            {s.continue}
+          </Button>
+        ) : (
+          <Button onClick={continueFromCompletion} className="h-12 px-6" size="lg">
+            {s.continue}
+          </Button>
+        )}
+      </>
+    )
+
+    // Briefing (pré-início): rótulo do passo, tarefa, descrição e "Iniciar tarefa".
+    const briefingInner = (
+      <>
+        <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
+          <ClipboardList className="h-4 w-4" />
+          {s.stepOf(stepIndex + 1, steps.length)}
+        </div>
+        <div className="space-y-3">
+          <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
+          {step.mission.description && (
+            <p className="text-body-large text-on-surface-variant">{step.mission.description}</p>
+          )}
+        </div>
+        {!taskStarted && (
+          <Button onClick={startTask} className="h-12 px-6" size="lg">
+            <Play className="h-4 w-4 mr-2" />
+            {s.startTask}
+          </Button>
+        )}
+      </>
+    )
+
+    // Quadro do protótipo (iframe do embed + loader). Reutilizado nos dois layouts.
+    const protoBox = (
       <div
         className={
-          "min-h-screen grid grid-cols-1 " +
-          (isMobile
-            ? "md:grid-cols-2"
-            : "md:grid-cols-[minmax(260px,340px)_1fr]") // web: barra de tarefa fina + protótipo largo
+          "relative bg-white overflow-hidden transition-opacity duration-300 max-w-full " +
+          // mobile: quadro de celular (retrato, altura fixa, cantos arredondados).
+          // web/tablet: tamanho de teste definido pela TELA (ver style abaixo).
+          (isMobile ? "rounded-[28px] h-[90vh] " : "rounded-xl shadow-sm ") +
+          (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
         }
+        style={
+          isMobile
+            ? { aspectRatio: `${frameW} / ${frameH}` }
+            : {
+                // Web/tablet: o quadro NÃO usa o tamanho em pixels do protótipo.
+                // Assume a proporção real do frame e ocupa o MAIOR tamanho que cabe
+                // na área (limite de 88vh de altura e 100% da largura), centralizado.
+                aspectRatio: `${frameW} / ${frameH}`,
+                width: `min(100%, calc(88vh * ${frameW} / ${frameH}))`,
+                maxHeight: "88vh",
+              }
+        }
+        aria-hidden={!taskStarted}
       >
+        {embedSrc && (
+          /* Recorte da moldura do Figma: o iframe fica maior que o quadro e
+             centralizado, e o overflow-hidden do quadro corta a borda preta
+             do device frame. FRAME_CROP=1 desliga o recorte. */
+          <iframe
+            title="Protótipo"
+            src={embedSrc}
+            allowFullScreen
+            loading="eager"
+            style={{
+              position: "absolute",
+              width: `${FRAME_CROP * 100}%`,
+              height: `${FRAME_CROP * 100}%`,
+              left: `${-(FRAME_CROP - 1) * 50}%`,
+              top: `${-(FRAME_CROP - 1) * FRAME_CROP_TOP * 100}%`,
+              border: "none",
+              display: "block",
+            }}
+          />
+        )}
+
+        {/* Loader amigável (barrinha que enche) enquanto o Figma carrega */}
+        {!embedLoaded && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-surface-container-low px-10">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <ClipboardCheck className="h-6 w-6" />
+            </div>
+            <div className="w-full max-w-[200px] h-2 rounded-full bg-surface-container-high overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
+                style={{ width: loadProgress + "%" }}
+              />
+            </div>
+            <span className="text-title-medium text-on-surface">{s.loadingPrototype}</span>
+          </div>
+        )}
+      </div>
+    )
+
+    content = isMobile ? (
+      // ─── MOBILE — layout dividido (tarefa | protótipo). Inalterado. ───
+      <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
         <div className="flex flex-col px-6 py-10 md:px-12 lg:px-16 bg-surface">
-          {/* Conteúdo — centralizado */}
           <div className="flex-1 flex flex-col justify-center">
             <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
-              {completion ? (
-                /* Feedback de conclusão no lugar do texto da tarefa */
-                <>
-                  <div
-                    className={
-                      "inline-flex h-14 w-14 items-center justify-center rounded-2xl " +
-                      (reached
-                        ? "bg-emerald-600 text-white"
-                        : "bg-surface-container-high text-on-surface-variant")
-                    }
-                  >
-                    {reached ? <Check className="h-7 w-7" /> : <Flag className="h-7 w-7" />}
-                  </div>
-                  <div className="space-y-2">
-                    <h1 className="text-headline-medium text-on-surface">
-                      {reached ? s.taskDoneTitle : s.taskGaveUpTitle}
-                    </h1>
-                    <p className="text-body-large text-on-surface-variant">
-                      {reached ? s.taskDoneBody : s.taskGaveUpBody}
-                    </p>
-                  </div>
-
-                  {/* SUM: ASQ (3 perguntas 1..7) embutido no feedback da tarefa */}
-                  {sumEnabled && (
-                    <div className="space-y-5 pt-1">
-                      {(sumStatements ?? []).map((st, idx) => (
-                        <SeqScale
-                          key={idx}
-                          statement={st}
-                          value={sumValues[idx] ?? 0}
-                          onChange={(v) =>
-                            setSumValues((prev) => prev.map((p, j) => (j === idx ? v : p)))
-                          }
-                          anchors={sumAnchors ?? { low: "", high: "" }}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Pergunta de estrelas embutida (próximo passo) — poupa 1 clique.
-                      Só quando a SUM não está embutida aqui (evita dois inline). */}
-                  {!sumEnabled && inlineRatingQ && (
-                    <div className="space-y-2.5 pt-1">
-                      <p className="text-title-medium text-on-surface">{inlineRatingQ.title}</p>
-                      {inlineRatingQ.description && (
-                        <p className="text-body-medium text-on-surface-variant">
-                          {inlineRatingQ.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2.5 pt-1">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            onClick={() => setInlineRating(n)}
-                            aria-label={`${n}`}
-                            className="p-1"
-                          >
-                            <Star
-                              className={cn(
-                                "h-12 w-12 transition-colors",
-                                n <= inlineRating ? "text-amber-400" : "text-outline-variant"
-                              )}
-                              fill={n <= inlineRating ? "currentColor" : "none"}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-body-small text-on-surface-variant">{s.rateHint}</p>
-                    </div>
-                  )}
-
-                  {sumEnabled ? (
-                    <Button
-                      onClick={() => continueWithSum(step.mission.id)}
-                      disabled={!sumAnswered}
-                      className="h-12 px-6"
-                      size="lg"
-                    >
-                      {s.continue}
-                    </Button>
-                  ) : inlineRatingQ ? (
-                    <Button
-                      onClick={() => continueWithInlineRating(inlineRatingQ)}
-                      disabled={inlineRatingQ.required && inlineRating === 0}
-                      className="h-12 px-6"
-                      size="lg"
-                    >
-                      {s.continue}
-                    </Button>
-                  ) : (
-                    <Button onClick={continueFromCompletion} className="h-12 px-6" size="lg">
-                      {s.continue}
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
-                    <ClipboardList className="h-4 w-4" />
-                    {s.stepOf(stepIndex + 1, steps.length)}
-                  </div>
-                  <div className="space-y-3">
-                    <h1 className="text-headline-medium text-on-surface">{step.mission.task}</h1>
-                    {step.mission.description && (
-                      <p className="text-body-large text-on-surface-variant">{step.mission.description}</p>
-                    )}
-                  </div>
-                  {!taskStarted && (
-                    <Button onClick={startTask} className="h-12 px-6" size="lg">
-                      <Play className="h-4 w-4 mr-2" />
-                      {s.startTask}
-                    </Button>
-                  )}
-                </>
-              )}
+              {completion ? feedbackInner : briefingInner}
             </div>
           </div>
 
-          {/* Desistir — espaço já reservado ao iniciar a tarefa; só aparece (fade)
-              após o 1º clique, sem empurrar o texto da tarefa. */}
+          {/* Desistir — aparece (fade) após o 1º clique, sem empurrar o texto. */}
           {!completion && taskStarted && (
             <div className="w-full max-w-md md:ml-auto md:mr-8 pt-6">
               <Button
@@ -848,73 +910,51 @@ export function FigmaFlowRunner({
           )}
         </div>
 
-        {/* Protótipo — some ao concluir a tarefa */}
         <div className="flex items-center justify-center p-2 md:p-3 bg-surface-container overflow-hidden md:h-screen">
-          {!completion && (
-            <div
-              className={
-                "relative bg-white overflow-hidden transition-opacity duration-300 max-w-full " +
-                // mobile: quadro de celular (retrato, altura fixa, cantos arredondados).
-                // web/tablet: tamanho de teste definido pela TELA (ver style abaixo).
-                (isMobile ? "rounded-[28px] h-[90vh] " : "rounded-xl shadow-sm ") +
-                (!taskStarted ? "opacity-40 pointer-events-none select-none" : "")
-              }
-              style={
-                isMobile
-                  ? { aspectRatio: `${frameW} / ${frameH}` }
-                  : {
-                      // Web/tablet: o quadro NÃO usa o tamanho em pixels do protótipo.
-                      // Ele assume a proporção real do frame e ocupa o MAIOR tamanho
-                      // que cabe na área — limitado pela altura (88vh) e pela largura
-                      // da coluna (100%). Assim qualquer protótipo (grande ou pequeno)
-                      // é adaptado para caber inteiro, sem cortar nem estourar. O embed
-                      // (scaling=contain) preenche o quadro exatamente.
-                      aspectRatio: `${frameW} / ${frameH}`,
-                      width: `min(100%, calc(88vh * ${frameW} / ${frameH}))`,
-                      maxHeight: "88vh",
-                    }
-              }
-              aria-hidden={!taskStarted}
-            >
-              {embedSrc && (
-                /* Recorte da moldura do Figma: o iframe fica maior que o quadro e
-                   centralizado, e o overflow-hidden do quadro corta a borda preta
-                   do device frame. FRAME_CROP=1 desliga o recorte. */
-                <iframe
-                  title="Protótipo"
-                  src={embedSrc}
-                  allowFullScreen
-                  loading="eager"
-                  style={{
-                    position: "absolute",
-                    width: `${FRAME_CROP * 100}%`,
-                    height: `${FRAME_CROP * 100}%`,
-                    left: `${-(FRAME_CROP - 1) * 50}%`,
-                    top: `${-(FRAME_CROP - 1) * FRAME_CROP_TOP * 100}%`,
-                    border: "none",
-                    display: "block",
-                  }}
-                />
-              )}
-
-              {/* Loader amigável (barrinha que enche) enquanto o Figma carrega */}
-              {!embedLoaded && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-surface-container-low px-10">
-                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    <ClipboardCheck className="h-6 w-6" />
-                  </div>
-                  <div className="w-full max-w-[200px] h-2 rounded-full bg-surface-container-high overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-primary transition-[width] duration-150 ease-out"
-                      style={{ width: loadProgress + "%" }}
-                    />
-                  </div>
-                  <span className="text-title-medium text-on-surface">{s.loadingPrototype}</span>
-                </div>
-              )}
-            </div>
-          )}
+          {!completion && protoBox}
         </div>
+      </div>
+    ) : completion ? (
+      // ─── WEB — feedback de conclusão, centralizado (protótipo some) ───
+      <div className="min-h-screen flex items-center justify-center p-4 bg-surface-container overflow-y-auto">
+        <div className="w-full max-w-md my-8 space-y-6 rounded-[28px] border border-outline-variant bg-surface-container-low elevation-1 p-10">
+          {feedbackInner}
+        </div>
+      </div>
+    ) : (
+      // ─── WEB — protótipo em tela cheia + tarefa como widget flutuante ───
+      <div className="relative min-h-screen md:h-screen overflow-hidden bg-surface-container">
+        {/* Protótipo centralizado, ocupando a tela */}
+        <div className="absolute inset-0 flex items-center justify-center p-3 md:p-6">
+          {protoBox}
+        </div>
+
+        {/* Briefing (pré-início): cartão à esquerda que desliza pra fora ao iniciar */}
+        <div
+          className={
+            "absolute inset-y-0 left-0 z-40 flex items-center transition-all duration-500 ease-out " +
+            (taskStarted
+              ? "-translate-x-[110%] opacity-0 pointer-events-none"
+              : "translate-x-0 opacity-100")
+          }
+        >
+          <div className="m-4 w-[min(420px,calc(100vw-2rem))] space-y-6 rounded-[28px] border border-outline-variant bg-surface-container-low elevation-2 p-8">
+            {briefingInner}
+          </div>
+        </div>
+
+        {/* Tarefa como widget flutuante arrastável — durante a tarefa */}
+        {taskStarted && (
+          <FloatingTaskWidget
+            stepLabel={s.stepOf(stepIndex + 1, steps.length)}
+            title={step.mission.task}
+            description={step.mission.description}
+            showLabel={s.showInstructions}
+            hideLabel={s.hideInstructions}
+            giveUpLabel={s.giveUp}
+            onGiveUp={() => completeMission("gave_up")}
+          />
+        )}
       </div>
     )
   }
