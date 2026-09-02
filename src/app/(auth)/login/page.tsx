@@ -7,9 +7,9 @@ import { AuthForm } from "@/components/auth-form"
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; reset?: string }>
 }) {
-  const { error } = await searchParams
+  const { error, reset } = await searchParams
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
@@ -23,6 +23,17 @@ export default async function LoginPage({
             Acesse sua conta
           </p>
         </div>
+
+        {reset === "1" && (
+          <p className="text-body-small text-center mb-4 rounded-lg bg-primary/10 text-primary px-3 py-2">
+            Senha redefinida com sucesso. Faça login.
+          </p>
+        )}
+        {error === "reset" && (
+          <p className="text-body-small text-center mb-4 rounded-lg bg-error/10 text-error px-3 py-2">
+            O link de redefinição é inválido ou expirou. Peça um novo.
+          </p>
+        )}
 
         <AuthForm action={loginAction} className="space-y-5">
           <M3TextField
@@ -48,6 +59,12 @@ export default async function LoginPage({
           )}
           <SubmitButton className="w-full">Entrar</SubmitButton>
         </AuthForm>
+
+        <p className="text-center mt-4">
+          <Link href="/forgot" className="text-body-small text-primary hover:underline">
+            Esqueci minha senha
+          </Link>
+        </p>
 
         <p className="text-body-medium text-on-surface-variant text-center mt-6">
           Não tem conta?{" "}

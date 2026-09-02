@@ -1,37 +1,33 @@
-import NextAuth from "next-auth"
-import Credentials from "next-auth/providers/credentials"
-import { authConfig } from "./auth.config"
+import { supabaseServer } from "@/lib/supabase-server"
 import { prisma } from "@/lib/db"
-import bcrypt from "bcryptjs"
-import { z } from "zod"
+import { redirect } from "next/navigation"
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-})
+// Sessão no MESMO formato do NextAuth anterior: session.user.id = User.id do
+// Beacon. Assim todos os pontos que já usavam `auth()` continuam funcionando sem
+// alteração. A autenticação passou a ser do Supabase Auth; aqui mapeamos o
+// usuário autenticado (por e-mail) para o registro `User` do Beacon.
+export type Session = {
+  user: { id: string; email: string; name: string | null }
+} | null
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  ...authConfig,
-  providers: [
-    Credentials({
-      credentials: {
-        email: {},
-        password: {},
-      },
-      async authorize(credentials) {
-        const parsed = loginSchema.safeParse(credentials)
-        if (!parsed.success) return null
+export async function auth(): Promise<Session> {
+  const supabase = await supabaseServer()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const email = user?.email?.toLowerCase()
+  if (!email) return null
 
-        const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email },
-        })
-        if (!user) return null
+  const dbUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, name: true },
+  })
+  if (!dbUser) return null
+  return { user: { id: dbUser.id, email: dbUser.email, name: dbUser.name } }
+}
 
-        const isValid = await bcrypt.compare(parsed.data.password, user.passwordHash)
-        if (!isValid) return null
-
-        return { id: user.id, email: user.email, name: user.name }
-      },
-    }),
-  ],
-})
+export async function signOut(opts?: { redirectTo?: string }) {
+  const supabase = await supabaseServer()
+  await supabase.auth.signOut()
+  redirect(opts?.redirectTo ?? "/login")
+}

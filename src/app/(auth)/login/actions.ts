@@ -1,19 +1,14 @@
 "use server"
-import { signIn } from "@/lib/auth"
-import { AuthError } from "next-auth"
+import { supabaseServer } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 
 export async function loginAction(formData: FormData) {
-  try {
-    await signIn("credentials", {
-      email: formData.get("email") as string,
-      password: formData.get("password") as string,
-      redirectTo: "/projects",
-    })
-  } catch (error) {
-    if (error instanceof AuthError) {
-      redirect("/login?error=credentials")
-    }
-    throw error
-  }
+  const email = String(formData.get("email") || "").trim().toLowerCase()
+  const password = String(formData.get("password") || "")
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) redirect("/login?error=credentials")
+
+  redirect("/projects")
 }

@@ -1,9 +1,8 @@
 "use server"
 import { prisma } from "@/lib/db"
-import { signIn } from "@/lib/auth"
-import { AuthError } from "next-auth"
+import { supabase as supabaseAdmin } from "@/lib/supabase"
+import { supabaseServer } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
-import bcrypt from "bcryptjs"
 import { z } from "zod"
 
 const registerSchema = z.object({
@@ -18,37 +17,32 @@ export async function registerAction(formData: FormData) {
     email: formData.get("email"),
     password: formData.get("password"),
   })
-
   if (!parsed.success) {
     const msg = encodeURIComponent(parsed.error.issues[0].message)
     redirect(`/register?error=${msg}`)
   }
 
-  const exists = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
-  })
+  const email = parsed.data.email.toLowerCase()
+  const exists = await prisma.user.findUnique({ where: { email } })
   if (exists) redirect("/register?error=taken")
 
-  const passwordHash = await bcrypt.hash(parsed.data.password, 12)
+  // Cria o usuário no Supabase Auth já CONFIRMADO (login imediato, sem depender
+  // de confirmação de e-mail). Usa a service role (admin).
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: parsed.data.password,
+    email_confirm: true,
+  })
+  if (error || !data.user) redirect("/register?error=taken")
 
+  // Cria o registro `User` do Beacon (mapeado por e-mail). O passwordHash legado
+  // não é mais usado (a senha vive no Supabase Auth).
   await prisma.user.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      passwordHash,
-    },
+    data: { name: parsed.data.name, email, passwordHash: "supabase-auth" },
   })
 
-  try {
-    await signIn("credentials", {
-      email: parsed.data.email,
-      password: parsed.data.password,
-      redirectTo: "/projects",
-    })
-  } catch (error) {
-    if (error instanceof AuthError) {
-      redirect("/login")
-    }
-    throw error
-  }
+  // Autentica (seta o cookie de sessão) e segue.
+  const supabase = await supabaseServer()
+  await supabase.auth.signInWithPassword({ email, password: parsed.data.password })
+  redirect("/projects")
 }
