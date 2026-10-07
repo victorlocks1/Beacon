@@ -60,22 +60,22 @@ export async function saveHotspotsAction(
   })
 
   // Replace all hotspots for this screen
-  await prisma.hotspot.deleteMany({ where: { screenId } })
-
-  await Promise.all(
-    valid.map((h) =>
-      prisma.hotspot.create({
-        data: {
-          screenId,
-          shape: "rect",
-          coords: h.coords,
-          action: h.action,
-          overlayPosition: h.action === "open_overlay" ? (h.overlayPosition ?? "bottom") : null,
-          targetScreenId: NEEDS_TARGET.has(h.action) ? h.targetScreenId : null,
-        },
-      })
-    )
-  )
+  // Uma única transação com um único INSERT: ou troca tudo, ou não troca nada.
+  // (Um create por hotspot em paralelo disputava o pool de 10 conexões e, se um
+  // falhasse, a tela ficava com só parte dos hotspots.)
+  await prisma.$transaction([
+    prisma.hotspot.deleteMany({ where: { screenId } }),
+    prisma.hotspot.createMany({
+      data: valid.map((h) => ({
+        screenId,
+        shape: "rect" as const,
+        coords: h.coords,
+        action: h.action,
+        overlayPosition: h.action === "open_overlay" ? (h.overlayPosition ?? "bottom") : null,
+        targetScreenId: NEEDS_TARGET.has(h.action) ? h.targetScreenId : null,
+      })),
+    }),
+  ])
 
   revalidatePath(`/studies/${studyId}`)
   revalidatePath(`/studies/${studyId}/screens/${screenId}/hotspots`)
