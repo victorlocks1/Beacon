@@ -17,6 +17,9 @@ interface HotspotInput {
 }
 
 const NEEDS_TARGET = new Set<HotspotActionType>(["navigate", "open_overlay"])
+// "navigate" aceita ficar sem destino (clique válido que não sai da tela);
+// overlay sem tela não tem o que abrir.
+const REQUIRES_TARGET = new Set<HotspotActionType>(["open_overlay"])
 
 export async function saveHotspotsAction(
   studyId: string,
@@ -48,13 +51,12 @@ export async function saveHotspotsAction(
   // Só aceita destinos que pertencem ao mesmo protótipo
   const validScreenIds = new Set(screen.prototype.screens.map((s) => s.id))
 
-  // Mantém só hotspots válidos: ações que navegam precisam de destino no protótipo;
-  // close_overlay/back não usam destino.
+  // Mantém só hotspots válidos: um destino informado precisa ser do protótipo;
+  // overlay exige destino; navigate pode ficar sem; close_overlay/back não usam.
   const valid = hotspots.filter((h) => {
-    if (NEEDS_TARGET.has(h.action)) {
-      return !!h.targetScreenId && validScreenIds.has(h.targetScreenId)
-    }
-    return true
+    if (!NEEDS_TARGET.has(h.action)) return true
+    if (!h.targetScreenId) return !REQUIRES_TARGET.has(h.action)
+    return validScreenIds.has(h.targetScreenId)
   })
 
   // Replace all hotspots for this screen

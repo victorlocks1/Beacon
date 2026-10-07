@@ -171,7 +171,20 @@ export function PrototypeStage({
 
   function dispatch(h: StageHotspot, fromScreenId: string, xNorm: number, yNorm: number) {
     if (h.action === "navigate") {
-      if (!h.targetScreenId) return
+      // Hotspot sem destino: é um clique válido (não vira misclick), mas o
+      // testador permanece na mesma tela.
+      if (!h.targetScreenId) {
+        onInteraction?.({
+          kind: "navigate",
+          fromScreenId,
+          toScreenId: null,
+          topScreenId: liveOverlays.length ? liveOverlays[liveOverlays.length - 1].screenId : baseId,
+          hotspotId: h.id,
+          xNorm,
+          yNorm,
+        })
+        return
+      }
       setBaseHistory((hist) => [...hist, h.targetScreenId!])
       setOverlays([])
       onInteraction?.({

@@ -54,6 +54,9 @@ const actionLabels: Record<ActionType, string> = {
   back: "Voltar",
 }
 const needsTarget = (a: ActionType) => a === "navigate" || a === "open_overlay"
+// "Navegar" pode ficar sem destino: o clique conta como acerto e a tela não muda.
+const requiresTarget = (a: ActionType) => a === "open_overlay"
+const NO_TARGET = "__none__"
 const axisLabels: Record<Axis, string> = {
   horizontal: "Horizontal",
   vertical: "Vertical",
@@ -143,7 +146,7 @@ export function HotspotEditor({
   const [, startScrollTransition] = useTransition()
   const svgRef = useRef<SVGSVGElement>(null)
 
-  const isComplete = (h: LocalHotspot) => (needsTarget(h.action) ? !!h.targetScreenId : true)
+  const isComplete = (h: LocalHotspot) => (requiresTarget(h.action) ? !!h.targetScreenId : true)
 
   function patchHotspot(localId: string, partial: Partial<LocalHotspot>) {
     setHotspots((prev) => prev.map((h) => (h.localId === localId ? { ...h, ...partial } : h)))
@@ -305,7 +308,7 @@ export function HotspotEditor({
                   fill={selected === h.localId ? "rgba(59,130,246,0.3)" : "rgba(59,130,246,0.15)"}
                   stroke={complete ? "#3b82f6" : "#ef4444"}
                   strokeWidth={selected === h.localId ? 2.5 : 1.5}
-                  strokeDasharray={complete ? undefined : "6 3"}
+                  strokeDasharray={complete && (h.targetScreenId || !needsTarget(h.action)) ? undefined : "6 3"}
                   style={{ cursor: "pointer", pointerEvents: mode === "hotspots" ? "auto" : "none", opacity: mode === "hotspots" ? 1 : 0.4 }}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -427,11 +430,16 @@ export function HotspotEditor({
                     </SelectContent>
                   </Select>
                   {needsTarget(h.action) && (
-                    <Select value={h.targetScreenId ?? ""} onValueChange={(val) => patchHotspot(h.localId, { targetScreenId: (val as string) || null })} items={targetItems}>
+                    <Select
+                      value={h.targetScreenId ?? (requiresTarget(h.action) ? "" : NO_TARGET)}
+                      onValueChange={(val) => patchHotspot(h.localId, { targetScreenId: val && val !== NO_TARGET ? (val as string) : null })}
+                      items={{ ...targetItems, [NO_TARGET]: "Sem destino" }}
+                    >
                       <SelectTrigger className="h-7 text-xs w-full">
                         <SelectValue placeholder="→ Destino" />
                       </SelectTrigger>
                       <SelectContent>
+                        {!requiresTarget(h.action) && <SelectItem value={NO_TARGET}>Sem destino</SelectItem>}
                         {otherScreens.map((s) => (
                           <SelectItem key={s.id} value={s.id}>Tela {s.order + 1}: {s.name}</SelectItem>
                         ))}
