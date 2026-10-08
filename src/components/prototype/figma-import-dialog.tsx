@@ -425,8 +425,9 @@ export function FigmaImportDialog({
                 </div>
                 <p className="text-title-medium text-on-surface">Importação concluída!</p>
                 <p className="text-body-medium text-on-surface-variant">
-                  {result.screens} {result.screens === 1 ? "tela importada" : "telas importadas"}. As
-                  interações são as do protótipo do Figma — veja o fluxo em Revisão.
+                  {result.screens} {result.screens === 1 ? "tela importada" : "telas importadas"} e{" "}
+                  {result.hotspots} {result.hotspots === 1 ? "hotspot criado" : "hotspots criados"} a
+                  partir das interações do Figma. Veja o fluxo em Revisão.
                 </p>
                 <DialogClose render={<Button className="mt-2" />}>Ver telas</DialogClose>
               </div>

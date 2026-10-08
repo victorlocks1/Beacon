@@ -202,6 +202,50 @@ async function exportScrollStrips(
   }
 }
 
+// Cria no Beacon um hotspot para cada interação de clique do protótipo do Figma
+// (ir para tela, abrir/fechar overlay, voltar). Com isso as áreas clicáveis do
+// Figma ficam visíveis e editáveis no Beacon, podem ser critério de sucesso e
+// saem identificadas nos relatórios. `nodeToScreen` = figmaNodeId → id da tela.
+// Só preenche telas que ainda NÃO têm hotspots (não duplica nem sobrescreve o
+// que o usuário desenhou). Retorna quantos foram criados.
+async function importFigmaHotspots(
+  screens: ImportScreen[],
+  nodeToScreen: Map<string, string>
+): Promise<number> {
+  const screenIds = screens.map((s) => nodeToScreen.get(s.figmaId)).filter((id): id is string => !!id)
+  if (!screenIds.length) return 0
+  const withHotspots = new Set(
+    (
+      await prisma.hotspot.findMany({
+        where: { screenId: { in: screenIds } },
+        select: { screenId: true },
+        distinct: ["screenId"],
+      })
+    ).map((h) => h.screenId)
+  )
+  const rows = screens.flatMap((s) => {
+    const screenId = nodeToScreen.get(s.figmaId)
+    if (!screenId || withHotspots.has(screenId)) return []
+    return s.hotspots.flatMap((h) => {
+      const needsTarget = h.action === "navigate" || h.action === "open_overlay"
+      const targetScreenId = h.destFigmaId ? nodeToScreen.get(h.destFigmaId) ?? null : null
+      if (needsTarget && !targetScreenId) return [] // destino fora das telas importadas
+      return [
+        {
+          screenId,
+          shape: "rect" as const,
+          coords: h.coords,
+          action: h.action,
+          overlayPosition: h.action === "open_overlay" ? h.overlayPosition ?? "bottom" : null,
+          targetScreenId: needsTarget ? targetScreenId : null,
+        },
+      ]
+    })
+  })
+  if (rows.length) await prisma.hotspot.createMany({ data: rows })
+  return rows.length
+}
+
 type ImportResult =
   | { ok: true; screens: number; hotspots: number }
   | { ok: false; error: string }
@@ -262,9 +306,14 @@ export async function figmaLiveImportAction(
       ? Math.max(...study.prototype.screens.map((s) => s.order)) + 1
       : 0
 
+    // figmaNodeId → tela (as já existentes também resolvem destino de hotspot)
+    const nodeToScreen = new Map<string, string>()
+    for (const ex of study.prototype?.screens ?? []) {
+      if (ex.figmaNodeId) nodeToScreen.set(ex.figmaNodeId, ex.id)
+    }
     for (let i = 0; i < screens.length; i++) {
       const s = screens[i]
-      await prisma.screen.create({
+      const created = await prisma.screen.create({
         data: {
           prototypeId: proto.id,
           name: s.name,
@@ -278,10 +327,13 @@ export async function figmaLiveImportAction(
           nodeBoxes: s.nodeBoxes,
         },
       })
+      nodeToScreen.set(s.figmaId, created.id)
     }
+    // interações do Figma → hotspots do Beacon
+    const hotspots = await importFigmaHotspots(screens, nodeToScreen)
 
     revalidatePath(`/studies/${studyId}`)
-    return { ok: true, screens: screens.length, hotspots: 0 }
+    return { ok: true, screens: screens.length, hotspots }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
     return {
@@ -364,6 +416,7 @@ export async function figmaRefreshAction(
 
     const existing = proto.screens
     const byNode = new Map(existing.filter((s) => s.figmaNodeId).map((s) => [s.figmaNodeId!, s]))
+    const nodeToScreen = new Map(existing.filter((s) => s.figmaNodeId).map((s) => [s.figmaNodeId!, s.id]))
 
     let updated = 0
     let added = 0
@@ -385,7 +438,7 @@ export async function figmaRefreshAction(
         })
         updated++
       } else {
-        await prisma.screen.create({
+        const created = await prisma.screen.create({
           data: {
             prototypeId: proto.id,
             name: s.name,
@@ -399,9 +452,12 @@ export async function figmaRefreshAction(
           nodeBoxes: s.nodeBoxes,
           },
         })
+        nodeToScreen.set(s.figmaId, created.id)
         added++
       }
     }
+    // interações do Figma → hotspots, nas telas que ainda não têm nenhum
+    await importFigmaHotspots(fresh, nodeToScreen)
 
     // frame inicial pode ter mudado
     const startNodeId =
