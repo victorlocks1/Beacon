@@ -90,9 +90,16 @@ export default async function TestRunPage({
           description: string | null
           required: boolean
           options: string[]
+          screen?: { name: string; imageUrl: string } | null
         }
       }
     | { kind: "sus" }
+
+  // tela exibida junto com a pergunta (quando o criador escolheu uma)
+  const questionScreen = (screenId: string | null) => {
+    const sc = screenId ? screens.find((x) => x.id === screenId) : null
+    return sc ? { name: sc.name, imageUrl: sc.imageUrl } : null
+  }
 
   const toQuestionStep = (q: {
     id: string
@@ -101,6 +108,7 @@ export default async function TestRunPage({
     description: string | null
     required: boolean
     options: unknown
+    screenId: string | null
   }): Step => ({
     kind: "question",
     question: {
@@ -110,6 +118,7 @@ export default async function TestRunPage({
       description: q.description,
       required: q.required,
       options: (q.options as string[] | null) ?? [],
+      screen: questionScreen(q.screenId),
     },
   })
 

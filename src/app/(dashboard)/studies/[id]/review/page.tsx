@@ -55,6 +55,12 @@ export default async function ReviewPage({
   const lang = (study.language ?? "pt") as Lang
 
   // Monta os passos do fluxo (idêntico ao testador): missões + perguntas.
+  // tela exibida junto com a pergunta (quando o criador escolheu uma)
+  const questionScreen = (screenId: string | null) => {
+    const sc = screenId ? screens.find((x) => x.id === screenId) : null
+    return sc ? { name: sc.name, imageUrl: sc.imageUrl } : null
+  }
+
   const toQuestionStep = (q: {
     id: string
     type: string
@@ -62,6 +68,7 @@ export default async function ReviewPage({
     description: string | null
     required: boolean
     options: unknown
+    screenId: string | null
   }): Step => ({
     kind: "question",
     question: {
@@ -71,6 +78,7 @@ export default async function ReviewPage({
       description: q.description,
       required: q.required,
       options: (q.options as string[] | null) ?? [],
+      screen: questionScreen(q.screenId),
     },
   })
 

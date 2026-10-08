@@ -14,6 +14,7 @@ export type QuestionWithAnswers = {
   title: string
   options: unknown
   mission?: { task: string } | null
+  screen?: { name: string } | null // tela exibida ao testador junto com a pergunta
   answers: { text: string | null; choice: string | null; rating: number | null }[]
 }
 
@@ -40,6 +41,7 @@ export function QuestionResultCard({
         <p className="text-label-medium text-on-surface-variant mb-1">
           PERGUNTA {index + 1} · {qTypeLabel[question.type]}
           {!hideMissionRef && question.mission ? ` · sobre “${question.mission.task}”` : ""}
+          {question.screen ? ` · tela “${question.screen.name}”` : ""}
         </p>
         <h3 className="text-title-medium text-on-surface">{question.title}</h3>
       </div>

@@ -13,6 +13,7 @@ import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 import { type PathStepDef } from "@/lib/path"
 import { frameLayout } from "@/lib/device"
+import { clickContentPoint, hotspotAt } from "@/lib/figma-clicks"
 
 interface WelcomeInfo {
   title: string
@@ -142,7 +143,8 @@ export function FigmaFlowRunner({
   const inlineRatingQ =
     completion === "reached" &&
     nextStep?.kind === "question" &&
-    nextStep.question.type === "rating"
+    nextStep.question.type === "rating" &&
+    !nextStep.question.screen
       ? (nextStep.question as StepQuestion)
       : null
 
@@ -431,13 +433,13 @@ export function FigmaFlowRunner({
         // origem do frame rolável + posição no viewport + offset de scroll.
         const scr0 = p.nodeId ? screenByNode[p.nodeId] : undefined
         const geom0 = p.nodeId && p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
-        const cx = scr0 ? (geom0?.x ?? 0) + (p.x + p.ox) / (scr0.w || 1) : -1
-        const cy = scr0 ? (geom0?.y ?? 0) + (p.y + p.oy) / (scr0.h || 1) : -1
-        const hit = p.nodeId
-          ? [...(hotspotsByNode[p.nodeId] ?? [])]
-              .reverse()
-              .find((h) => cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h)
-          : undefined
+        const hit =
+          scr0 && p.nodeId
+            ? hotspotAt(
+                clickContentPoint({ vx: p.x, vy: p.y, ox: p.ox, oy: p.oy }, scr0, geom0),
+                hotspotsByNode[p.nodeId]
+              )
+            : undefined
         // clique num hotspot do Beacon é um clique válido, mesmo que o Figma não
         // tenha interação ali
         const handled = p.handled || !!hit
@@ -743,6 +745,7 @@ export function FigmaFlowRunner({
           key={step.question.id}
           question={step.question}
           lang={lang}
+          deviceType={deviceType}
           stepLabel={s.stepOf(stepIndex + 1, steps.length)}
           onSubmit={submitAnswer}
         />

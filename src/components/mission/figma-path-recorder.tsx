@@ -128,7 +128,7 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
                 largura disponível, na proporção do frame, limitado em altura. */}
             <div
               className={cn(
-                "bg-white overflow-hidden shadow-sm max-w-full",
+                "relative bg-white overflow-hidden shadow-sm max-w-full",
                 deviceType === "mobile" ? "rounded-2xl h-[520px]" : "rounded-xl"
               )}
               style={
@@ -146,7 +146,9 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
                   title="Protótipo"
                   src={embedSrc}
                   allowFullScreen
-                  style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                  // absoluto: não depende de o navegador resolver altura em %
+                  // dentro de um quadro dimensionado por aspect-ratio
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
                 />
               )}
             </div>

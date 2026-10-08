@@ -41,6 +41,7 @@ export type ReportQuestion = {
   type: string // open | choice | rating | binary
   title: string
   options?: unknown
+  screenName?: string | null // tela exibida ao testador junto com a pergunta
   answers: { text: string | null; choice: string | null; rating: number | null }[]
 }
 
@@ -52,7 +53,7 @@ const qKindLabel: Record<string, string> = {
 }
 
 export function questionReportSection(q: ReportQuestion): ReportSection {
-  const heading = `Pergunta (${qKindLabel[q.type] ?? q.type}): ${q.title}`
+  const heading = `Pergunta (${qKindLabel[q.type] ?? q.type})${q.screenName ? ` sobre a tela “${q.screenName}”` : ""}: ${q.title}`
   const answers = q.answers ?? []
 
   if (q.type === "open") {

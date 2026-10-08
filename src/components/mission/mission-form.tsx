@@ -394,6 +394,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
                   <p className="text-label-small text-on-surface-variant">
                     {qTypeLabel[q.type]}
                     {!q.required ? " · opcional" : ""}
+                    {q.screenId ? " · com tela" : ""}
                   </p>
                 </div>
                 <QuestionDialog
@@ -404,7 +405,10 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
                     description: q.description,
                     required: q.required,
                     options: q.options ?? [],
+                    screenId: q.screenId ?? null,
                   }}
+                  studyId={studyId}
+                  screens={screens}
                   onSubmit={(input) => updateQuestion(q.key, input)}
                   trigger={
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high">
@@ -427,6 +431,8 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
 
         <QuestionDialog
           variant="create"
+          studyId={studyId}
+          screens={screens}
           onSubmit={addQuestion}
           trigger={
             <span className={cn(buttonVariants({ variant: "outline" }))}>

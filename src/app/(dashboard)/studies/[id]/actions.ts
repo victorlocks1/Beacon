@@ -394,6 +394,7 @@ interface MissionQuestionInput {
   description?: string | null
   required: boolean
   options?: string[]
+  screenId?: string | null // tela exibida junto com a pergunta
 }
 
 // Passo de um caminho exato: a tela + flags de robustez (opcional / "qualquer do grupo").
@@ -454,7 +455,11 @@ async function saveExactPaths(missionId: string, paths: MissionPathStepInput[][]
 }
 
 // Cria as perguntas de acompanhamento de uma missão (ordem = posição na lista).
-async function createMissionQuestions(missionId: string, questions?: MissionQuestionInput[]) {
+async function createMissionQuestions(
+  missionId: string,
+  questions: MissionQuestionInput[] | undefined,
+  ownScreenIds: Set<string>
+) {
   if (!questions?.length) return
   const rows = questions
     .map((q, i) => {
@@ -473,6 +478,7 @@ async function createMissionQuestions(missionId: string, questions?: MissionQues
         description: q.description?.trim() || null,
         required: !!q.required,
         options,
+        screenId: q.screenId && ownScreenIds.has(q.screenId) ? q.screenId : null,
       }
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -534,7 +540,7 @@ export async function createMissionAction(
     await saveExactPaths(mission.id, validExactPaths(input.paths, ownScreenIds))
   }
 
-  await createMissionQuestions(mission.id, input.questions)
+  await createMissionQuestions(mission.id, input.questions, ownScreenIds)
 
   redirect(`/studies/${studyId}?tab=missions&saved=created&block=${block.id}`)
 }
@@ -601,7 +607,7 @@ export async function updateMissionAction(
 
   // Substitui as perguntas de acompanhamento (remove as antigas, recria)
   await prisma.question.deleteMany({ where: { missionId } })
-  await createMissionQuestions(missionId, input.questions)
+  await createMissionQuestions(missionId, input.questions, ownScreenIds)
 
   redirect(`/studies/${studyId}?tab=missions&saved=updated&block=${existing.blockId}`)
 }
@@ -629,6 +635,7 @@ interface QuestionInput {
   description?: string | null
   required: boolean
   options?: string[]
+  screenId?: string | null // tela exibida junto com a pergunta
 }
 
 // Próxima ordem de bloco = (maior ordem atual) + 1 — evita colisões após deleções.
@@ -655,7 +662,16 @@ function cleanQuestionInput(input: QuestionInput) {
     description: input.description?.trim() || null,
     required: !!input.required,
     options,
+    screenId: input.screenId || null,
   }
+}
+
+// A tela da pergunta precisa ser do protótipo deste study (senão fica sem tela).
+function ownScreenOrNull(
+  study: { prototype: { screens: { id: string }[] } | null },
+  screenId: string | null
+) {
+  return screenId && study.prototype?.screens.some((s) => s.id === screenId) ? screenId : null
 }
 
 export async function createQuestionAction(studyId: string, input: QuestionInput) {
@@ -675,6 +691,7 @@ export async function createQuestionAction(studyId: string, input: QuestionInput
       description: clean.description,
       required: clean.required,
       options: clean.options,
+      screenId: ownScreenOrNull(study, clean.screenId),
     },
   })
   revalidatePath(`/studies/${studyId}`)
@@ -703,6 +720,7 @@ export async function updateQuestionAction(
       description: clean.description,
       required: clean.required,
       options: clean.options,
+      screenId: ownScreenOrNull(study, clean.screenId),
     },
   })
   revalidatePath(`/studies/${studyId}`)

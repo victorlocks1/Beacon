@@ -384,7 +384,12 @@ export function StudyBuilder({
             sumEnabled={sum.enabled}
           />
         ) : sel === "new-question" ? (
-          <QuestionEditor studyId={studyId} editable={editable} onSaved={() => setSel("welcome")} />
+          <QuestionEditor
+            studyId={studyId}
+            editable={editable}
+            screens={missionScreens}
+            onSaved={() => setSel("welcome")}
+          />
         ) : selectedBlock?.kind === "mission" ? (
           <MissionForm
             key={selectedBlock.missionId}
@@ -404,6 +409,7 @@ export function StudyBuilder({
             editable={editable}
             questionId={selectedBlock.questionId}
             initial={selectedBlock.initial}
+            screens={missionScreens}
           />
         ) : selectedBlock?.kind === "sus" ? (
           <SusEditor

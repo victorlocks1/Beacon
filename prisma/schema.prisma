@@ -188,6 +188,7 @@ model Screen {
   nodeBoxes        Json?
   hotspots         Hotspot[]      @relation("ScreenHotspots")
   incomingHotspots Hotspot[]     @relation("HotspotTarget")
+  questions        Question[]    @relation("QuestionScreen")
   missionStarts    Mission[]     @relation("MissionStartScreen")
   missionGoals     MissionGoal[]
   pathSteps        PathStep[]
@@ -264,6 +265,9 @@ model Question {
   description String?
   required    Boolean      @default(true)
   options     Json? // choice: string[]
+  // Tela do protótipo exibida ao testador junto com a pergunta (opcional).
+  screenId    String?
+  screen      Screen?      @relation("QuestionScreen", fields: [screenId], references: [id], onDelete: SetNull)
   answers     Answer[]
 }
 

@@ -1,7 +1,14 @@
 "use server"
 import { prisma } from "@/lib/db"
 import { auth } from "@/lib/auth"
-import { extractCountedClicks, type RawFigmaEvent } from "@/lib/figma-clicks"
+import {
+  extractCountedClicks,
+  clickContentPoint,
+  hotspotAt,
+  type CountedClick,
+  type HotspotRect,
+  type RawFigmaEvent,
+} from "@/lib/figma-clicks"
 import type { ScrollFrameGeom } from "@/lib/figma"
 
 export type StripPoint = { x: number; y: number; handled: boolean }
@@ -16,6 +23,30 @@ export type ScrollStrip = {
 }
 
 export type OverlayPoint = { x: number; y: number; type: "click" | "misclick" }
+
+// Clique "válido" = o Figma tratou OU caiu num hotspot desenhado no Beacon —
+// a mesma regra do runner, para o relatório bater com os eventos gravados.
+function makeIsHandled(screen: {
+  width: number
+  height: number
+  scrollFrames: unknown
+  hotspots: { id: string; coords: unknown }[]
+}) {
+  const hotspots: HotspotRect[] = screen.hotspots.map((h) => ({
+    id: h.id,
+    ...(h.coords as { x: number; y: number; w: number; h: number }),
+  }))
+  const origins = new Map(
+    ((screen.scrollFrames as ScrollFrameGeom[] | null) ?? []).map((f) => [f.figmaId, { x: f.x, y: f.y }])
+  )
+  const size = { w: screen.width, h: screen.height }
+  return (cl: CountedClick) =>
+    cl.handled ||
+    !!hotspotAt(
+      clickContentPoint(cl, size, cl.scrollFrameId ? origins.get(cl.scrollFrameId) : null),
+      hotspots
+    )
+}
 
 // Heatmap FIEL de uma OVERLAY (bottomsheet/modal): o embed manda a posição do
 // clique relativa ao ELEMENTO, não à tela. Aqui plotamos em
@@ -32,7 +63,14 @@ export async function getOverlayPoints(
     if (!session?.user?.id) return { ok: false, error: "unauthorized" }
     const screen = await prisma.screen.findFirst({
       where: { id: screenId, prototype: { study: { id: studyId, ownerId: session.user.id } } },
-      select: { figmaNodeId: true, width: true, height: true, nodeBoxes: true },
+      select: {
+        figmaNodeId: true,
+        width: true,
+        height: true,
+        nodeBoxes: true,
+        scrollFrames: true,
+        hotspots: { select: { id: true, coords: true } },
+      },
     })
     if (!screen?.figmaNodeId) return { ok: false, error: "screen_not_found" }
     const boxes = screen.nodeBoxes as Record<string, [number, number]> | null
@@ -66,6 +104,7 @@ export async function getOverlayPoints(
     }
     const w = screen.width || 1
     const h = screen.height || 1
+    const isHandled = makeIsHandled(screen)
     const points: OverlayPoint[] = []
     for (const events of bySession.values()) {
       for (const cl of extractCountedClicks(events, (id) => screenNodes.has(id))) {
@@ -78,7 +117,7 @@ export async function getOverlayPoints(
         points.push({
           x: Math.max(0, Math.min(1, x)),
           y: Math.max(0, Math.min(1, y)),
-          type: cl.handled ? "click" : "misclick",
+          type: isHandled(cl) ? "click" : "misclick",
         })
       }
     }
@@ -103,7 +142,13 @@ export async function getScrollStrips(
     // a tela precisa pertencer a um estudo do usuário
     const screen = await prisma.screen.findFirst({
       where: { id: screenId, prototype: { study: { id: studyId, ownerId: session.user.id } } },
-      select: { figmaNodeId: true, scrollFrames: true },
+      select: {
+        figmaNodeId: true,
+        width: true,
+        height: true,
+        scrollFrames: true,
+        hotspots: { select: { id: true, coords: true } },
+      },
     })
     if (!screen?.figmaNodeId) return { ok: false, error: "screen_not_found" }
 
@@ -145,6 +190,7 @@ export async function getScrollStrips(
       bySession.set(e.sessionId, arr)
     }
 
+    const isHandled = makeIsHandled(screen)
     const pointsByFrame = new Map<string, StripPoint[]>()
     for (const events of bySession.values()) {
       const clicks = extractCountedClicks(events, (id) => screenNodes.has(id))
@@ -156,7 +202,7 @@ export async function getScrollStrips(
         const cy = (cl.vy + cl.oy) / strip.contentH
         if (cx < -0.02 || cx > 1.02 || cy < -0.02 || cy > 1.02) continue
         const arr = pointsByFrame.get(strip.figmaId) ?? []
-        arr.push({ x: Math.max(0, Math.min(1, cx)), y: Math.max(0, Math.min(1, cy)), handled: cl.handled })
+        arr.push({ x: Math.max(0, Math.min(1, cx)), y: Math.max(0, Math.min(1, cy)), handled: isHandled(cl) })
         pointsByFrame.set(strip.figmaId, arr)
       }
     }

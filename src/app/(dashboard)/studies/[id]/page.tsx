@@ -117,6 +117,7 @@ export default async function StudyPage({
               description: q.description,
               required: q.required,
               options: (q.options as string[] | null) ?? [],
+              screenId: q.screenId,
             })),
           },
         }
@@ -135,6 +136,7 @@ export default async function StudyPage({
             description: q.description,
             required: q.required,
             options: (q.options as string[] | null) ?? [],
+            screenId: q.screenId,
           },
         }
       }

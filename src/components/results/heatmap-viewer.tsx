@@ -30,6 +30,8 @@ interface ScreenData {
   points: Point[]
   firstClickPoints?: Point[] // primeiro toque de cada participante (modo "first click")
   isOverlay?: boolean // bottomsheet/modal: usa pontos fiéis (via elemento) sob demanda
+  // hotspots que contam como SUCESSO da missão (critério "clique em hotspot")
+  goalAreas?: { x: number; y: number; w: number; h: number }[]
 }
 
 type Mode = "heatmap" | "clicks" | "firstclick" | "image"
@@ -272,6 +274,25 @@ export function HeatmapViewer({
 
           {(mode === "heatmap" || mode === "firstclick") && (
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+          )}
+
+          {/* Hotspots de sucesso da missão: contorno verde em todos os modos */}
+          {!!screen.goalAreas?.length && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+              {screen.goalAreas.map((a, i) => (
+                <rect
+                  key={i}
+                  x={`${a.x * 100}%`}
+                  y={`${a.y * 100}%`}
+                  width={`${a.w * 100}%`}
+                  height={`${a.h * 100}%`}
+                  fill="none"
+                  stroke="#059669"
+                  strokeWidth={2.5}
+                  strokeDasharray="8 4"
+                />
+              ))}
+            </svg>
           )}
 
           {mode === "clicks" && (

@@ -46,7 +46,12 @@ export default async function MissionResultsPage({
   const mission = await prisma.mission.findFirst({
     where: { id: missionId, block: { study: { id, ownerId: session.user.id } } },
     include: {
-      questions: { orderBy: { order: "asc" }, include: { answers: true } },
+      questions: {
+        orderBy: { order: "asc" },
+        include: { answers: true, screen: { select: { name: true } } },
+      },
+      goals: { include: { goalScreen: { select: { name: true } } } },
+      goalHotspots: { include: { hotspot: { select: { coords: true, screenId: true } } } },
       paths: { include: { steps: { orderBy: { order: "asc" } } } },
       block: {
         include: {
@@ -135,6 +140,15 @@ export default async function MissionResultsPage({
   // (direct/indirect) de caminho exato; desistência (given_up), abandono e
   // missões de tela-alvo permanecem como estão.
   const isPath = mission.successType === "path"
+  // Critério "clique em hotspot": áreas-objetivo por tela (contorno no heatmap).
+  const isHotspot = mission.successType === "hotspot"
+  type Area = { x: number; y: number; w: number; h: number }
+  const goalAreasByScreen = new Map<string, Area[]>()
+  for (const g of mission.goalHotspots) {
+    const arr = goalAreasByScreen.get(g.hotspot.screenId) ?? []
+    arr.push(g.hotspot.coords as Area)
+    goalAreasByScreen.set(g.hotspot.screenId, arr)
+  }
   const expectedPaths = buildExactPaths(mission.paths, screens)
   type Oc = "direct" | "indirect" | "given_up" | "unfinished"
   const effOutcome = new Map<string, Oc>()
@@ -300,6 +314,7 @@ export default async function MissionResultsPage({
       imageUrl: s.imageUrl,
       points: pointsByScreen.get(s.id) ?? [],
       firstClickPoints: firstClickByScreen.get(s.id) ?? [],
+      goalAreas: goalAreasByScreen.get(s.id) ?? [],
       isOverlay: s.nodeBoxes != null, // overlay → heatmap fiel via elemento
     }))
 
@@ -467,11 +482,20 @@ export default async function MissionResultsPage({
   // ── Relatório exportável desta missão (Excel / PDF / Markdown) ──
   const nameOfPath = (path: string[]) =>
     path.map((sid) => screenById.get(sid)?.name ?? "?").join(" → ")
+  // Critério de sucesso por extenso (aparece no relatório exportado)
+  const criterionLabel = isPath
+    ? `Caminho exato (${mission.paths.length} caminho(s))`
+    : isHotspot
+      ? `Clique em hotspot — ${mission.goalHotspots.length} hotspot(s) em: ${
+          [...goalAreasByScreen.keys()].map((sid) => screenById.get(sid)?.name ?? "?").join(", ") || "—"
+        }`
+      : `Tela-alvo: ${mission.goals.map((g) => g.goalScreen.name).join(", ") || "—"}`
   const reportSections: ReportSection[] = [
     {
       heading: "Resumo",
       kind: "keyvalue",
       pairs: [
+        ["Critério de sucesso", criterionLabel],
         ["Iniciaram", String(startedSessionIds.size)],
         ["Concluíram", `${successCount} (${formatPct(completionRate)})`],
         ["Direto", `${counts.completed} (${formatPct(directRate)})`],
@@ -544,6 +568,7 @@ export default async function MissionResultsPage({
         title: q.title,
         options: q.options,
         answers: q.answers,
+        screenName: q.screen?.name,
       })
     )
   }
@@ -687,7 +712,9 @@ export default async function MissionResultsPage({
                 info={
                   isPath
                     ? "Sucesso = concluiu a tarefa percorrendo o caminho exato — DIRETO (limpo) ou INDIRETO (vagou e depois completou). Ambos contam como conclusão. Chegar na tela final SEM percorrer o caminho exato não conta. Denominador = sessões encerradas."
-                    : "Participantes que chegaram na tela-objetivo da tarefa. Denominador = sessões encerradas (concluídas + desistências + perdidas)."
+                    : isHotspot
+                      ? "Participantes que clicaram em um dos hotspots marcados como sucesso (contorno verde no heatmap). Denominador = sessões encerradas (concluídas + desistências + perdidas)."
+                      : "Participantes que chegaram na tela-objetivo da tarefa. Denominador = sessões encerradas (concluídas + desistências + perdidas)."
                 }
               />
               <Kpi

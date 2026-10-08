@@ -395,6 +395,7 @@ export function TestRunner({
           key={step.question.id}
           question={step.question}
           lang={lang}
+          deviceType={deviceType}
           stepLabel={s.stepOf(stepIndex + 1, steps.length)}
           onSubmit={submitAnswer}
         />

@@ -60,6 +60,7 @@ export default async function EditMissionPage({
       description: q.description,
       required: q.required,
       options: (q.options as string[] | null) ?? [],
+      screenId: q.screenId,
     })),
   }
 

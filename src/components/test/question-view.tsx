@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { HelpCircle, Star } from "lucide-react"
 import { tt, type Lang } from "@/lib/i18n"
+import { deviceMaxWidth, type DeviceType } from "@/lib/device"
 
 export type StepQuestion = {
   id: string
@@ -13,6 +14,8 @@ export type StepQuestion = {
   description: string | null
   required: boolean
   options: string[]
+  // tela do protótipo exibida junto com a pergunta (opcional)
+  screen?: { name: string; imageUrl: string } | null
 }
 
 export type AnswerPayload = { text?: string; choice?: string; rating?: number }
@@ -22,7 +25,9 @@ export function QuestionView({
   lang,
   stepLabel,
   onSubmit,
+  deviceType = "desktop",
 }: {
+  deviceType?: DeviceType // dispositivo do estudo: largura em que a tela é exibida
   question: StepQuestion
   lang: Lang
   stepLabel: string
@@ -55,7 +60,7 @@ export function QuestionView({
     else onSubmit({ choice: choice ?? "" })
   }
 
-  return (
+  const card = (
     <div className="w-full max-w-lg rounded-[28px] bg-surface-container-low border border-outline-variant p-8 space-y-6">
       <div className="flex items-center gap-2 text-label-large text-on-surface-variant">
         <HelpCircle className="h-4 w-4" />
@@ -164,6 +169,33 @@ export function QuestionView({
           {s.continue}
         </Button>
       </div>
+    </div>
+  )
+
+  // Sem tela (ou tela ainda sem imagem): só o cartão da pergunta, como sempre.
+  const screen = question.screen?.imageUrl ? question.screen : null
+  if (!screen) return card
+
+  // Pergunta sobre uma tela: a tela e a pergunta ficam SEMPRE visíveis juntas.
+  // Telas largas: tela à esquerda (rola por dentro se for longa) e a pergunta
+  // fixa à direita. Telas estreitas: tela em cima, pergunta embaixo.
+  return (
+    <div className="w-full max-w-7xl flex flex-col lg:flex-row lg:items-start lg:justify-center gap-6">
+      <div className="min-w-0 lg:flex-1 flex justify-center">
+        <div
+          className="w-full max-h-[45vh] lg:max-h-[88vh] overflow-auto subtle-scroll rounded-2xl border border-outline-variant bg-white shadow-sm"
+          style={{ maxWidth: deviceMaxWidth[deviceType] }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={screen.imageUrl}
+            alt={screen.name}
+            className="w-full h-auto block select-none"
+            draggable={false}
+          />
+        </div>
+      </div>
+      <div className="w-full lg:w-[28rem] lg:shrink-0 lg:sticky lg:top-6 flex justify-center">{card}</div>
     </div>
   )
 }

@@ -199,6 +199,7 @@ export default async function ResultsOverviewPage({
     },
     include: {
       answers: true,
+      screen: { select: { name: true } },
       block: { select: { order: true } },
       mission: { select: { task: true, block: { select: { order: true } } } },
     },
@@ -219,7 +220,13 @@ export default async function ResultsOverviewPage({
     title: `Perguntas gerais — ${study.title}`,
     subtitle: `${freeQuestions.length} pergunta(s) avulsa(s)`,
     sections: freeQuestions.map((q) =>
-      questionReportSection({ type: q.type, title: q.title, options: q.options, answers: q.answers })
+      questionReportSection({
+        type: q.type,
+        title: q.title,
+        options: q.options,
+        answers: q.answers,
+        screenName: q.screen?.name,
+      })
     ),
   }
 

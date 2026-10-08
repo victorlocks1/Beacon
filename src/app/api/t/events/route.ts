@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   // Aceita apenas missões e telas que pertencem ao study DESTA sessão
-  const [validMissions, validScreens] = await Promise.all([
+  const [validMissions, validScreens, validHotspots] = await Promise.all([
     prisma.mission.findMany({
       where: { block: { studyId: session.studyId } },
       select: { id: true },
@@ -41,7 +41,14 @@ export async function POST(request: Request) {
       where: { prototype: { studyId: session.studyId } },
       select: { id: true },
     }),
+    // hotspotId desconhecido (ex.: hotspot removido) vira null em vez de derrubar
+    // o lote inteiro por violação de chave estrangeira
+    prisma.hotspot.findMany({
+      where: { screen: { prototype: { studyId: session.studyId } } },
+      select: { id: true },
+    }),
   ])
+  const hotspotIds = new Set(validHotspots.map((h) => h.id))
   const missionIds = new Set(validMissions.map((m) => m.id))
   const screenIds = new Set(validScreens.map((s) => s.id))
 
@@ -60,7 +67,7 @@ export async function POST(request: Request) {
       type: e.type as "click" | "navigate" | "misclick" | "give_up" | "end",
       xNorm: Number(e.xNorm) || 0,
       yNorm: Number(e.yNorm) || 0,
-      hotspotId: e.hotspotId ?? null,
+      hotspotId: e.hotspotId && hotspotIds.has(e.hotspotId) ? e.hotspotId : null,
       targetScreenId: e.targetScreenId ?? null,
       timestampMs: BigInt(Math.round(e.timestampMs ?? 0)),
     }))

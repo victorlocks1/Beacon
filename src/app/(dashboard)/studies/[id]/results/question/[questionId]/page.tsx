@@ -22,7 +22,10 @@ export default async function QuestionResultsPage({
         { mission: { block: { study: { id, ownerId: session.user.id } } } },
       ],
     },
-    include: { answers: { orderBy: { createdAt: "desc" } } },
+    include: {
+      answers: { orderBy: { createdAt: "desc" } },
+      screen: { select: { name: true, imageUrl: true } },
+    },
   })
   if (!question) notFound()
 
@@ -44,6 +47,21 @@ export default async function QuestionResultsPage({
           <h1 className="text-headline-small text-on-surface">{question.title}</h1>
         </div>
       </div>
+
+      {/* Tela que o testador via ao responder */}
+      {question.screen && (
+        <div className="mb-6 space-y-2">
+          <p className="text-body-small text-on-surface-variant">
+            Pergunta feita sobre a tela <strong className="text-on-surface font-medium">{question.screen.name}</strong>
+          </p>
+          {question.screen.imageUrl && (
+            <div className="max-h-72 overflow-auto rounded-2xl border border-outline-variant bg-surface-container-high">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={question.screen.imageUrl} alt={question.screen.name} className="w-full h-auto block" />
+            </div>
+          )}
+        </div>
+      )}
 
       {texts.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">

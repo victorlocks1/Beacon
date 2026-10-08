@@ -144,3 +144,40 @@ export function extractCountedClicks(
   }
   return out
 }
+
+// ---------------------------------------------------------------------------
+// Hotspots do Beacon sob um clique do embed. É a MESMA regra usada pelo runner
+// (ao gravar o clique) e pelos relatórios que releem o log cru — assim um clique
+// num hotspot é "clique" (e não misclick) em todos os lugares.
+// ---------------------------------------------------------------------------
+export type HotspotRect = { id: string; x: number; y: number; w: number; h: number }
+
+/**
+ * Posição do clique na tela INTEIRA (normalizada 0..1), em coordenadas de
+ * conteúdo: origem do frame rolável + posição no viewport + offset de scroll.
+ * Os hotspots são desenhados sobre a imagem inteira da tela, então é nesse
+ * sistema que o teste de acerto precisa ser feito.
+ */
+export function clickContentPoint(
+  click: { vx: number; vy: number; ox: number; oy: number },
+  screen: { w: number; h: number },
+  frameOrigin?: { x: number; y: number } | null
+): { x: number; y: number } {
+  return {
+    x: (frameOrigin?.x ?? 0) + (click.vx + click.ox) / (screen.w || 1),
+    y: (frameOrigin?.y ?? 0) + (click.vy + click.oy) / (screen.h || 1),
+  }
+}
+
+/** Hotspot que contém o ponto (o desenhado por último vence, como no player). */
+export function hotspotAt(
+  pt: { x: number; y: number },
+  hotspots: HotspotRect[] | undefined
+): HotspotRect | undefined {
+  if (!hotspots?.length) return undefined
+  for (let i = hotspots.length - 1; i >= 0; i--) {
+    const h = hotspots[i]
+    if (pt.x >= h.x && pt.x <= h.x + h.w && pt.y >= h.y && pt.y <= h.y + h.h) return h
+  }
+  return undefined
+}

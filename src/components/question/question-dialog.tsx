@@ -25,6 +25,10 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 import {
+  QuestionScreenField,
+  type QuestionScreenOption,
+} from "@/components/question/question-screen-field"
+import {
   createQuestionAction,
   updateQuestionAction,
 } from "@/app/(dashboard)/studies/[id]/actions"
@@ -55,6 +59,7 @@ export interface QuestionInitial {
   description: string | null
   required: boolean
   options: string[]
+  screenId?: string | null
 }
 
 export interface QuestionInput {
@@ -63,6 +68,7 @@ export interface QuestionInput {
   description: string | null
   required: boolean
   options?: string[]
+  screenId?: string | null // tela exibida junto com a pergunta
 }
 
 export function QuestionDialog({
@@ -72,7 +78,9 @@ export function QuestionDialog({
   variant,
   onSubmit,
   trigger,
+  screens = [],
 }: {
+  screens?: QuestionScreenOption[] // telas do protótipo (para a pergunta sobre uma tela)
   studyId?: string
   questionId?: string
   initial?: QuestionInitial
@@ -90,6 +98,7 @@ export function QuestionDialog({
   const [title, setTitle] = useState(initial?.title ?? "")
   const [description, setDescription] = useState(initial?.description ?? "")
   const [required, setRequired] = useState(initial?.required ?? true)
+  const [screenId, setScreenId] = useState<string | null>(initial?.screenId ?? null)
   const [options, setOptions] = useState<string[]>(initial?.options?.length ? initial.options : ["", ""])
 
   const optionsValid = type !== "choice" || options.map((o) => o.trim()).filter(Boolean).length >= 2
@@ -100,6 +109,7 @@ export function QuestionDialog({
     setTitle(initial?.title ?? "")
     setDescription(initial?.description ?? "")
     setRequired(initial?.required ?? true)
+    setScreenId(initial?.screenId ?? null)
     setOptions(initial?.options?.length ? initial.options : ["", ""])
   }
 
@@ -110,6 +120,7 @@ export function QuestionDialog({
       description: description.trim() || null,
       required,
       options: type === "choice" ? options.map((o) => o.trim()).filter(Boolean) : undefined,
+      screenId,
     }
     // Modo local (dentro do form de missão): devolve o input, não persiste.
     if (onSubmit) {
@@ -252,6 +263,13 @@ export function QuestionDialog({
                 </button>
               </div>
             )}
+
+            <QuestionScreenField
+              studyId={studyId}
+              screens={screens}
+              value={screenId}
+              onChange={setScreenId}
+            />
 
             {/* Obrigatória */}
             <label className="flex items-center gap-2.5 cursor-pointer">
