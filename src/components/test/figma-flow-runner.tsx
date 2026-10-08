@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { figmaEmbedUrl, runEmbedHotspotAction, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
+import { figmaEmbedUrl, runEmbedHotspotAction, actsOnPress, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { type RunnerHotspot } from "@/lib/figma-runner"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { SeqScale } from "@/components/test/seq-scale"
@@ -121,6 +121,10 @@ export function FigmaFlowRunner({
   const [taskStarted, setTaskStarted] = useState(false)
   const [interacted, setInteracted] = useState(false) // já houve o 1º clique na tarefa
   const [embedLoaded, setEmbedLoaded] = useState(false) // protótipo do Figma pronto
+  // um hotspot do Beacon acabou de mandar o protótipo navegar: sinal imediato de
+  // "clique reconhecido" até a nova tela aparecer
+  const [navigating, setNavigating] = useState(false)
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loadProgress, setLoadProgress] = useState(0) // 0..100 da barra de carregamento
   // conclusão da tarefa (feedback + botão continuar) antes de seguir
   const [completion, setCompletion] = useState<null | "reached" | "gave_up">(null)
@@ -175,6 +179,8 @@ export function FigmaFlowRunner({
       ox: number
       oy: number
       handled: boolean
+      // o hotspot do Beacon sob este press já mandou o protótipo navegar
+      acted?: boolean
       nodeId: string | undefined
       // id do frame ROLÁVEL sob o clique (nearestScrollingFrameId). A posição do
       // clique vem relativa ao viewport DESSE frame; somamos a origem dele na tela
@@ -416,32 +422,48 @@ export function FigmaFlowRunner({
       // Registra um clique (na tela de origem) uma única vez, a partir de um
       // press pendente. Usado tanto no pareamento press/release (toque na mesma
       // tela) quanto na navegação (o press que disparou a troca de tela).
-      const countClick = (p: {
+      type Press = {
         x: number
         y: number
         ox: number
         oy: number
         handled: boolean
+        acted?: boolean
         nodeId: string | undefined
         sfId: string | undefined
-      }) => {
+      }
+      // Hotspot do Beacon sob o clique. Os hotspots são desenhados sobre a
+      // imagem INTEIRA da tela, então o teste usa a posição no CONTEÚDO:
+      // origem do frame rolável + posição no viewport + offset de scroll.
+      const hotspotUnder = (p: Press) => {
+        const scr0 = p.nodeId ? screenByNode[p.nodeId] : undefined
+        const geom0 = p.nodeId && p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
+        return scr0 && p.nodeId
+          ? hotspotAt(
+              clickContentPoint({ vx: p.x, vy: p.y, ox: p.ox, oy: p.oy }, scr0, geom0),
+              hotspotsByNode[p.nodeId]
+            )
+          : undefined
+      }
+      // Manda o protótipo executar a ação do hotspot (uma vez por clique) e liga
+      // o sinal de "navegando" até a nova tela aparecer.
+      const actOnHotspot = (p: Press, hit: NonNullable<ReturnType<typeof hotspotUnder>>) => {
+        if (p.acted || p.handled) return
+        p.acted = true
+        if (!runEmbedHotspotAction(iframeRef.current, hit)) return
+        setNavigating(true)
+        if (navTimerRef.current) clearTimeout(navTimerRef.current)
+        navTimerRef.current = setTimeout(() => setNavigating(false), 2500)
+      }
+      const isGoalHotspot = (id: string) => (goalHotspotsByMission[missionId] ?? []).includes(id)
+
+      const countClick = (p: Press) => {
         clickCountRef.current += 1
         if (!interactedRef.current) {
           interactedRef.current = true
           setInteracted(true)
         }
-        // Hotspot do Beacon sob o clique. Os hotspots são desenhados sobre a
-        // imagem INTEIRA da tela, então o teste usa a posição no CONTEÚDO:
-        // origem do frame rolável + posição no viewport + offset de scroll.
-        const scr0 = p.nodeId ? screenByNode[p.nodeId] : undefined
-        const geom0 = p.nodeId && p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
-        const hit =
-          scr0 && p.nodeId
-            ? hotspotAt(
-                clickContentPoint({ vx: p.x, vy: p.y, ox: p.ox, oy: p.oy }, scr0, geom0),
-                hotspotsByNode[p.nodeId]
-              )
-            : undefined
+        const hit = hotspotUnder(p)
         // clique num hotspot do Beacon é um clique válido, mesmo que o Figma não
         // tenha interação ali
         const handled = p.handled || !!hit
@@ -469,13 +491,14 @@ export function FigmaFlowRunner({
           }
         }
         // Critério "clique em hotspot": clicou num hotspot-objetivo → concluiu.
-        if (hit && (goalHotspotsByMission[missionId] ?? []).includes(hit.id)) {
+        if (hit && isGoalHotspot(hit.id)) {
           completeMission("reached", "direct")
-        } else if (hit && !p.handled) {
+        } else if (hit) {
           // Hotspot do Beacon onde o Figma não tem interação: o Beacon navega o
           // protótipo (ir para a tela de destino / voltar). Se o Figma já tratou
-          // o clique, a interação do Figma prevalece.
-          runEmbedHotspotAction(iframeRef.current, hit)
+          // o clique, a interação do Figma prevalece. (Com mouse isso já
+          // aconteceu no pressionar — actOnHotspot não repete.)
+          actOnHotspot(p, hit)
         }
       }
 
@@ -520,10 +543,18 @@ export function FigmaFlowRunner({
             nodeId: d.data?.presentedNodeId as string | undefined,
             sfId,
           }
+          // Com mouse, age JÁ no pressionar (sem esperar o soltar): a navegação
+          // fica imediata. O clique em si continua sendo contado no soltar.
+          if (actsOnPress()) {
+            const press = pendingPressRef.current
+            const hit = hotspotUnder(press)
+            if (hit && !isGoalHotspot(hit.id)) actOnHotspot(press, hit)
+          }
         }
       }
 
       if (d.type === "PRESENTED_NODE_CHANGED") {
+        setNavigating(false) // a nova tela apareceu
         const nodeId = d.data?.presentedNodeId as string | undefined
         const scr = nodeId ? screenByNode[nodeId] : undefined
         if (scr) {
@@ -930,6 +961,13 @@ export function FigmaFlowRunner({
               display: "block",
             }}
           />
+        )}
+
+        {/* Clique num hotspot reconhecido: barra no topo até a nova tela aparecer */}
+        {navigating && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-primary/20">
+            <div className="h-full w-full origin-left animate-pulse bg-primary" />
+          </div>
         )}
 
         {/* Loader amigável (barrinha que enche) enquanto o Figma carrega */}

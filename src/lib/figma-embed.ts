@@ -54,15 +54,31 @@ export interface EmbedHotspotAction {
  * navega para a tela e "fechar overlay" volta. Hotspot sem destino não faz nada
  * (é só uma área clicável válida).
  */
-export function runEmbedHotspotAction(iframe: HTMLIFrameElement | null, h: EmbedHotspotAction) {
+export function runEmbedHotspotAction(
+  iframe: HTMLIFrameElement | null,
+  h: EmbedHotspotAction
+): boolean {
   const win = iframe?.contentWindow
-  if (!win) return
+  if (!win) return false
   if (h.action === "back" || h.action === "close_overlay") {
     win.postMessage({ type: "NAVIGATE_BACKWARD" }, FIGMA_ORIGIN)
-  } else if (h.targetNodeId) {
+    return true
+  }
+  if (h.targetNodeId) {
     win.postMessage(
       { type: "NAVIGATE_TO_FRAME_AND_CLOSE_OVERLAYS", data: { nodeId: h.targetNodeId } },
       FIGMA_ORIGIN
     )
+    return true
   }
+  return false // hotspot sem destino: nada a navegar
+}
+
+/**
+ * Com mouse (ponteiro fino) o clique pode agir já no PRESSIONAR: não há gesto de
+ * arrastar para rolar. Em toque, é preciso esperar o soltar para distinguir um
+ * toque de uma rolagem.
+ */
+export function actsOnPress(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: fine)").matches
 }
