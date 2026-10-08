@@ -206,27 +206,36 @@ async function exportScrollStrips(
 // (ir para tela, abrir/fechar overlay, voltar). Com isso as áreas clicáveis do
 // Figma ficam visíveis e editáveis no Beacon, podem ser critério de sucesso e
 // saem identificadas nos relatórios. `nodeToScreen` = figmaNodeId → id da tela.
-// Só preenche telas que ainda NÃO têm hotspots (não duplica nem sobrescreve o
-// que o usuário desenhou). Retorna quantos foram criados.
+// Não duplica: pula a interação cuja área já tem um hotspot igual na tela (de
+// uma importação anterior). Hotspots desenhados à mão são preservados e os do
+// Figma entram ao lado deles. Retorna quantos foram criados.
 async function importFigmaHotspots(
   screens: ImportScreen[],
   nodeToScreen: Map<string, string>
 ): Promise<number> {
   const screenIds = screens.map((s) => nodeToScreen.get(s.figmaId)).filter((id): id is string => !!id)
   if (!screenIds.length) return 0
-  const withHotspots = new Set(
-    (
-      await prisma.hotspot.findMany({
-        where: { screenId: { in: screenIds } },
-        select: { screenId: true },
-        distinct: ["screenId"],
-      })
-    ).map((h) => h.screenId)
-  )
+  type Rect = { x: number; y: number; w: number; h: number }
+  const existing = new Map<string, Rect[]>()
+  for (const h of await prisma.hotspot.findMany({
+    where: { screenId: { in: screenIds } },
+    select: { screenId: true, coords: true },
+  })) {
+    const arr = existing.get(h.screenId) ?? []
+    arr.push(h.coords as Rect)
+    existing.set(h.screenId, arr)
+  }
+  // mesma área (tolerância de 0,5% da tela) = já importado
+  const EPS = 0.005
+  const sameRect = (a: Rect, b: Rect) =>
+    Math.abs(a.x - b.x) < EPS && Math.abs(a.y - b.y) < EPS && Math.abs(a.w - b.w) < EPS && Math.abs(a.h - b.h) < EPS
   const rows = screens.flatMap((s) => {
     const screenId = nodeToScreen.get(s.figmaId)
-    if (!screenId || withHotspots.has(screenId)) return []
+    if (!screenId) return []
+    const taken = [...(existing.get(screenId) ?? [])]
     return s.hotspots.flatMap((h) => {
+      if (taken.some((r) => sameRect(r, h.coords))) return []
+      taken.push(h.coords)
       const needsTarget = h.action === "navigate" || h.action === "open_overlay"
       const targetScreenId = h.destFigmaId ? nodeToScreen.get(h.destFigmaId) ?? null : null
       if (needsTarget && !targetScreenId) return [] // destino fora das telas importadas
@@ -456,7 +465,7 @@ export async function figmaRefreshAction(
         added++
       }
     }
-    // interações do Figma → hotspots, nas telas que ainda não têm nenhum
+    // interações do Figma → hotspots (sem duplicar os que já existem)
     await importFigmaHotspots(fresh, nodeToScreen)
 
     // frame inicial pode ter mudado
