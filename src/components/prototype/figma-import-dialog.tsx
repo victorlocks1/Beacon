@@ -28,7 +28,18 @@ import {
   figmaLiveImportAction,
   loadFigmaImagesAction,
 } from "@/app/(dashboard)/studies/[id]/figma/actions"
-import type { ImportScreen } from "@/lib/figma"
+import type { ImportScreen, IgnoredReason } from "@/lib/figma"
+
+// Por que uma interação do Figma não virou hotspot (texto para o usuário).
+const ignoredLabel: Record<IgnoredReason, string> = {
+  scroll: "rolam até uma seção da mesma tela",
+  variant: "trocam o estado de um componente",
+  link: "abrem link externo",
+  notClick: "não são de clique (hover, arrastar, tempo)",
+  outOfScope: "levam a uma tela fora das importadas",
+  tiny: "têm área pequena demais",
+  other: "usam variável, condição ou mídia",
+}
 
 type Step = "loading" | "connect" | "url" | "review" | "importing" | "done"
 
@@ -344,6 +355,8 @@ export function FigmaImportDialog({
                     {selected.size === screens.length ? "Limpar" : "Selecionar todas"}
                   </button>
                 </div>
+                {/* Transparência: o que do Figma vira hotspot e o que fica de fora */}
+                <ImportSummary screens={screens.filter((s) => selected.has(s.figmaId))} />
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {screens.map((s) => {
                     const on = selected.has(s.figmaId)
@@ -393,6 +406,7 @@ export function FigmaImportDialog({
                           <p className="text-label-medium text-on-surface truncate">{s.name}</p>
                           <p className="text-label-small text-on-surface-variant">
                             {s.hotspots.length} hotspots
+                            {ignoredCount(s) ? ` · ${ignoredCount(s)} ignoradas` : ""}
                             {s.scroll !== "none" ? " · scroll" : ""}
                           </p>
                         </div>
@@ -436,6 +450,35 @@ export function FigmaImportDialog({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function ignoredCount(s: ImportScreen): number {
+  return Object.values(s.ignored ?? {}).reduce((a, n) => a + (n ?? 0), 0)
+}
+
+function ImportSummary({ screens }: { screens: ImportScreen[] }) {
+  const hotspots = screens.reduce((a, s) => a + s.hotspots.length, 0)
+  const totals: Partial<Record<IgnoredReason, number>> = {}
+  for (const s of screens)
+    for (const [k, n] of Object.entries(s.ignored ?? {}) as [IgnoredReason, number][])
+      totals[k] = (totals[k] ?? 0) + n
+  const reasons = (Object.entries(totals) as [IgnoredReason, number][]).filter(([, n]) => n > 0)
+  return (
+    <div className="rounded-xl border border-outline-variant bg-surface-container-high/50 px-4 py-3 text-body-small text-on-surface-variant space-y-1">
+      <p>
+        <strong className="text-on-surface font-medium">
+          {hotspots} {hotspots === 1 ? "interação do Figma vira hotspot" : "interações do Figma viram hotspots"}
+        </strong>{" "}
+        no Beacon.
+      </p>
+      {reasons.length > 0 && (
+        <p>
+          Ficam de fora (continuam funcionando no protótipo, mas não são hotspots):{" "}
+          {reasons.map(([k, n]) => `${n} que ${ignoredLabel[k]}`).join("; ")}.
+        </p>
+      )}
+    </div>
   )
 }
 

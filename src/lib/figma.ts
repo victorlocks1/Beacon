@@ -62,6 +62,9 @@ export interface ImportScreen {
   scroll: "none" | "vertical" | "horizontal" | "both"
   isStart: boolean
   hotspots: ImportHotspot[]
+  // Interações do Figma que NÃO viraram hotspot, por motivo (para explicar ao
+  // usuário por que uma área clicável do protótipo não apareceu no Beacon).
+  ignored?: Partial<Record<IgnoredReason, number>>
   regions: ImportRegion[]
   scrollFrames: ScrollFrameGeom[] // frames roláveis (overflowDirection≠NONE) → geometria
   // Só para telas OVERLAY (bottomsheet/modal): nó → origem normalizada [x,y] na
@@ -240,6 +243,33 @@ export function screenIdOf(nodeId: string, idx: Index): string {
   return cur
 }
 
+// Por que uma interação do Figma não vira hotspot do Beacon.
+export type IgnoredReason =
+  | "scroll" // rola até uma seção da mesma tela
+  | "variant" // troca variante/estado de um componente
+  | "link" // abre um link externo
+  | "notClick" // não é clique (hover, arrastar, tempo, tecla…)
+  | "outOfScope" // leva a uma tela que não está entre as importadas
+  | "tiny" // área pequena demais para ser clicável
+  | "other" // variável, condicional, mídia…
+
+// Motivo de uma interação não ser mapeável (null = o nó não tem interações).
+function ignoredReasonOf(n: FigNode): IgnoredReason | null {
+  const its = (n.interactions ?? []).filter(Boolean)
+  if (!its.length) return null
+  const clicks = its.filter((it) => CLICK_TRIGGERS.has(it.trigger?.type ?? ""))
+  if (!clicks.length) return "notClick"
+  for (const it of clicks) {
+    for (const a of it.actions || []) {
+      if (!a) continue
+      if (a.type === "URL") return "link"
+      if (a.type === "NODE" && a.navigation === "SCROLL_TO") return "scroll"
+      if (a.type === "NODE" && a.navigation === "CHANGE_TO") return "variant"
+    }
+  }
+  return "other"
+}
+
 const CLICK_TRIGGERS = new Set(["ON_CLICK", "ON_PRESS", "ON_TAP", "MOUSE_DOWN", "MOUSE_UP"])
 
 // Tipos de nó que podem ser uma "tela" (frame de topo do protótipo). Inclui
@@ -413,6 +443,8 @@ function overlayPositionOf(
 // percorre a subárvore de uma tela coletando hotspots + regiões
 function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart" | "thumbUrl"> {
   const hotspots: ImportHotspot[] = []
+  const ignored: Partial<Record<IgnoredReason, number>> = {}
+  const ignore = (r: IgnoredReason) => (ignored[r] = (ignored[r] ?? 0) + 1)
   const regions: ImportRegion[] = []
   const scrollFrames: ScrollFrameGeom[] = []
 
@@ -420,15 +452,23 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
     if (n !== screen) {
       // hotspot?
       const edge = edgeForNode(n)
+      if (!edge) {
+        const why = ignoredReasonOf(n)
+        if (why) ignore(why)
+      }
       if (edge) {
         // Sem clamp: hotspots DENTRO de áreas roláveis podem começar além do
         // frame (x/y > 1) — o clamp os grudava na borda e quebrava o clique
         // depois de rolar. Guarda apenas contra tamanho ínfimo / nós distantes.
-        const raw = relCoordsRaw(n.absoluteBoundingBox, screen)
+        // O mínimo é em PIXELS (4px): um limite relativo à tela descartava links
+        // e ícones pequenos em páginas longas (14px numa página de 2875px = 0,49%).
+        const nb = n.absoluteBoundingBox
+        const raw = relCoordsRaw(nb, screen)
         const coords =
-          raw && raw.w >= 0.005 && raw.h >= 0.005 && raw.x < 4 && raw.x + raw.w > -0.5 && raw.y < 6 && raw.y + raw.h > -0.5
+          raw && nb && nb.width >= 4 && nb.height >= 4 && raw.x < 4 && raw.x + raw.w > -0.5 && raw.y < 6 && raw.y + raw.h > -0.5
             ? raw
             : null
+        if (!coords) ignore("tiny")
         if (coords) {
           // Normaliza o destino para o FRAME DE TOPO (a "tela" que importamos e
           // renderizamos). O destino cru de um overlay/navigate pode ser um nó
@@ -547,6 +587,7 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
     height: Math.round(b?.height ?? 0),
     scroll: pageAxis,
     hotspots,
+    ignored,
     regions,
     scrollFrames,
   }
@@ -719,7 +760,9 @@ export async function collectImportPlan(
     // descarta hotspots navigate/overlay cujo destino ficou fora do conjunto final
     base.hotspots = base.hotspots.filter((h) => {
       if (h.action === "back" || h.action === "close_overlay") return true
-      return !!h.destFigmaId && screenIds.has(h.destFigmaId)
+      const ok = !!h.destFigmaId && screenIds.has(h.destFigmaId)
+      if (!ok) base.ignored = { ...base.ignored, outOfScope: (base.ignored?.outOfScope ?? 0) + 1 }
+      return ok
     })
     screens.push({ ...base, isStart: id === startId })
   }
