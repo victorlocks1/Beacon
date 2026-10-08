@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
 import { figmaEmbedUrl } from "@/lib/figma-embed"
+import { frameLayout, type DeviceType } from "@/lib/device"
 import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
 interface RecorderScreen {
@@ -12,10 +13,13 @@ interface RecorderScreen {
   name: string
   order: number
   figmaNodeId: string | null
+  width: number
+  height: number
 }
 
 interface Props {
   fileKey: string
+  deviceType: DeviceType // dispositivo do estudo: define o formato do quadro
   screens: RecorderScreen[]
   startScreenId: string | null
   paths: PathStepInput[][]
@@ -25,7 +29,7 @@ interface Props {
 // Grava o caminho esperado navegando no protótipo VIVO do Figma (embed). Cada
 // frame apresentado (PRESENTED_NODE_CHANGED) é mapeado para a tela e entra no
 // caminho. Serve os estudos importados ao vivo (sem imagem para o player).
-export function FigmaPathRecorder({ fileKey, screens, startScreenId, paths, onChange }: Props) {
+export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId, paths, onChange }: Props) {
   const [recording, setRecording] = useState<string[] | null>(null)
   const [embedSrc, setEmbedSrc] = useState<string | null>(null)
 
@@ -38,7 +42,10 @@ export function FigmaPathRecorder({ fileKey, screens, startScreenId, paths, onCh
   for (const s of screens) countByName.set(s.name, (countByName.get(s.name) ?? 0) + 1)
   const nameCount = (id: string) => countByName.get(screenById.get(id)?.name ?? "") ?? 0
 
-  const startNodeId = startScreenId ? screenById.get(startScreenId)?.figmaNodeId ?? null : null
+  const startScreen = startScreenId ? screenById.get(startScreenId) : undefined
+  const startNodeId = startScreen?.figmaNodeId ?? null
+  // mesmo quadro do testador: proporção do frame (ou do viewport, se página longa)
+  const layout = frameLayout(startScreen?.width ?? 0, startScreen?.height ?? 0, deviceType)
 
   function name(id: string) {
     const s = screenById.get(id)
@@ -47,9 +54,11 @@ export function FigmaPathRecorder({ fileKey, screens, startScreenId, paths, onCh
 
   const startRecording = useCallback(() => {
     if (!startScreenId) return
-    setEmbedSrc(figmaEmbedUrl({ fileKey, startNodeId, host: window.location.host }))
+    setEmbedSrc(
+      figmaEmbedUrl({ fileKey, startNodeId, host: window.location.host, scaling: layout.scaling })
+    )
     setRecording([startScreenId])
-  }, [fileKey, startNodeId, startScreenId])
+  }, [fileKey, startNodeId, startScreenId, layout.scaling])
 
   function finalize() {
     if (!recording || recording.length < 2) return
@@ -115,8 +124,22 @@ export function FigmaPathRecorder({ fileKey, screens, startScreenId, paths, onCh
 
           {/* Protótipo vivo — navegue para gravar o caminho */}
           <div className="flex justify-center bg-surface-container rounded-lg p-3">
+            {/* mobile: quadro de celular (altura fixa). Web/tablet: ocupa a
+                largura disponível, na proporção do frame, limitado em altura. */}
             <div
-              className="bg-white rounded-2xl overflow-hidden shadow-sm aspect-[9/20] h-[520px] max-w-full"
+              className={cn(
+                "bg-white overflow-hidden shadow-sm max-w-full",
+                deviceType === "mobile" ? "rounded-2xl h-[520px]" : "rounded-xl"
+              )}
+              style={
+                deviceType === "mobile"
+                  ? { aspectRatio: layout.aspect }
+                  : {
+                      aspectRatio: layout.aspect,
+                      width: `min(100%, calc(70vh * ${layout.aspect}))`,
+                      maxHeight: "70vh",
+                    }
+              }
             >
               {embedSrc && (
                 <iframe

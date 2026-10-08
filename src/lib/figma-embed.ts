@@ -10,6 +10,9 @@ export function figmaEmbedUrl(opts: {
   host: string
   hideUi?: boolean
   hotspotHints?: boolean // quadrados azuis do Figma (dicas de área clicável)
+  // "contain" (padrão) encaixa o frame inteiro; páginas longas usam encaixe na
+  // largura ("fit-width"/"scale-down-width") para rolar na vertical.
+  scaling?: "contain" | "fit-width" | "scale-down-width"
 }): string | null {
   if (!FIGMA_EMBED_CLIENT_ID || !opts.fileKey) return null
   const u = new URL(`https://embed.figma.com/proto/${opts.fileKey}/beacon`)
@@ -19,7 +22,7 @@ export function figmaEmbedUrl(opts: {
   u.searchParams.set("client-id", FIGMA_EMBED_CLIENT_ID)
   // "contain" = encaixa na tela ampliando/reduzindo (preenche o iframe, estilo
   // Maze). "scale-down" só reduzia → protótipo pequeno com fundo sobrando.
-  u.searchParams.set("scaling", "contain")
+  u.searchParams.set("scaling", opts.scaling ?? "contain")
   u.searchParams.set("content-scaling", "fixed")
   if (opts.hideUi !== false) u.searchParams.set("hide-ui", "1")
   // No testador escondemos as dicas azuis (não entregar a área clicável). Na

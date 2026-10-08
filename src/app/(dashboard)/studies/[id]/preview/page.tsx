@@ -36,6 +36,9 @@ export default async function PreviewPage({
 
   if (!study || !study.prototype) notFound()
 
+  // Figma ao vivo: as telas não têm imagem — o preview é a revisão (embed vivo).
+  if (study.prototype.source === "figma") redirect(`/studies/${studyId}/review`)
+
   const screens = study.prototype.screens
   const firstMission = study.blocks[0]?.mission ?? null
 

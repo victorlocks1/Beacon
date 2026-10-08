@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { deviceMaxWidth, type DeviceType } from "@/lib/device"
 import { toast } from "@/components/ui/toast"
 import { Check, CornerDownRight, Loader2, MessageSquarePlus, Trash2, X } from "lucide-react"
 import {
@@ -46,7 +47,9 @@ export function CommentsBoard({
   comments,
   currentUserId,
   isOwner,
+  deviceType = "mobile",
 }: {
+  deviceType?: DeviceType // dispositivo do estudo: largura em que a tela é exibida
   studyId: string
   screens: BoardScreen[]
   tasks?: BoardTask[]
@@ -136,7 +139,8 @@ export function CommentsBoard({
       <div className="space-y-2">
         <p className="text-title-small text-on-surface">{s.name}</p>
         <div
-          className="relative w-full max-w-[360px] rounded-xl overflow-hidden border border-outline-variant cursor-crosshair"
+          className="relative w-full rounded-xl overflow-hidden border border-outline-variant cursor-crosshair"
+          style={{ maxWidth: deviceMaxWidth[deviceType] }}
           onClick={(e) => screenClick(e, s.id)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}

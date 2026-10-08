@@ -38,6 +38,29 @@ export default async function HotspotsPage({
 
   if (!screen || screen.prototype.study.ownerId !== session.user.id) notFound()
 
+  // Figma ao vivo: quem renderiza e navega é o embed do Figma; não há imagem
+  // para desenhar hotspots (o editor apareceria com a imagem quebrada).
+  if (screen.prototype.source === "figma" && screen.prototype.figmaFileKey) {
+    return (
+      <div className="max-w-xl mx-auto py-16 text-center space-y-4">
+        <h1 className="text-title-large text-on-surface">{screen.name}</h1>
+        <p className="text-body-medium text-on-surface-variant">
+          Esta tela veio do Figma em modo ao vivo. As áreas clicáveis e a navegação são as do
+          próprio protótipo do Figma, então não há hotspots para desenhar aqui. Para mudar uma
+          interação, edite no Figma e use <strong className="text-on-surface font-medium">Atualizar protótipo</strong>.
+        </p>
+        <div className="flex justify-center gap-2">
+          <Link href={`/studies/${studyId}`} className={buttonVariants({ variant: "outline" })}>
+            Voltar ao estudo
+          </Link>
+          <Link href={`/studies/${studyId}/review`} className={buttonVariants()}>
+            Ver o protótipo na revisão
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const otherScreens = screen.prototype.screens.filter((s) => s.id !== screenId)
 
   async function save(hotspots: Parameters<typeof saveHotspotsAction>[2]) {

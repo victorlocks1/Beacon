@@ -83,6 +83,9 @@ interface FigNode {
   overlayPositionType?: string
   clipsContent?: boolean
   transitionNodeID?: string | null
+  // só em CANVAS (página): pontos de início dos fluxos do protótipo
+  flowStartingPoints?: Array<{ nodeId: string; name?: string }>
+  prototypeStartNodeID?: string | null
   interactions?: Array<{ trigger?: { type?: string } | null; actions?: Array<Record<string, unknown>> }>
   children?: FigNode[]
 }
@@ -90,22 +93,27 @@ interface FigNode {
 // ---------------------------------------------------------------------------
 // URL parsing
 // ---------------------------------------------------------------------------
-export function parseFigmaUrl(url: string): { fileKey: string; nodeId: string | null } {
-  // aceita /file/, /design/, /proto/
-  const keyMatch = url.match(/figma\.com\/(?:file|design|proto)\/([A-Za-z0-9]+)/)
-  if (!keyMatch) throw new Error("URL do Figma inválida — esperado um link de arquivo, design ou protótipo.")
-  const fileKey = keyMatch[1]
+export interface ParsedFigmaUrl {
+  fileKey: string
+  nodeId: string | null // nó selecionado/apresentado (página, seção ou frame)
+  startNodeId: string | null // ponto de início do protótipo (link "Present")
+  pageId: string | null // página do protótipo (link "Present")
+}
 
-  let nodeId: string | null = null
-  const u = safeUrl(url)
-  if (u) {
-    // prioriza o ponto de início do protótipo, senão o node selecionado
-    const raw =
-      u.searchParams.get("starting-point-node-id") ||
-      u.searchParams.get("node-id")
-    if (raw) nodeId = raw.replace(/-/g, ":") // URL usa "-", API usa ":"
-  }
-  return { fileKey, nodeId }
+export function parseFigmaUrl(url: string): ParsedFigmaUrl {
+  // aceita /file/, /design/, /proto/ (com ou sem www, e o domínio embed.figma.com)
+  const m = url.trim().match(/figma\.com\/(?:file|design|proto)\/([A-Za-z0-9]+)(?:\/branch\/([A-Za-z0-9]+))?/)
+  if (!m) throw new Error("URL do Figma inválida — esperado um link de arquivo, design ou protótipo.")
+  // em links de branch, a chave do arquivo é a da branch
+  const fileKey = m[2] ?? m[1]
+
+  // URL usa "-" (ou ":" codificado); a API usa ":"
+  const toId = (raw: string | null) => (raw ? raw.replace(/-/g, ":") : null)
+  const u = safeUrl(url.trim())
+  const startNodeId = toId(u?.searchParams.get("starting-point-node-id") ?? null)
+  const pageId = toId(u?.searchParams.get("page-id") ?? null)
+  const nodeId = toId(u?.searchParams.get("node-id") ?? null) ?? startNodeId
+  return { fileKey, nodeId, startNodeId, pageId }
 }
 
 function safeUrl(s: string): URL | null {
@@ -592,36 +600,100 @@ function collectEdges(idx: Index): { sources: Set<string>; dests: Set<string> } 
 // ---------------------------------------------------------------------------
 const MAX_SCREENS = 250
 
+export interface ImportPlan {
+  screens: ImportScreen[]
+  // Escopo efetivamente lido (página/seção). É o que guardamos para o
+  // "Atualizar protótipo" reler o mesmo conjunto de telas.
+  entryNodeId: string | null
+}
+
+const isContainer = (n?: FigNode) => n?.type === "CANVAS" || n?.type === "SECTION"
+
+// Descobre a PÁGINA que contém um nó. A API de nós não devolve o pai, então
+// lemos o esqueleto do arquivo (páginas → topo → 1 nível) e procuramos o nó.
+async function findPageOf(token: string, fileKey: string, nodeId: string): Promise<string | null> {
+  const file = await figmaApi<{ document: FigNode }>(token, `/v1/files/${fileKey}?depth=3`)
+  const contains = (n: FigNode): boolean => n.id === nodeId || (n.children ?? []).some(contains)
+  const page = (file.document.children ?? []).find((c) => c.type === "CANVAS" && contains(c))
+  return page?.id ?? null
+}
+
 export async function collectImportPlan(
   token: string,
   fileKey: string,
-  entryNodeId: string | null
-): Promise<ImportScreen[]> {
+  entryNodeId: string | null,
+  hint: { pageId?: string | null; startNodeId?: string | null } = {}
+): Promise<ImportPlan> {
   const idx: Index = { byId: {}, parentOf: {} }
+  // frame apontado pelo link (quando o link é de um frame, não de uma página)
+  let linkedFrameId: string | null = null
 
-  // 1) nó de entrada (página/section/frame). Sem nodeId → primeira CANVAS do arquivo.
-  let entryRootIds: string[]
-  if (entryNodeId) {
-    const nodes = await figmaGetNodes(token, fileKey, [entryNodeId])
+  async function load(ids: string[]): Promise<string[]> {
+    const nodes = await figmaGetNodes(token, fileKey, ids)
     for (const root of Object.values(nodes)) indexTree(root, idx)
-    entryRootIds = Object.keys(nodes)
-  } else {
-    const file = await figmaApi<{ document: FigNode }>(token, `/v1/files/${fileKey}?depth=4`)
-    const canvas = (file.document.children || []).find((c) => c.type === "CANVAS")
-    if (!canvas) throw new Error("Arquivo sem páginas.")
-    indexTree(canvas, idx)
-    entryRootIds = [canvas.id]
+    return Object.keys(nodes)
+  }
+
+  // 1) nó de entrada. Sempre lemos a árvore COMPLETA do escopo (sem `depth`):
+  //    as interações ficam em nós profundos e um corte as faria sumir.
+  let entryRootIds: string[] = []
+  if (entryNodeId) {
+    entryRootIds = await load([entryNodeId])
+    const entry = idx.byId[entryNodeId]
+    // Link de um FRAME (o caso do link "Present"/protótipo): ler só ele traria
+    // uma única tela, porque os destinos das interações ficam fora da subárvore.
+    // Ampliamos o escopo para a PÁGINA do frame.
+    if (entry && !isContainer(entry)) {
+      linkedFrameId = entryNodeId
+      const pageId = hint.pageId ?? (await findPageOf(token, fileKey, entryNodeId))
+      if (pageId && pageId !== entryNodeId) {
+        idx.byId = {}
+        idx.parentOf = {}
+        const loaded = await load([pageId])
+        // página não veio (id inválido) → volta para o frame isolado
+        entryRootIds = loaded.length ? loaded : await load([entryNodeId])
+      }
+    }
+  }
+  if (!entryRootIds.length) {
+    // sem nó (ou nó inexistente): a página do link, senão a primeira do arquivo
+    const file = await figmaApi<{ document: FigNode }>(token, `/v1/files/${fileKey}?depth=1`)
+    const pages = (file.document.children || []).filter((c) => c.type === "CANVAS")
+    const page = pages.find((c) => c.id === hint.pageId) ?? pages[0]
+    if (!page) throw new Error("Arquivo sem páginas.")
+    entryRootIds = await load([page.id])
+    if (!entryRootIds.length) throw new Error("Não foi possível ler a página do Figma.")
+  }
+
+  // Pontos de início declarados no Figma (flows) dentro do escopo.
+  const flowStarts: string[] = []
+  for (const n of Object.values(idx.byId)) {
+    if (n.type !== "CANVAS") continue
+    for (const f of n.flowStartingPoints ?? []) if (idx.byId[f.nodeId]) flowStarts.push(f.nodeId)
+    if (n.prototypeStartNodeID && idx.byId[n.prototypeStartNodeID]) flowStarts.push(n.prototypeStartNodeID)
   }
 
   // 2) sementes: telas que participam do protótipo dentro do escopo de entrada
   const { sources, dests } = collectEdges(idx)
   const seeds = new Set<string>()
+  // ordem importa (define a ordem das telas): início(s) primeiro
+  const preferredStart = [hint.startNodeId, linkedFrameId, ...flowStarts]
+    .filter((id): id is string => !!id && !!idx.byId[id])
+    .map((id) => screenIdOf(id, idx))
+  for (const id of preferredStart) seeds.add(id)
   for (const s of sources) seeds.add(s)
   for (const d of dests) if (idx.byId[d]) seeds.add(screenIdOf(d, idx))
   // se o nó de entrada é um frame isolado, ele é semente
   for (const rid of entryRootIds) {
     const node = idx.byId[rid]
     if (node && SCREEN_TYPES.has(node.type)) seeds.add(rid)
+  }
+  // Protótipo sem nenhuma interação ligada: ainda dá para apresentar/testar as
+  // telas — usamos os frames de topo do escopo em vez de devolver "nenhuma tela".
+  if (seeds.size === 0) {
+    for (const n of Object.values(idx.byId)) {
+      if (n.type === "FRAME" && isContainer(idx.byId[idx.parentOf[n.id] ?? ""])) seeds.add(n.id)
+    }
   }
 
   // 3) Escopo ESTRITO ao link enviado: importamos apenas as telas dentro do
@@ -630,8 +702,12 @@ export async function collectImportPlan(
   //    do escopo são descartados na etapa de extração (não viram navegação).
   const screenIds = new Set<string>([...seeds].slice(0, MAX_SCREENS))
 
-  // 4) extrai cada tela
+  // 4) extrai cada tela. Tela inicial: a do link/flow do Figma; sem isso, a
+  //    única tela que só tem saídas (nenhuma interação chega nela).
   const startCandidates = new Set([...sources].filter((s) => !dests.has(s)))
+  const startId =
+    preferredStart.find((id) => screenIds.has(id)) ??
+    (startCandidates.size === 1 ? [...startCandidates][0] : null)
   const overlayDests = collectOverlayDests(idx)
   const screens: ImportScreen[] = []
   for (const id of screenIds) {
@@ -645,8 +721,8 @@ export async function collectImportPlan(
       if (h.action === "back" || h.action === "close_overlay") return true
       return !!h.destFigmaId && screenIds.has(h.destFigmaId)
     })
-    screens.push({ ...base, isStart: startCandidates.size === 1 && startCandidates.has(id) })
+    screens.push({ ...base, isStart: id === startId })
   }
 
-  return screens
+  return { screens, entryNodeId: entryRootIds[0] ?? entryNodeId }
 }

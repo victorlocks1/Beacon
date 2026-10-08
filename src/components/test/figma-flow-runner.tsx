@@ -12,6 +12,7 @@ import { FloatingTaskWidget } from "@/components/test/floating-task-widget"
 import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 import { type PathStepDef } from "@/lib/path"
+import { frameLayout } from "@/lib/device"
 
 interface WelcomeInfo {
   title: string
@@ -72,7 +73,10 @@ export function FigmaFlowRunner({
   deviceType = "desktop",
   frameW = 360,
   frameH = 800,
+  preview = false,
 }: {
+  // Modo revisão: roda o fluxo inteiro no protótipo vivo sem gravar nenhum dado.
+  preview?: boolean
   token: string
   lang: Lang
   fileKey: string
@@ -102,7 +106,6 @@ export function FigmaFlowRunner({
   // Dispositivo do protótipo: mobile usa o quadro de celular (retrato estreito);
   // web/tablet usam a proporção REAL do frame (paisagem), sem moldura de celular.
   const isMobile = deviceType === "mobile"
-  const frameAspect = frameW > 0 && frameH > 0 ? frameW / frameH : isMobile ? 9 / 20 : 16 / 10
   const [stepIndex, setStepIndex] = useState(0)
   const [flowStarted, setFlowStarted] = useState(!welcome)
   const [introDone, setIntroDone] = useState(!howItWorks) // tela "Como funciona"
@@ -138,6 +141,10 @@ export function FigmaFlowRunner({
 
   // node-id do Figma onde a missão atual começa (null → frame padrão do protótipo)
   const currentStartNode = mission ? startNodeByMission[mission.id] ?? null : null
+  // Quadro do protótipo: proporção do frame de partida da missão. Página mais
+  // alta que a tela → quadro do tamanho do viewport, com rolagem vertical.
+  const startDims = currentStartNode ? screenByNode[currentStartNode] : undefined
+  const layout = frameLayout(startDims?.w ?? frameW, startDims?.h ?? frameH, deviceType)
 
   // refs lidos pelo listener de eventos (que é montado uma vez)
   const missionRef = useRef<string | null>(null)
@@ -180,6 +187,11 @@ export function FigmaFlowRunner({
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
 
   const flush = useCallback(async () => {
+    if (preview) {
+      bufferRef.current = []
+      ourBufferRef.current = []
+      return
+    }
     // 1) eventos crus do Figma
     if (bufferRef.current.length > 0) {
       const events = bufferRef.current
@@ -210,7 +222,7 @@ export function FigmaFlowRunner({
         ourBufferRef.current = [...events, ...ourBufferRef.current]
       }
     }
-  }, [token])
+  }, [token, preview])
 
   // Cada missão abre no seu frame de partida. Ao trocar de missão o embed
   // recarrega ali (reset limpo entre tarefas). host real p/ o Allowed origin.
@@ -218,13 +230,19 @@ export function FigmaFlowRunner({
     // testador: sem as dicas azuis do Figma (não entregar a área clicável)
     setEmbedLoaded(false) // volta o loader ao (re)carregar o embed
     setEmbedSrc(
-      figmaEmbedUrl({ fileKey, startNodeId: currentStartNode, host: window.location.host, hotspotHints: false })
+      figmaEmbedUrl({
+        fileKey,
+        startNodeId: currentStartNode,
+        host: window.location.host,
+        hotspotHints: false,
+        scaling: layout.scaling,
+      })
     )
     epochRef.current = now()
     // rede de segurança: se o INITIAL_LOAD não chegar, esconde o loader mesmo assim
     const t = setTimeout(() => setEmbedLoaded(true), 10000)
     return () => clearTimeout(t)
-  }, [fileKey, currentStartNode])
+  }, [fileKey, currentStartNode, layout.scaling])
 
   // Barra de carregamento: enche SEMPRE avançando (desacelera perto do fim mas
   // nunca congela) enquanto o embed não está pronto; completa quando fica pronto.
@@ -247,13 +265,14 @@ export function FigmaFlowRunner({
 
   const finishFlow = useCallback(() => {
     setFinished(true)
+    if (preview) return
     fetch("/api/t/finish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
       keepalive: true,
     }).catch(() => {})
-  }, [token])
+  }, [token, preview])
 
   const advance = useCallback(() => {
     if (isLastStep) {
@@ -287,6 +306,7 @@ export function FigmaFlowRunner({
       if (signal === "reached") setTimeout(() => setCompletion("reached"), 600)
       else setCompletion("gave_up")
       flush()
+      if (preview) return
       fetch("/api/t/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -303,7 +323,7 @@ export function FigmaFlowRunner({
         keepalive: true,
       }).catch(() => {})
     },
-    [flush, token]
+    [flush, token, preview]
   )
 
   // Continua da tela de conclusão para o próximo passo (pergunta ou missão).
@@ -315,7 +335,7 @@ export function FigmaFlowRunner({
   // SUM: grava o ASQ da tarefa (coletado no feedback de conclusão) e segue.
   const continueWithSum = useCallback(
     (missionId: string) => {
-      if (sumValues.every((v) => v >= 1)) {
+      if (!preview && sumValues.every((v) => v >= 1)) {
         fetch("/api/t/sum", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -327,14 +347,14 @@ export function FigmaFlowRunner({
       setCompletion(null)
       advance()
     },
-    [sumValues, token, advance]
+    [sumValues, token, advance, preview]
   )
 
   // Continua a partir do feedback de sucesso quando a próxima pergunta é de
   // estrelas: grava a nota dada ali mesmo e pula o step da pergunta.
   const continueWithInlineRating = useCallback(
     (nextQ: StepQuestion) => {
-      if (inlineRating > 0) {
+      if (!preview && inlineRating > 0) {
         fetch("/api/t/answer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -354,7 +374,7 @@ export function FigmaFlowRunner({
         startedRef.current = false
       }
     },
-    [inlineRating, token, stepIndex, steps.length, finishFlow]
+    [inlineRating, token, stepIndex, steps.length, finishFlow, preview]
   )
 
   // Listener global dos eventos da Embed API (Figma). Marca por tarefa, monta o
@@ -548,7 +568,7 @@ export function FigmaFlowRunner({
   useEffect(() => {
     const id = setInterval(flush, 3000)
     function onHide() {
-      if (bufferRef.current.length === 0) return
+      if (preview || bufferRef.current.length === 0) return
       navigator.sendBeacon(
         "/api/t/figma-events",
         new Blob([JSON.stringify({ token, events: bufferRef.current })], { type: "application/json" })
@@ -561,7 +581,7 @@ export function FigmaFlowRunner({
       window.removeEventListener("pagehide", onHide)
       flush()
     }
-  }, [flush, token])
+  }, [flush, token, preview])
 
   function startTask() {
     if (!mission) return
@@ -607,7 +627,7 @@ export function FigmaFlowRunner({
       (typeof payload.text === "string" && payload.text.length > 0) ||
       (typeof payload.choice === "string" && payload.choice.length > 0) ||
       typeof payload.rating === "number"
-    if (hasValue) {
+    if (hasValue && !preview) {
       try {
         await fetch("/api/t/answer", {
           method: "POST",
@@ -623,12 +643,14 @@ export function FigmaFlowRunner({
   }
 
   function submitSus(values: number[]) {
-    fetch("/api/t/sus", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, values }),
-      keepalive: true,
-    }).catch(() => {})
+    if (!preview) {
+      fetch("/api/t/sus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, values }),
+        keepalive: true,
+      }).catch(() => {})
+    }
     advance()
   }
 
@@ -830,13 +852,14 @@ export function FigmaFlowRunner({
         }
         style={
           isMobile
-            ? { aspectRatio: `${frameW} / ${frameH}` }
+            ? { aspectRatio: layout.aspect }
             : {
                 // Web/tablet: o quadro NÃO usa o tamanho em pixels do protótipo.
-                // Assume a proporção real do frame e ocupa o MAIOR tamanho que cabe
-                // na área (limite de 88vh de altura e 100% da largura), centralizado.
-                aspectRatio: `${frameW} / ${frameH}`,
-                width: `min(100%, calc(88vh * ${frameW} / ${frameH}))`,
+                // Assume a proporção do frame (ou do viewport, se a página for
+                // longa) e ocupa o MAIOR tamanho que cabe na área (limite de 88vh
+                // de altura e 100% da largura), centralizado.
+                aspectRatio: layout.aspect,
+                width: `min(100%, calc(88vh * ${layout.aspect}))`,
                 maxHeight: "88vh",
               }
         }

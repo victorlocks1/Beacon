@@ -26,12 +26,19 @@ import {
   disconnectFigmaAction,
   figmaInspectAction,
   figmaLiveImportAction,
+  loadFigmaImagesAction,
 } from "@/app/(dashboard)/studies/[id]/figma/actions"
 import type { ImportScreen } from "@/lib/figma"
 
 type Step = "loading" | "connect" | "url" | "review" | "importing" | "done"
 
-export function FigmaImportDialog({ studyId }: { studyId: string }) {
+export function FigmaImportDialog({
+  studyId,
+  deviceType = "mobile",
+}: {
+  studyId: string
+  deviceType?: "desktop" | "tablet" | "mobile" // dispositivo do estudo: formato das miniaturas
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>("loading")
@@ -138,6 +145,13 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
       setStep("done")
       router.refresh()
       toast.success(`${res.screens} tela(s) importada(s)`)
+      // Baixa as imagens das telas em segundo plano (miniaturas, comentários e
+      // fundo do heatmap). O teste em si usa o embed vivo e não depende disso.
+      loadFigmaImagesAction(studyId)
+        .then((img) => {
+          if (img.ok && img.loaded) router.refresh()
+        })
+        .catch(() => {})
     } catch (e) {
       setError(msg(e) || "Falha na importação.")
       setStep("review")
@@ -295,8 +309,8 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
                   autoFocus
                 />
                 <p className="text-body-small text-on-surface-variant -mt-2">
-                  Dica: selecione a página do protótipo no Figma e use “Copy link”. Lemos só
-                  aquele escopo, não o arquivo inteiro.
+                  Aceita o link da página, de um frame ou do protótipo (“Present” → copiar
+                  link). Lemos a página inteira daquele protótipo, não o arquivo todo.
                 </p>
                 <div className="flex justify-end">
                   <Button onClick={inspect} disabled={busy || !url.trim()}>
@@ -343,7 +357,12 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
                         )}
                         onClick={() => toggle(s.figmaId)}
                       >
-                        <div className="aspect-[9/16] bg-surface-container-high flex items-center justify-center overflow-hidden">
+                        <div
+                          className={cn(
+                            "bg-surface-container-high flex items-center justify-center overflow-hidden",
+                            deviceType === "desktop" ? "aspect-[16/10]" : deviceType === "tablet" ? "aspect-[3/4]" : "aspect-[9/16]"
+                          )}
+                        >
                           {s.thumbUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={s.thumbUrl} alt={s.name} className="w-full h-full object-cover object-top" />
@@ -406,7 +425,8 @@ export function FigmaImportDialog({ studyId }: { studyId: string }) {
                 </div>
                 <p className="text-title-medium text-on-surface">Importação concluída!</p>
                 <p className="text-body-medium text-on-surface-variant">
-                  {result.screens} telas e {result.hotspots} hotspots criados.
+                  {result.screens} {result.screens === 1 ? "tela importada" : "telas importadas"}. As
+                  interações são as do protótipo do Figma — veja o fluxo em Revisão.
                 </p>
                 <DialogClose render={<Button className="mt-2" />}>Ver telas</DialogClose>
               </div>

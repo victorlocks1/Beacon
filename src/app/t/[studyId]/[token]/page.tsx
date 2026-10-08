@@ -7,6 +7,7 @@ import { tt, type Lang } from "@/lib/i18n"
 import { susStatementsFor } from "@/lib/sus"
 import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
 import { buildExactPaths, type PathStepDef } from "@/lib/path"
+import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
 
 export default async function TestRunPage({
   params,
@@ -158,44 +159,10 @@ export default async function TestRunPage({
   // ─── Protótipo VIVO do Figma (embed) é o padrão para estudos do Figma ───
   const canEmbed = proto?.source === "figma" && !!proto.figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
   if (canEmbed) {
-    // mapeia figmaNodeId → tela (id + tamanho) e monta os objetivos por missão
-    const screenByNode: Record<string, { id: string; w: number; h: number }> = {}
-    const screenToNode: Record<string, string> = {}
-    // figmaNodeId da tela → { figmaNodeId do frame rolável → origem/tam } (p/ heatmap)
-    const scrollFrameGeomByScreen: Record<string, Record<string, { x: number; y: number; w: number; h: number }>> = {}
-    for (const sc of screens) {
-      if (sc.figmaNodeId) {
-        screenByNode[sc.figmaNodeId] = { id: sc.id, w: sc.width, h: sc.height }
-        screenToNode[sc.id] = sc.figmaNodeId
-        const frames = (sc.scrollFrames as { figmaId: string; x: number; y: number; w: number; h: number }[] | null) ?? []
-        if (frames.length) {
-          scrollFrameGeomByScreen[sc.figmaNodeId] = Object.fromEntries(
-            frames.map((f) => [f.figmaId, { x: f.x, y: f.y, w: f.w, h: f.h }])
-          )
-        }
-      }
-    }
-    const goalsByMission: Record<string, string[]> = {}
-    const startNodeByMission: Record<string, string | null> = {}
-    const successTypeByMission: Record<string, "screen" | "path"> = {}
-    // Caminhos esperados (passos c/ opcional/wildcard) — rastreador do caminho exato
-    const expectedPathsByMission: Record<string, PathStepDef[][]> = {}
-    for (const st of testSteps) {
-      if (st.kind === "mission") {
-        goalsByMission[st.mission.id] = st.mission.goalScreenIds
-          .map((gid) => screenToNode[gid])
-          .filter((n): n is string => !!n)
-        // frame de partida da missão (node-id do Figma), p/ o embed abrir ali
-        startNodeByMission[st.mission.id] = screenToNode[st.mission.startScreenId] ?? null
-        successTypeByMission[st.mission.id] = st.mission.successType
-        expectedPathsByMission[st.mission.id] = st.mission.paths.filter((p) => p.length >= 2)
-      }
-    }
-    // dimensões de referência do protótipo (todas as telas do frame compartilham),
-    // usadas para dar a proporção correta ao quadro no runner (mobile vs web)
-    const refScreen = screens[0]
-    const frameW = refScreen?.width || 360
-    const frameH = refScreen?.height || 800
+    const maps = buildFigmaRunnerMaps(
+      screens,
+      testSteps.flatMap((st) => (st.kind === "mission" ? [st.mission] : []))
+    )
     return (
       <FigmaFlowRunner
         token={token}
@@ -203,8 +170,6 @@ export default async function TestRunPage({
         fileKey={proto!.figmaFileKey!}
         steps={testSteps}
         deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-        frameW={frameW}
-        frameH={frameH}
         /* A tela de entrada (/t/<studyId>) já é a boas-vindas — não duplicar aqui */
         welcome={null}
         howItWorks={null} /* Como funciona agora fica na tela de boas-vindas (entry) */
@@ -214,13 +179,19 @@ export default async function TestRunPage({
         sumEnabled={study.sumEnabled}
         sumStatements={asqStatementsFor(lang === "es" ? "es" : "pt", study.sumStatements)}
         sumAnchors={ASQ_ANCHORS[lang === "es" ? "es" : "pt"]}
-        goalsByMission={goalsByMission}
-        startNodeByMission={startNodeByMission}
-        successTypeByMission={successTypeByMission}
-        expectedPathsByMission={expectedPathsByMission}
-        screenByNode={screenByNode}
-        scrollFrameGeomByScreen={scrollFrameGeomByScreen}
+        {...maps}
       />
+    )
+  }
+
+  if (proto?.source === "figma" && screens.every((sc) => !sc.imageUrl)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
+        <p className="max-w-md text-center text-body-medium text-on-surface-variant">
+          Este protótipo do Figma não pôde ser carregado (integração de embed não configurada).
+          Avise quem compartilhou o link.
+        </p>
+      </div>
     )
   }
 

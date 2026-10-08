@@ -281,11 +281,14 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
             {canEmbed ? (
               <FigmaPathRecorder
                 fileKey={figmaFileKey!}
+                deviceType={deviceType}
                 screens={screens.map((s) => ({
                   id: s.id,
                   name: s.name,
                   order: s.order,
                   figmaNodeId: s.figmaNodeId ?? null,
+                  width: s.width,
+                  height: s.height,
                 }))}
                 startScreenId={startScreenId || null}
                 paths={paths}

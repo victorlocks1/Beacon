@@ -160,6 +160,8 @@ export default async function StudyPage({
   }))
   const builderFigmaKey = study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null
   const susLang = (study.language ?? "pt") === "es" ? "es" : "pt"
+  // Importado do Figma em modo ao vivo: o embed do Figma renderiza e navega.
+  const isLiveFigma = !!builderFigmaKey
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
   const editable = study.status !== "live"
@@ -237,7 +239,10 @@ export default async function StudyPage({
                 <span className="h-px flex-1 bg-outline-variant" />
               </div>
               <div className="flex justify-center">
-                <FigmaImportDialog studyId={study.id} />
+                <FigmaImportDialog
+                  studyId={study.id}
+                  deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+                />
               </div>
             </div>
           ) : (
@@ -274,7 +279,10 @@ export default async function StudyPage({
                         <p className="text-sm font-medium truncate">{screen.name}</p>
                       )}
                       <p className="text-xs text-muted-foreground">
-                        {screen.hotspots.length} hotspot(s) · {screen.width}×{screen.height}
+                        {isLiveFigma
+                          ? "Interações do Figma"
+                          : `${screen.hotspots.length} hotspot(s)`}{" "}
+                        · {screen.width}×{screen.height}
                       </p>
                     </div>
 
@@ -294,13 +302,16 @@ export default async function StudyPage({
 
                       <Separator orientation="vertical" className="h-5 mx-1" />
 
-                      <Link
-                        href={`/studies/${study.id}/screens/${screen.id}/hotspots`}
-                        className={buttonVariants({ variant: "outline", size: "sm" })}
-                      >
-                        <MousePointerClick className="h-3.5 w-3.5 mr-1.5" />
-                        Hotspots
-                      </Link>
+                      {/* Figma ao vivo: as áreas clicáveis vêm do protótipo do Figma */}
+                      {!isLiveFigma && (
+                        <Link
+                          href={`/studies/${study.id}/screens/${screen.id}/hotspots`}
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                          <MousePointerClick className="h-3.5 w-3.5 mr-1.5" />
+                          Hotspots
+                        </Link>
+                      )}
 
                       <form action={deleteScreenAction.bind(null, study.id, screen.id)}>
                         <SubmitButton variant="ghost" size="icon" fullWidth={false} className="h-8 w-8 text-red-500 hover:text-red-700">
@@ -317,7 +328,10 @@ export default async function StudyPage({
               {editable && (
                 <div className="sticky top-4 space-y-3">
                   <ScreenUploadForm studyId={study.id} />
-                  <FigmaImportDialog studyId={study.id} />
+                  <FigmaImportDialog
+                  studyId={study.id}
+                  deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+                />
                 </div>
               )}
             </div>

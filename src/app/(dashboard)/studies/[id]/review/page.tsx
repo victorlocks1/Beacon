@@ -5,6 +5,11 @@ import { buttonVariants } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TestRunner, type Step } from "@/components/test/test-runner"
+import { FigmaFlowRunner } from "@/components/test/figma-flow-runner"
+import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
+import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
+import { buildExactPaths } from "@/lib/path"
+import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
 import { type Lang } from "@/lib/i18n"
 import { susStatementsFor } from "@/lib/sus"
 import { CommentsBoard, type BoardComment } from "@/components/comments/comments-board"
@@ -117,6 +122,28 @@ export default async function ReviewPage({
     })
   }
 
+  // Protótipo VIVO do Figma: a revisão roda no MESMO runner do testador (embed),
+  // senão as telas — que não têm imagem no import ao vivo — apareceriam em branco.
+  const proto = study.prototype
+  const isFigma = proto?.source === "figma" && !!proto.figmaFileKey
+  const figmaMaps = isFigma
+    ? buildFigmaRunnerMaps(
+        screens,
+        reviewSteps.flatMap((st) => {
+          if (st.kind !== "mission") return []
+          const m = study.blocks.find((b) => b.mission?.id === st.mission.id)?.mission
+          return [
+            {
+              ...st.mission,
+              successType: (m?.successType ?? "screen") as "screen" | "path",
+              paths: m ? buildExactPaths(m.paths, screens) : [],
+            },
+          ]
+        })
+      )
+    : null
+  const susLang = lang === "es" ? "es" : "pt"
+
   const missionCount = reviewSteps.filter(
     (st) => st.kind === "mission" && st.mission.id !== "__explore__"
   ).length
@@ -207,6 +234,34 @@ export default async function ReviewPage({
             {/* Fluxo inteiro em modo revisão: boas-vindas → tarefas → perguntas →
                 obrigado. Não grava nenhum dado (preview). */}
             <div className="rounded-3xl overflow-hidden border border-outline-variant">
+              {figmaMaps && !FIGMA_EMBED_CLIENT_ID ? (
+                <p className="py-24 px-6 text-center text-body-medium text-on-surface-variant">
+                  O protótipo do Figma não pôde ser carregado: falta configurar a integração de
+                  embed (NEXT_PUBLIC_FIGMA_EMBED_CLIENT_ID) neste ambiente.
+                </p>
+              ) : figmaMaps ? (
+                <FigmaFlowRunner
+                  token=""
+                  preview
+                  lang={lang}
+                  fileKey={proto!.figmaFileKey!}
+                  steps={reviewSteps}
+                  deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
+                  welcome={{
+                    title: study.welcomeTitle ?? "",
+                    message: study.welcomeMessage ?? "",
+                    taskCount: missionCount,
+                  }}
+                  howItWorks={study.howItWorks}
+                  thanksTitle={study.thanksTitle}
+                  thanksMessage={study.thanksMessage}
+                  susStatements={susStatementsFor(susLang, study.susStatements)}
+                  sumEnabled={study.sumEnabled}
+                  sumStatements={asqStatementsFor(susLang, study.sumStatements)}
+                  sumAnchors={ASQ_ANCHORS[susLang]}
+                  {...figmaMaps}
+                />
+              ) : (
               <TestRunner
                 token=""
                 lang={lang}
@@ -245,6 +300,7 @@ export default async function ReviewPage({
                 }))}
                 steps={reviewSteps}
               />
+              )}
             </div>
           </TabsContent>
 
@@ -253,6 +309,7 @@ export default async function ReviewPage({
               studyId={studyId}
               currentUserId={userId}
               isOwner={isOwner}
+              deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
               screens={screens.map((s) => ({ id: s.id, name: s.name, imageUrl: s.imageUrl }))}
               tasks={commentTasks}
               comments={comments}

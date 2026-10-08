@@ -110,10 +110,19 @@ export async function figmaInspectAction(studyId: string, url: string): Promise<
   try {
     const { userId } = await getOwnedEditableStudy(studyId)
     const token = await getDecryptedToken(userId)
-    const { fileKey, nodeId } = parseFigmaUrl(url)
-    const screens = await collectImportPlan(token, fileKey, nodeId)
+    const { fileKey, nodeId: linkNodeId, pageId, startNodeId } = parseFigmaUrl(url)
+    // nodeId devolvido = escopo efetivamente lido (a página, quando o link é de um
+    // frame/protótipo) — é o que o "Atualizar protótipo" usa para reler.
+    const { screens, entryNodeId: nodeId } = await collectImportPlan(token, fileKey, linkNodeId, {
+      pageId,
+      startNodeId,
+    })
     if (!screens.length) {
-      return { ok: false, error: "Nenhuma tela com protótipo encontrada nesse link." }
+      return {
+        ok: false,
+        error:
+          "Nenhuma tela encontrada nesse link. Confira se ele aponta para a página (ou o protótipo) que contém os frames.",
+      }
     }
     // miniaturas para a revisão — opcional. Se o Figma limitar (429) só nas
     // imagens, seguimos sem preview em vez de travar todo o inspecionar.
@@ -345,7 +354,7 @@ export async function figmaRefreshAction(
 
     const token = await getDecryptedToken(userId)
     const entry = proto.figmaEntryNodeId ?? proto.figmaStartNodeId ?? null
-    const fresh = await collectImportPlan(token, proto.figmaFileKey, entry)
+    const { screens: fresh, entryNodeId: scope } = await collectImportPlan(token, proto.figmaFileKey, entry)
     if (!fresh.length) {
       return { ok: false, error: "Nenhuma tela encontrada ao reler o protótipo." }
     }
@@ -395,10 +404,13 @@ export async function figmaRefreshAction(
     }
 
     // frame inicial pode ter mudado
-    const startNodeId = (fresh.find((s) => s.isStart) ?? fresh[0])?.figmaId ?? proto.figmaStartNodeId
+    const startNodeId =
+      (proto.figmaStartNodeId && fresh.some((s) => s.figmaId === proto.figmaStartNodeId)
+        ? proto.figmaStartNodeId
+        : (fresh.find((s) => s.isStart) ?? fresh[0])?.figmaId) ?? proto.figmaStartNodeId
     await prisma.prototype.update({
       where: { id: proto.id },
-      data: { figmaStartNodeId: startNodeId },
+      data: { figmaStartNodeId: startNodeId, figmaEntryNodeId: scope },
     })
 
     // limpa imagens antigas do heatmap → o auto-loader baixa versões novas
