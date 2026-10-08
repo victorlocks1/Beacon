@@ -224,6 +224,7 @@ model Hotspot {
   targetScreenId  String?
   targetScreen    Screen?          @relation("HotspotTarget", fields: [targetScreenId], references: [id], onDelete: SetNull)
   events          Event[]
+  goalFor         MissionGoalHotspot[]
 }
 
 model Block {
@@ -293,6 +294,7 @@ model Mission {
   // a partir do caminho exato.
   idealTimeMs   Int?
   goals         MissionGoal[]
+  goalHotspots  MissionGoalHotspot[]
   paths         MissionPath[]
   results       MissionResult[]
   events        Event[]
@@ -303,6 +305,7 @@ model Mission {
 enum SuccessType {
   screen
   path
+  hotspot
 }
 
 model MissionGoal {
@@ -311,6 +314,18 @@ model MissionGoal {
   mission      Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
   goalScreenId String
   goalScreen   Screen  @relation(fields: [goalScreenId], references: [id], onDelete: Cascade)
+}
+
+// Critério "clique em hotspot": clicar em QUALQUER um dos hotspots listados
+// conclui a missão (não depende de chegar numa tela).
+model MissionGoalHotspot {
+  id        String  @id @default(cuid())
+  missionId String
+  mission   Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  hotspotId String
+  hotspot   Hotspot @relation(fields: [hotspotId], references: [id], onDelete: Cascade)
+
+  @@unique([missionId, hotspotId])
 }
 
 model MissionPath {

@@ -35,6 +35,7 @@ export default async function TestRunPage({
               mission: {
                 include: {
                   goals: true,
+                  goalHotspots: true,
                   paths: { include: { steps: { orderBy: { order: "asc" } } } },
                   questions: { orderBy: { order: "asc" } },
                 },
@@ -75,7 +76,8 @@ export default async function TestRunPage({
           description: string | null
           startScreenId: string
           goalScreenIds: string[]
-          successType: "screen" | "path"
+          goalHotspotIds: string[]
+          successType: "screen" | "path" | "hotspot"
           paths: PathStepDef[][] // passos do caminho exato (c/ opcional/wildcard)
         }
       }
@@ -135,7 +137,8 @@ export default async function TestRunPage({
             description: m.description,
             startScreenId: m.startScreenId,
             goalScreenIds,
-            successType: m.successType as "screen" | "path",
+            goalHotspotIds: m.goalHotspots.map((g) => g.hotspotId),
+            successType: m.successType,
             paths: buildExactPaths(m.paths, screens),
           },
         },

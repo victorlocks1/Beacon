@@ -13,13 +13,14 @@ import {
 } from "@/components/ui/select"
 import { PathRecorder } from "@/components/mission/path-recorder"
 import { FigmaPathRecorder } from "@/components/mission/figma-path-recorder"
+import { HotspotGoalPicker } from "@/components/mission/hotspot-goal-picker"
 import { type PathStepInput } from "@/components/mission/path-steps-editor"
 import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
 import { klmIdealMs } from "@/lib/sum"
 import { QuestionDialog, type QuestionInput } from "@/components/question/question-dialog"
 import { createMissionAction, updateMissionAction } from "@/app/(dashboard)/studies/[id]/actions"
 import { cn } from "@/lib/utils"
-import { Target, Route, Loader2, Plus, Pencil, Trash2, GripVertical } from "lucide-react"
+import { Target, Route, MousePointerClick, Loader2, Plus, Pencil, Trash2, GripVertical } from "lucide-react"
 
 const qTypeLabel: Record<string, string> = {
   open: "Aberta",
@@ -30,7 +31,7 @@ const qTypeLabel: Record<string, string> = {
 type LocalQuestion = QuestionInput & { key: string }
 
 type DeviceType = "desktop" | "tablet" | "mobile"
-type SuccessType = "screen" | "path"
+type SuccessType = "screen" | "path" | "hotspot"
 
 interface Hotspot {
   id: string
@@ -64,6 +65,7 @@ export interface MissionInitial {
   successType: SuccessType
   startScreenId: string
   goalScreenId: string | null
+  goalHotspotIds?: string[] // critério "clique em hotspot"
   paths: PathStepInput[][]
   idealTimeMs?: number | null
   questions?: QuestionInput[]
@@ -89,6 +91,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
   const [successType, setSuccessType] = useState<SuccessType>(initial?.successType ?? "screen")
   const [startScreenId, setStartScreenId] = useState<string>(initial?.startScreenId ?? "")
   const [goalScreenId, setGoalScreenId] = useState<string>(initial?.goalScreenId ?? "")
+  const [goalHotspotIds, setGoalHotspotIds] = useState<string[]>(initial?.goalHotspotIds ?? [])
   const [paths, setPaths] = useState<PathStepInput[][]>(initial?.paths ?? [])
   // SUM: tempo ideal em SEGUNDOS (override do KLM); vazio = estima automático.
   const [idealTimeSec, setIdealTimeSec] = useState(
@@ -139,6 +142,11 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
       return setErr("Selecione a tela de sucesso.")
     if (successType === "path" && paths.length === 0)
       return setErr("Grave ao menos um caminho esperado.")
+    // só contam os hotspots que ainda existem nas telas
+    const liveHotspotIds = new Set(screens.flatMap((s) => s.hotspots.map((h) => h.id)))
+    const hotspotGoals = goalHotspotIds.filter((id) => liveHotspotIds.has(id))
+    if (successType === "hotspot" && hotspotGoals.length === 0)
+      return setErr("Marque ao menos um hotspot de sucesso.")
 
     const idealSec = parseInt(idealTimeSec, 10)
     const payload = {
@@ -147,6 +155,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
       startScreenId,
       successType,
       goalScreenId: successType === "screen" ? goalScreenId : null,
+      goalHotspotIds: successType === "hotspot" ? hotspotGoals : undefined,
       paths: successType === "path" ? paths : undefined,
       idealTimeMs: Number.isFinite(idealSec) && idealSec > 0 ? idealSec * 1000 : null,
       questions: questions
@@ -228,10 +237,11 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {([
             { key: "screen" as const, icon: Target, title: "Tela-alvo", desc: "Sucesso ao chegar numa tela, por qualquer caminho." },
             { key: "path" as const, icon: Route, title: "Caminho exato", desc: "Grava o caminho esperado; classifica direto/indireto." },
+            { key: "hotspot" as const, icon: MousePointerClick, title: "Clique em hotspot", desc: "Sucesso ao clicar em um dos hotspots marcados." },
           ]).map((opt) => {
             const Icon = opt.icon
             const active = successType === opt.key
@@ -274,6 +284,17 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        ) : successType === "hotspot" ? (
+          <div className="space-y-2 pt-1">
+            <Label className="text-title-small text-on-surface">Hotspot(s) de sucesso</Label>
+            <HotspotGoalPicker
+              screens={screens}
+              startScreenId={startScreenId || null}
+              deviceType={deviceType}
+              value={goalHotspotIds}
+              onChange={setGoalHotspotIds}
+            />
           </div>
         ) : (
           <div className="space-y-2 pt-1">

@@ -59,6 +59,7 @@ export default async function StudyPage({
             include: {
               startScreen: true,
               goals: { include: { goalScreen: true } },
+              goalHotspots: true,
               questions: { orderBy: { order: "asc" } },
               paths: {
                 include: {
@@ -98,9 +99,10 @@ export default async function StudyPage({
           initial: {
             task: m.task,
             description: m.description,
-            successType: m.successType as "screen" | "path",
+            successType: m.successType,
             startScreenId: m.startScreenId,
             goalScreenId: m.goals[0]?.goalScreenId ?? null,
+            goalHotspotIds: m.goalHotspots.map((g) => g.hotspotId),
             paths: m.paths.map((p) =>
               p.steps.map((s) => ({
                 screenId: s.screenId,
@@ -160,8 +162,6 @@ export default async function StudyPage({
   }))
   const builderFigmaKey = study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null
   const susLang = (study.language ?? "pt") === "es" ? "es" : "pt"
-  // Importado do Figma em modo ao vivo: o embed do Figma renderiza e navega.
-  const isLiveFigma = !!builderFigmaKey
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
   const editable = study.status !== "live"
@@ -279,10 +279,7 @@ export default async function StudyPage({
                         <p className="text-sm font-medium truncate">{screen.name}</p>
                       )}
                       <p className="text-xs text-muted-foreground">
-                        {isLiveFigma
-                          ? "Interações do Figma"
-                          : `${screen.hotspots.length} hotspot(s)`}{" "}
-                        · {screen.width}×{screen.height}
+                        {screen.hotspots.length} hotspot(s) · {screen.width}×{screen.height}
                       </p>
                     </div>
 
@@ -302,16 +299,13 @@ export default async function StudyPage({
 
                       <Separator orientation="vertical" className="h-5 mx-1" />
 
-                      {/* Figma ao vivo: as áreas clicáveis vêm do protótipo do Figma */}
-                      {!isLiveFigma && (
-                        <Link
-                          href={`/studies/${study.id}/screens/${screen.id}/hotspots`}
-                          className={buttonVariants({ variant: "outline", size: "sm" })}
-                        >
-                          <MousePointerClick className="h-3.5 w-3.5 mr-1.5" />
-                          Hotspots
-                        </Link>
-                      )}
+                      <Link
+                        href={`/studies/${study.id}/screens/${screen.id}/hotspots`}
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
+                      >
+                        <MousePointerClick className="h-3.5 w-3.5 mr-1.5" />
+                        Hotspots
+                      </Link>
 
                       <form action={deleteScreenAction.bind(null, study.id, screen.id)}>
                         <SubmitButton variant="ghost" size="icon" fullWidth={false} className="h-8 w-8 text-red-500 hover:text-red-700">

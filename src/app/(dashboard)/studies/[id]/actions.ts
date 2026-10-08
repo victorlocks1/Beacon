@@ -407,8 +407,9 @@ interface CreateMissionInput {
   task: string
   description?: string | null
   startScreenId: string
-  successType: "screen" | "path"
+  successType: "screen" | "path" | "hotspot"
   goalScreenId?: string | null
+  goalHotspotIds?: string[] // critério "clique em hotspot": qualquer um conclui
   paths?: MissionPathStepInput[][] // cada caminho: passos (start..objetivo)
   questions?: MissionQuestionInput[] // perguntas de acompanhamento da missão
   idealTimeMs?: number | null // SUM: override do tempo ideal (ms); nulo = KLM
@@ -422,6 +423,16 @@ function validExactPaths(
   return (paths ?? []).filter(
     (p) => p.length >= 2 && p.every((st) => ownScreenIds.has(st.screenId))
   )
+}
+
+// Hotspots-objetivo válidos: só os que pertencem a telas deste study.
+async function validGoalHotspotIds(studyId: string, ids: string[] | undefined): Promise<string[]> {
+  if (!ids?.length) return []
+  const rows = await prisma.hotspot.findMany({
+    where: { id: { in: ids }, screen: { prototype: { studyId } } },
+    select: { id: true },
+  })
+  return rows.map((r) => r.id)
 }
 
 // Cria os MissionPath + PathStep (com optional/matchByName) de uma missão de caminho.
@@ -486,8 +497,12 @@ export async function createMissionAction(
   if (!ownScreenIds.has(startScreenId)) return
 
   // Validação por tipo de sucesso
+  const goalHotspotIds =
+    input.successType === "hotspot" ? await validGoalHotspotIds(study.id, input.goalHotspotIds) : []
   if (input.successType === "screen") {
     if (!input.goalScreenId || !ownScreenIds.has(input.goalScreenId)) return
+  } else if (input.successType === "hotspot") {
+    if (goalHotspotIds.length === 0) return
   } else {
     if (validExactPaths(input.paths, ownScreenIds).length === 0) return
   }
@@ -510,6 +525,10 @@ export async function createMissionAction(
   if (input.successType === "screen") {
     await prisma.missionGoal.create({
       data: { missionId: mission.id, goalScreenId: input.goalScreenId! },
+    })
+  } else if (input.successType === "hotspot") {
+    await prisma.missionGoalHotspot.createMany({
+      data: goalHotspotIds.map((hotspotId) => ({ missionId: mission.id, hotspotId })),
     })
   } else {
     await saveExactPaths(mission.id, validExactPaths(input.paths, ownScreenIds))
@@ -542,8 +561,12 @@ export async function updateMissionAction(
   const ownScreenIds = new Set((study.prototype?.screens ?? []).map((s) => s.id))
   if (!ownScreenIds.has(startScreenId)) return
 
+  const goalHotspotIds =
+    input.successType === "hotspot" ? await validGoalHotspotIds(study.id, input.goalHotspotIds) : []
   if (input.successType === "screen") {
     if (!input.goalScreenId || !ownScreenIds.has(input.goalScreenId)) return
+  } else if (input.successType === "hotspot") {
+    if (goalHotspotIds.length === 0) return
   } else {
     if (validExactPaths(input.paths, ownScreenIds).length === 0) return
   }
@@ -561,11 +584,16 @@ export async function updateMissionAction(
 
   // Substitui critério de sucesso (remove o antigo, recria o novo)
   await prisma.missionGoal.deleteMany({ where: { missionId } })
+  await prisma.missionGoalHotspot.deleteMany({ where: { missionId } })
   await prisma.missionPath.deleteMany({ where: { missionId } }) // cascateia PathSteps
 
   if (input.successType === "screen") {
     await prisma.missionGoal.create({
       data: { missionId, goalScreenId: input.goalScreenId! },
+    })
+  } else if (input.successType === "hotspot") {
+    await prisma.missionGoalHotspot.createMany({
+      data: goalHotspotIds.map((hotspotId) => ({ missionId, hotspotId })),
     })
   } else {
     await saveExactPaths(missionId, validExactPaths(input.paths, ownScreenIds))

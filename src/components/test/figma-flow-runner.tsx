@@ -35,6 +35,7 @@ interface OurEvent {
   type: "click" | "navigate" | "misclick" | "give_up" | "end"
   xNorm: number
   yNorm: number
+  hotspotId?: string | null
   targetScreenId?: string | null
   timestampMs: number
 }
@@ -70,6 +71,8 @@ export function FigmaFlowRunner({
   expectedPathsByMission,
   screenByNode,
   scrollFrameGeomByScreen,
+  hotspotsByNode = {},
+  goalHotspotsByMission = {},
   deviceType = "desktop",
   frameW = 360,
   frameH = 800,
@@ -91,7 +94,11 @@ export function FigmaFlowRunner({
   sumAnchors?: { low: string; high: string } // âncoras da escala 1..7
   goalsByMission: Record<string, string[]> // missionId → node-ids objetivo (Figma)
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
-  successTypeByMission: Record<string, "screen" | "path"> // critério de sucesso da missão
+  successTypeByMission: Record<string, "screen" | "path" | "hotspot"> // critério de sucesso da missão
+  // figmaNodeId da tela → hotspots desenhados no Beacon (coords normalizadas na tela)
+  hotspotsByNode?: Record<string, { id: string; x: number; y: number; w: number; h: number }[]>
+  // missionId → hotspots que concluem a tarefa (critério "clique em hotspot")
+  goalHotspotsByMission?: Record<string, string[]>
   expectedPathsByMission: Record<string, PathStepDef[][]> // caminhos esperados (passos c/ opcional/wildcard)
   screenByNode: Record<string, { id: string; w: number; h: number }> // figmaNodeId → tela
   // figmaNodeId da TELA → { figmaNodeId do frame rolável → origem/tam normalizados }.
@@ -160,6 +167,9 @@ export function FigmaFlowRunner({
       t: number
       x: number
       y: number
+      // offset de scroll do frame rolável no momento do clique (px)
+      ox: number
+      oy: number
       handled: boolean
       nodeId: string | undefined
       // id do frame ROLÁVEL sob o clique (nearestScrollingFrameId). A posição do
@@ -405,6 +415,8 @@ export function FigmaFlowRunner({
       const countClick = (p: {
         x: number
         y: number
+        ox: number
+        oy: number
         handled: boolean
         nodeId: string | undefined
         sfId: string | undefined
@@ -414,7 +426,22 @@ export function FigmaFlowRunner({
           interactedRef.current = true
           setInteracted(true)
         }
-        if (!p.handled) misclickCountRef.current += 1
+        // Hotspot do Beacon sob o clique. Os hotspots são desenhados sobre a
+        // imagem INTEIRA da tela, então o teste usa a posição no CONTEÚDO:
+        // origem do frame rolável + posição no viewport + offset de scroll.
+        const scr0 = p.nodeId ? screenByNode[p.nodeId] : undefined
+        const geom0 = p.nodeId && p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
+        const cx = scr0 ? (geom0?.x ?? 0) + (p.x + p.ox) / (scr0.w || 1) : -1
+        const cy = scr0 ? (geom0?.y ?? 0) + (p.y + p.oy) / (scr0.h || 1) : -1
+        const hit = p.nodeId
+          ? [...(hotspotsByNode[p.nodeId] ?? [])]
+              .reverse()
+              .find((h) => cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h)
+          : undefined
+        // clique num hotspot do Beacon é um clique válido, mesmo que o Figma não
+        // tenha interação ali
+        const handled = p.handled || !!hit
+        if (!handled) misclickCountRef.current += 1
         // Posição na tela = ORIGEM do frame rolável (normalizada) + posição do clique
         // no viewport do frame. Assim cliques dentro de carrossel/sub-frame rolável
         // caem no lugar certo (a posição vem relativa ao frame interno, não à tela).
@@ -429,12 +456,17 @@ export function FigmaFlowRunner({
             ourBufferRef.current.push({
               missionId,
               screenId: scr.id,
-              type: p.handled ? "click" : "misclick",
+              type: handled ? "click" : "misclick",
               xNorm: clamp01(xr),
               yNorm: clamp01(yr),
+              hotspotId: hit?.id ?? null,
               timestampMs: ts,
             })
           }
+        }
+        // Critério "clique em hotspot": clicou num hotspot-objetivo → concluiu.
+        if (hit && (goalHotspotsByMission[missionId] ?? []).includes(hit.id)) {
+          completeMission("reached", "direct")
         }
       }
 
@@ -448,6 +480,7 @@ export function FigmaFlowRunner({
           (d.data?.targetNodeMousePosition as { x: number; y: number } | null) ?? { x: 0, y: 0 }
         const px = pos.x ?? 0
         const py = pos.y ?? 0
+        const off = (d.data?.nearestScrollingFrameOffset as { x?: number; y?: number } | null) ?? null
         const sfId = d.data?.nearestScrollingFrameId as string | undefined
         const tNow = now()
         const pending = pendingPressRef.current
@@ -472,6 +505,8 @@ export function FigmaFlowRunner({
             t: tNow,
             x: px,
             y: py,
+            ox: off?.x ?? 0,
+            oy: off?.y ?? 0,
             handled: d.data?.handled !== false,
             nodeId: d.data?.presentedNodeId as string | undefined,
             sfId,

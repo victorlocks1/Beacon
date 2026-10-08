@@ -96,7 +96,7 @@ interface Props {
       targetScreenId: string | null
       shape: "rect"
     }>
-  ) => Promise<void>
+  ) => Promise<(string | null)[]> // id salvo de cada hotspot, na mesma ordem
   onSaveRegions: (
     regions: Array<{ kind: RegionKind; coords: NormalizedRect; axis: Axis; imageUrl: string | null }>
   ) => Promise<void>
@@ -207,8 +207,9 @@ export function HotspotEditor({
     setSaving(true)
     setSaved(false)
     try {
-      await onSave(
-        hotspots.map((h) => ({
+      const sent = hotspots
+      const ids = await onSave(
+        sent.map((h) => ({
           id: h.dbId,
           coords: h.coords,
           action: h.action,
@@ -216,6 +217,12 @@ export function HotspotEditor({
           targetScreenId: needsTarget(h.action) ? h.targetScreenId : null,
           shape: "rect" as const,
         }))
+      )
+      // guarda o id de cada hotspot salvo: o próximo "Salvar" atualiza o mesmo
+      // registro em vez de recriá-lo (o que quebraria missões que apontam p/ ele)
+      const idByLocal = new Map(sent.map((h, i) => [h.localId, ids[i]]))
+      setHotspots((prev) =>
+        prev.map((h) => (idByLocal.get(h.localId) ? { ...h, dbId: idByLocal.get(h.localId)! } : h))
       )
       await onSaveRegions(
         regions

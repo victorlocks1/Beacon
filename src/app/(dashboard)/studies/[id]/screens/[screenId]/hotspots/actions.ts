@@ -25,7 +25,7 @@ export async function saveHotspotsAction(
   studyId: string,
   screenId: string,
   hotspots: HotspotInput[]
-) {
+): Promise<(string | null)[]> {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
@@ -60,25 +60,40 @@ export async function saveHotspotsAction(
   })
 
   // Replace all hotspots for this screen
-  // Uma única transação com um único INSERT: ou troca tudo, ou não troca nada.
-  // (Um create por hotspot em paralelo disputava o pool de 10 conexões e, se um
-  // falhasse, a tela ficava com só parte dos hotspots.)
-  await prisma.$transaction([
-    prisma.hotspot.deleteMany({ where: { screenId } }),
-    prisma.hotspot.createMany({
-      data: valid.map((h) => ({
-        screenId,
-        shape: "rect" as const,
-        coords: h.coords,
-        action: h.action,
-        overlayPosition: h.action === "open_overlay" ? (h.overlayPosition ?? "bottom") : null,
-        targetScreenId: NEEDS_TARGET.has(h.action) ? h.targetScreenId : null,
-      })),
-    }),
+  // Os hotspots já salvos MANTÊM o id (são atualizados, não recriados): missões
+  // com critério "clique em hotspot" e os eventos dos testes apontam para ele.
+  // Tudo numa única transação: ou aplica tudo, ou não aplica nada.
+  const existingIds = new Set(
+    (await prisma.hotspot.findMany({ where: { screenId }, select: { id: true } })).map((h) => h.id)
+  )
+  const fields = (h: HotspotInput) => ({
+    shape: "rect" as const,
+    coords: h.coords,
+    action: h.action,
+    overlayPosition: h.action === "open_overlay" ? (h.overlayPosition ?? "bottom") : null,
+    targetScreenId: NEEDS_TARGET.has(h.action) ? h.targetScreenId : null,
+  })
+  const isKept = (h: HotspotInput) => !!h.id && existingIds.has(h.id)
+  const keptIds = valid.filter(isKept).map((h) => h.id!)
+
+  const results = await prisma.$transaction([
+    prisma.hotspot.deleteMany({ where: { screenId, id: { notIn: keptIds } } }),
+    ...valid.map((h) =>
+      isKept(h)
+        ? prisma.hotspot.update({ where: { id: h.id! }, data: fields(h), select: { id: true } })
+        : prisma.hotspot.create({ data: { screenId, ...fields(h) }, select: { id: true } })
+    ),
   ])
+  const savedIds = results.slice(1).map((r) => (r as { id: string }).id)
 
   revalidatePath(`/studies/${studyId}`)
   revalidatePath(`/studies/${studyId}/screens/${screenId}/hotspots`)
+
+  // id salvo de cada hotspot recebido, na mesma ordem (null = descartado)
+  return hotspots.map((h) => {
+    const k = valid.indexOf(h)
+    return k === -1 ? null : savedIds[k]
+  })
 }
 
 async function assertOwnerEditable(studyId: string, screenId: string) {

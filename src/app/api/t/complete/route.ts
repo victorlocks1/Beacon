@@ -48,7 +48,8 @@ export async function POST(request: Request) {
   let outcome: Outcome
   if (signal === "gave_up") {
     outcome = "given_up"
-  } else if (mission.successType === "screen") {
+  } else if (mission.successType === "screen" || mission.successType === "hotspot") {
+    // tela-alvo / clique em hotspot: alcançou o objetivo = sucesso direto
     outcome = "direct"
   } else if (clientOutcome === "direct" || clientOutcome === "indirect") {
     // CAMINHO EXATO: o cliente (rastreador do caminho) enxerga toda a navegação

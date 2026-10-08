@@ -39,6 +39,7 @@ export default async function ReviewPage({
           mission: {
             include: {
               goals: true,
+              goalHotspots: true,
               paths: { include: { steps: { orderBy: { order: "asc" } } } },
               questions: { orderBy: { order: "asc" } },
             },
@@ -95,6 +96,7 @@ export default async function ReviewPage({
             description: m.description,
             startScreenId: m.startScreenId,
             goalScreenIds,
+            goalHotspotIds: m.goalHotspots.map((g) => g.hotspotId),
           },
         },
         ...m.questions.map(toQuestionStep),
@@ -135,7 +137,7 @@ export default async function ReviewPage({
           return [
             {
               ...st.mission,
-              successType: (m?.successType ?? "screen") as "screen" | "path",
+              successType: m?.successType ?? "screen",
               paths: m ? buildExactPaths(m.paths, screens) : [],
             },
           ]

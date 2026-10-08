@@ -18,6 +18,8 @@ interface Mission {
   description: string | null
   startScreenId: string
   goalScreenIds: string[]
+  // critério "clique em hotspot": clicar em qualquer um destes conclui a tarefa
+  goalHotspotIds?: string[]
 }
 
 export type Step =
@@ -290,6 +292,12 @@ export function TestRunner({
         return
       }
       pendingFlushesRef.current.push(flush())
+    }
+
+    // Critério "clique em hotspot": o clique num hotspot-objetivo conclui a
+    // tarefa (depois de registrar a navegação que ele eventualmente disparou).
+    if (ev.hotspotId && mission.goalHotspotIds?.includes(ev.hotspotId)) {
+      await completeMission("reached", topRef.current)
     }
   }
 
