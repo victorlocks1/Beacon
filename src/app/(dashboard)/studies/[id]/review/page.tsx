@@ -13,6 +13,7 @@ import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
 import { type Lang } from "@/lib/i18n"
 import { susStatementsFor } from "@/lib/sus"
 import { CommentsBoard, type BoardComment } from "@/components/comments/comments-board"
+import { ReviewStage } from "@/components/review/review-stage"
 
 export default async function ReviewPage({
   params,
@@ -243,7 +244,7 @@ export default async function ReviewPage({
           <TabsContent value="preview">
             {/* Fluxo inteiro em modo revisão: boas-vindas → tarefas → perguntas →
                 obrigado. Não grava nenhum dado (preview). */}
-            <div className="rounded-3xl overflow-hidden border border-outline-variant">
+            <ReviewStage>
               {figmaMaps && !FIGMA_EMBED_CLIENT_ID ? (
                 <p className="py-24 px-6 text-center text-body-medium text-on-surface-variant">
                   O protótipo do Figma não pôde ser carregado: falta configurar a integração de
@@ -311,7 +312,7 @@ export default async function ReviewPage({
                 steps={reviewSteps}
               />
               )}
-            </div>
+            </ReviewStage>
           </TabsContent>
 
           <TabsContent value="comments">

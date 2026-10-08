@@ -170,10 +170,10 @@ export function clickContentPoint(
 }
 
 /** Hotspot que contém o ponto (o desenhado por último vence, como no player). */
-export function hotspotAt(
+export function hotspotAt<T extends HotspotRect>(
   pt: { x: number; y: number },
-  hotspots: HotspotRect[] | undefined
-): HotspotRect | undefined {
+  hotspots: T[] | undefined
+): T | undefined {
   if (!hotspots?.length) return undefined
   for (let i = hotspots.length - 1; i >= 0; i--) {
     const h = hotspots[i]

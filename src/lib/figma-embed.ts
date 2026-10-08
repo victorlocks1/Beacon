@@ -38,3 +38,31 @@ export const FIGMA_EVENT_TYPES = [
   "MOUSE_PRESS_OR_RELEASE",
   "NEW_STATE",
 ] as const
+
+// ── Controle do protótipo embutido (Embed API: mensagens para o iframe) ──
+const FIGMA_ORIGIN = "https://www.figma.com"
+
+/** Ação de um hotspot desenhado no Beacon sobre uma tela do Figma. */
+export interface EmbedHotspotAction {
+  action: "navigate" | "open_overlay" | "close_overlay" | "back"
+  targetNodeId: string | null // node-id do Figma da tela de destino
+}
+
+/**
+ * Executa no embed a ação de um hotspot do Beacon: ir para a tela de destino ou
+ * voltar. O embed não sabe abrir overlays por comando, então "abrir overlay"
+ * navega para a tela e "fechar overlay" volta. Hotspot sem destino não faz nada
+ * (é só uma área clicável válida).
+ */
+export function runEmbedHotspotAction(iframe: HTMLIFrameElement | null, h: EmbedHotspotAction) {
+  const win = iframe?.contentWindow
+  if (!win) return
+  if (h.action === "back" || h.action === "close_overlay") {
+    win.postMessage({ type: "NAVIGATE_BACKWARD" }, FIGMA_ORIGIN)
+  } else if (h.targetNodeId) {
+    win.postMessage(
+      { type: "NAVIGATE_TO_FRAME_AND_CLOSE_OVERLAYS", data: { nodeId: h.targetNodeId } },
+      FIGMA_ORIGIN
+    )
+  }
+}

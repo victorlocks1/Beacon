@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { figmaEmbedUrl, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
+import { figmaEmbedUrl, runEmbedHotspotAction, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
+import { type RunnerHotspot } from "@/lib/figma-runner"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { SeqScale } from "@/components/test/seq-scale"
 import { HowItWorksScreen } from "@/components/test/how-it-works-screen"
@@ -97,7 +98,7 @@ export function FigmaFlowRunner({
   startNodeByMission: Record<string, string | null> // missionId → node-id inicial (Figma)
   successTypeByMission: Record<string, "screen" | "path" | "hotspot"> // critério de sucesso da missão
   // figmaNodeId da tela → hotspots desenhados no Beacon (coords normalizadas na tela)
-  hotspotsByNode?: Record<string, { id: string; x: number; y: number; w: number; h: number }[]>
+  hotspotsByNode?: Record<string, RunnerHotspot[]>
   // missionId → hotspots que concluem a tarefa (critério "clique em hotspot")
   goalHotspotsByMission?: Record<string, string[]>
   expectedPathsByMission: Record<string, PathStepDef[][]> // caminhos esperados (passos c/ opcional/wildcard)
@@ -156,6 +157,7 @@ export function FigmaFlowRunner({
   const layout = frameLayout(startDims?.w ?? frameW, startDims?.h ?? frameH, deviceType)
 
   // refs lidos pelo listener de eventos (que é montado uma vez)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
   const missionRef = useRef<string | null>(null)
   const startNodeRef = useRef<string | null>(null)
   const startedRef = useRef(false)
@@ -469,6 +471,11 @@ export function FigmaFlowRunner({
         // Critério "clique em hotspot": clicou num hotspot-objetivo → concluiu.
         if (hit && (goalHotspotsByMission[missionId] ?? []).includes(hit.id)) {
           completeMission("reached", "direct")
+        } else if (hit && !p.handled) {
+          // Hotspot do Beacon onde o Figma não tem interação: o Beacon navega o
+          // protótipo (ir para a tela de destino / voltar). Se o Figma já tratou
+          // o clique, a interação do Figma prevalece.
+          runEmbedHotspotAction(iframeRef.current, hit)
         }
       }
 
@@ -908,6 +915,7 @@ export function FigmaFlowRunner({
              centralizado, e o overflow-hidden do quadro corta a borda preta
              do device frame. FRAME_CROP=1 desliga o recorte. */
           <iframe
+            ref={iframeRef}
             title="Protótipo"
             src={embedSrc}
             allowFullScreen

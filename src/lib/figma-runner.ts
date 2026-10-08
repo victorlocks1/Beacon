@@ -9,7 +9,18 @@ interface RunnerScreen {
   width: number
   height: number
   scrollFrames: unknown
-  hotspots?: { id: string; coords: unknown }[]
+  hotspots?: {
+    id: string
+    coords: unknown
+    action?: "navigate" | "open_overlay" | "close_overlay" | "back"
+    targetScreenId?: string | null
+  }[]
+}
+
+/** Hotspot do Beacon numa tela do Figma: área + o que fazer no embed ao clicar. */
+export type RunnerHotspot = { id: string } & Geom & {
+  action: "navigate" | "open_overlay" | "close_overlay" | "back"
+  targetNodeId: string | null
 }
 
 interface RunnerMission {
@@ -30,11 +41,17 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
   // figmaNodeId da tela → { figmaNodeId do frame rolável → origem/tam } (p/ heatmap)
   const scrollFrameGeomByScreen: Record<string, Record<string, Geom>> = {}
   // figmaNodeId da tela → hotspots desenhados no Beacon (coords normalizadas na tela)
-  const hotspotsByNode: Record<string, ({ id: string } & Geom)[]> = {}
+  const hotspotsByNode: Record<string, RunnerHotspot[]> = {}
+  for (const sc of screens) if (sc.figmaNodeId) screenToNode[sc.id] = sc.figmaNodeId
   for (const sc of screens) {
     if (!sc.figmaNodeId) continue
     if (sc.hotspots?.length) {
-      hotspotsByNode[sc.figmaNodeId] = sc.hotspots.map((h) => ({ id: h.id, ...(h.coords as Geom) }))
+      hotspotsByNode[sc.figmaNodeId] = sc.hotspots.map((h) => ({
+        id: h.id,
+        ...(h.coords as Geom),
+        action: h.action ?? "navigate",
+        targetNodeId: h.targetScreenId ? screenToNode[h.targetScreenId] ?? null : null,
+      }))
     }
     screenByNode[sc.figmaNodeId] = { id: sc.id, w: sc.width, h: sc.height }
     screenToNode[sc.id] = sc.figmaNodeId

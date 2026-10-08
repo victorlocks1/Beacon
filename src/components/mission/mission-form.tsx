@@ -49,6 +49,7 @@ export interface Screen {
   height: number
   scroll: "none" | "vertical" | "horizontal" | "both"
   figmaNodeId?: string | null
+  scrollFrames?: unknown // geometria dos frames roláveis (Figma ao vivo)
   hotspots: Hotspot[]
   scrollRegions?: {
     id: string
@@ -310,6 +311,8 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
                   figmaNodeId: s.figmaNodeId ?? null,
                   width: s.width,
                   height: s.height,
+                  scrollFrames: s.scrollFrames,
+                  hotspots: s.hotspots,
                 }))}
                 startScreenId={startScreenId || null}
                 paths={paths}

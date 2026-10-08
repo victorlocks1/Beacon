@@ -1,10 +1,12 @@
 "use client"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
-import { figmaEmbedUrl } from "@/lib/figma-embed"
+import { figmaEmbedUrl, runEmbedHotspotAction } from "@/lib/figma-embed"
+import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
+import { clickContentPoint, hotspotAt } from "@/lib/figma-clicks"
 import { frameLayout, type DeviceType } from "@/lib/device"
 import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
@@ -15,6 +17,14 @@ interface RecorderScreen {
   figmaNodeId: string | null
   width: number
   height: number
+  scrollFrames?: unknown
+  // hotspots desenhados no Beacon: no embed, clicar neles navega como no teste
+  hotspots?: {
+    id: string
+    coords: unknown
+    action?: "navigate" | "open_overlay" | "close_overlay" | "back"
+    targetScreenId?: string | null
+  }[]
 }
 
 interface Props {
@@ -32,6 +42,16 @@ interface Props {
 export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId, paths, onChange }: Props) {
   const [recording, setRecording] = useState<string[] | null>(null)
   const [embedSrc, setEmbedSrc] = useState<string | null>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  // mesmos mapas do runner do testador (tela ↔ node do Figma, hotspots do Beacon)
+  const maps = useMemo(
+    () => buildFigmaRunnerMaps(screens.map((s) => ({ ...s, scrollFrames: s.scrollFrames ?? null })), []),
+    [screens]
+  )
+  const mapsRef = useRef(maps)
+  useEffect(() => {
+    mapsRef.current = maps
+  }, [maps])
 
   const screenById = new Map(screens.map((s) => [s.id, s]))
   // figmaNodeId → screenId (para traduzir os eventos do embed)
@@ -75,10 +95,47 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
   // Escuta os eventos do embed enquanto grava e monta o caminho.
   useEffect(() => {
     if (!recording) return
+    // press pendente: um clique = press + release quase sem movimento
+    let pending: { t: number; x: number; y: number; ox: number; oy: number; handled: boolean; nodeId?: string; sfId?: string } | null = null
     function onMsg(e: MessageEvent) {
       if (!e.origin.includes("figma.com")) return
       const d = e.data
-      if (!d || typeof d !== "object" || d.type !== "PRESENTED_NODE_CHANGED") return
+      if (!d || typeof d !== "object") return
+      // Clique num hotspot do Beacon (onde o Figma não tem interação): navega o
+      // protótipo, igual ao que acontece no teste. A troca de tela resultante
+      // chega como PRESENTED_NODE_CHANGED e entra no caminho.
+      if (d.type === "MOUSE_PRESS_OR_RELEASE") {
+        const pos = d.data?.nearestScrollingFrameMousePosition ?? d.data?.targetNodeMousePosition ?? { x: 0, y: 0 }
+        const off = d.data?.nearestScrollingFrameOffset ?? { x: 0, y: 0 }
+        const tNow = performance.now()
+        if (pending && tNow - pending.t < 700) {
+          const p = pending
+          pending = null
+          if (Math.abs(pos.x - p.x) > 14 || Math.abs(pos.y - p.y) > 14) return // arraste
+          const m = mapsRef.current
+          const scr = p.nodeId ? m.screenByNode[p.nodeId] : undefined
+          if (!scr || !p.nodeId || p.handled) return
+          const origin = p.sfId ? m.scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
+          const hit = hotspotAt(
+            clickContentPoint({ vx: p.x, vy: p.y, ox: p.ox, oy: p.oy }, scr, origin),
+            m.hotspotsByNode[p.nodeId]
+          )
+          if (hit) runEmbedHotspotAction(iframeRef.current, hit)
+        } else {
+          pending = {
+            t: tNow,
+            x: pos.x ?? 0,
+            y: pos.y ?? 0,
+            ox: off.x ?? 0,
+            oy: off.y ?? 0,
+            handled: d.data?.handled !== false,
+            nodeId: d.data?.presentedNodeId,
+            sfId: d.data?.nearestScrollingFrameId,
+          }
+        }
+        return
+      }
+      if (d.type !== "PRESENTED_NODE_CHANGED") return
       const nodeId = d.data?.presentedNodeId as string | undefined
       const screenId = nodeId ? screenByNode[nodeId] : undefined
       if (!screenId) return
@@ -143,6 +200,7 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
             >
               {embedSrc && (
                 <iframe
+                  ref={iframeRef}
                   title="Protótipo"
                   src={embedSrc}
                   allowFullScreen
