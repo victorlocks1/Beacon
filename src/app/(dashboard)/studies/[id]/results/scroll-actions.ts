@@ -5,6 +5,8 @@ import {
   extractCountedClicks,
   clickContentPoint,
   hotspotAt,
+  CLICK_RULE_V2_FROM,
+  HOTSPOT_RULE_FROM,
   type CountedClick,
   type HotspotRect,
   type RawFigmaEvent,
@@ -40,12 +42,15 @@ function makeIsHandled(screen: {
     ((screen.scrollFrames as ScrollFrameGeom[] | null) ?? []).map((f) => [f.figmaId, { x: f.x, y: f.y }])
   )
   const size = { w: screen.width, h: screen.height }
-  return (cl: CountedClick) =>
+  // `hotspotRule` = a sessão é posterior a HOTSPOT_RULE_FROM (antes disso vale só
+  // o que o Figma informou — não recalculamos testes já realizados).
+  return (cl: CountedClick, hotspotRule: boolean) =>
     cl.handled ||
-    !!hotspotAt(
-      clickContentPoint(cl, size, cl.scrollFrameId ? origins.get(cl.scrollFrameId) : null),
-      hotspots
-    )
+    (hotspotRule &&
+      !!hotspotAt(
+        clickContentPoint(cl, size, cl.scrollFrameId ? origins.get(cl.scrollFrameId) : null),
+        hotspots
+      ))
 }
 
 // Heatmap FIEL de uma OVERLAY (bottomsheet/modal): o embed manda a posição do
@@ -88,11 +93,20 @@ export async function getOverlayPoints(
     )
     const raw = await prisma.figmaEventLog.findMany({
       where: { missionId, session: { studyId } },
-      select: { sessionId: true, type: true, data: true, clientTsMs: true, missionId: true },
+      select: {
+        sessionId: true,
+        type: true,
+        data: true,
+        clientTsMs: true,
+        missionId: true,
+        session: { select: { startedAt: true } },
+      },
       orderBy: { clientTsMs: "asc" },
     })
+    const startedAt = new Map<string, Date>()
     const bySession = new Map<string, RawFigmaEvent[]>()
     for (const e of raw) {
+      startedAt.set(e.sessionId, e.session.startedAt)
       const arr = bySession.get(e.sessionId) ?? []
       arr.push({
         type: e.type,
@@ -106,8 +120,13 @@ export async function getOverlayPoints(
     const h = screen.height || 1
     const isHandled = makeIsHandled(screen)
     const points: OverlayPoint[] = []
-    for (const events of bySession.values()) {
-      for (const cl of extractCountedClicks(events, (id) => screenNodes.has(id))) {
+    for (const [sid, events] of bySession) {
+      // cada sessão é lida com a regra vigente quando ela aconteceu
+      const at = startedAt.get(sid) ?? new Date(0)
+      const hotspotRule = at >= HOTSPOT_RULE_FROM
+      for (const cl of extractCountedClicks(events, (id) => screenNodes.has(id), {
+        legacyPairing: at < CLICK_RULE_V2_FROM,
+      })) {
         if (cl.presentedNode !== screen.figmaNodeId || !cl.targetNode) continue
         const origin = boxes[cl.targetNode]
         if (!origin) continue // elemento não é da overlay (ex.: tela de trás) → descarta
@@ -117,7 +136,7 @@ export async function getOverlayPoints(
         points.push({
           x: Math.max(0, Math.min(1, x)),
           y: Math.max(0, Math.min(1, y)),
-          type: isHandled(cl) ? "click" : "misclick",
+          type: isHandled(cl, hotspotRule) ? "click" : "misclick",
         })
       }
     }
@@ -175,11 +194,20 @@ export async function getScrollStrips(
     // eventos crus da missão, por sessão, em ordem de tempo
     const raw = await prisma.figmaEventLog.findMany({
       where: { missionId, session: { studyId } },
-      select: { sessionId: true, type: true, data: true, clientTsMs: true, missionId: true },
+      select: {
+        sessionId: true,
+        type: true,
+        data: true,
+        clientTsMs: true,
+        missionId: true,
+        session: { select: { startedAt: true } },
+      },
       orderBy: { clientTsMs: "asc" },
     })
+    const startedAt = new Map<string, Date>()
     const bySession = new Map<string, RawFigmaEvent[]>()
     for (const e of raw) {
+      startedAt.set(e.sessionId, e.session.startedAt)
       const arr = bySession.get(e.sessionId) ?? []
       arr.push({
         type: e.type,
@@ -192,8 +220,13 @@ export async function getScrollStrips(
 
     const isHandled = makeIsHandled(screen)
     const pointsByFrame = new Map<string, StripPoint[]>()
-    for (const events of bySession.values()) {
-      const clicks = extractCountedClicks(events, (id) => screenNodes.has(id))
+    for (const [sid, events] of bySession) {
+      // cada sessão é lida com a regra vigente quando ela aconteceu
+      const at = startedAt.get(sid) ?? new Date(0)
+      const hotspotRule = at >= HOTSPOT_RULE_FROM
+      const clicks = extractCountedClicks(events, (id) => screenNodes.has(id), {
+        legacyPairing: at < CLICK_RULE_V2_FROM,
+      })
       for (const cl of clicks) {
         if (cl.presentedNode !== screen.figmaNodeId || !cl.scrollFrameId) continue
         const strip = stripById.get(cl.scrollFrameId)
@@ -202,7 +235,7 @@ export async function getScrollStrips(
         const cy = (cl.vy + cl.oy) / strip.contentH
         if (cx < -0.02 || cx > 1.02 || cy < -0.02 || cy > 1.02) continue
         const arr = pointsByFrame.get(strip.figmaId) ?? []
-        arr.push({ x: Math.max(0, Math.min(1, cx)), y: Math.max(0, Math.min(1, cy)), handled: isHandled(cl) })
+        arr.push({ x: Math.max(0, Math.min(1, cx)), y: Math.max(0, Math.min(1, cy)), handled: isHandled(cl, hotspotRule) })
         pointsByFrame.set(strip.figmaId, arr)
       }
     }

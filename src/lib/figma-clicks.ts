@@ -14,6 +14,19 @@
 export const CLICK_PAIR_MS = 350
 export const DRAG_PX = 14
 
+// ── Vigência das regras ──
+// Números de testes já realizados NÃO são recalculados: cada sessão é lida com
+// a regra que estava valendo quando ela aconteceu. Ao mudar uma regra de
+// contagem, registre aqui a data em que a nova versão entrou no ar.
+//
+// Até esta data o runner exigia um PAR de eventos (≤700ms) para contar um clique
+// e descartava os isolados; a partir dela, cada evento é um clique.
+export const CLICK_RULE_V2_FROM = new Date("2026-10-09T13:38:55Z")
+// A partir desta data, clique dentro de um hotspot do Beacon conta como clique
+// (não misclick) mesmo sem interação no Figma.
+export const HOTSPOT_RULE_FROM = new Date("2026-10-08T18:11:28Z")
+const LEGACY_PAIR_MS = 700
+
 type Pt = { x: number; y: number }
 export type RawFigmaEvent = {
   type: string
@@ -51,8 +64,13 @@ function asPt(v: unknown): Pt | null {
  */
 export function extractCountedClicks(
   events: RawFigmaEvent[],
-  isScreen: (nodeId: string) => boolean
+  isScreen: (nodeId: string) => boolean,
+  // true = sessão anterior a CLICK_RULE_V2_FROM: reproduz a regra antiga (par de
+  // eventos; isolados descartados), para o relatório bater com o que foi gravado.
+  opts: { legacyPairing?: boolean } = {}
 ): CountedClick[] {
+  const legacy = !!opts.legacyPairing
+  const pairMs = legacy ? LEGACY_PAIR_MS : CLICK_PAIR_MS
   const out: CountedClick[] = []
   type Pending = {
     t: number
@@ -92,7 +110,7 @@ export function extractCountedClicks(
   for (const e of events) {
     // estado reseta por missão (igual ao runner ao trocar de tarefa)
     if (e.missionId !== curMission) {
-      if (pending) emit(pending) // clique isolado ainda em aberto
+      if (pending && !legacy) emit(pending) // clique isolado ainda em aberto
       curMission = e.missionId
       pending = null
       postNav = 0
@@ -115,7 +133,7 @@ export function extractCountedClicks(
       const tNow = e.clientTsMs
 
       if (!pending && tNow - postNav < 250) continue
-      if (pending && tNow - pending.t < CLICK_PAIR_MS) {
+      if (pending && tNow - pending.t < pairMs) {
         // 2º evento do MESMO gesto: longe = arraste (não é clique); perto = o
         // mesmo clique (conta uma vez).
         const p = pending
@@ -124,7 +142,7 @@ export function extractCountedClicks(
         emit(p)
         continue
       }
-      if (pending) emit(pending) // o anterior ficou sozinho → era um clique
+      if (pending && !legacy) emit(pending) // o anterior ficou sozinho → era um clique
       pending = {
         t: tNow,
         x: px,
@@ -154,7 +172,7 @@ export function extractCountedClicks(
       }
     }
   }
-  if (pending) emit(pending) // último clique isolado
+  if (pending && !legacy) emit(pending) // último clique isolado
   return out
 }
 
