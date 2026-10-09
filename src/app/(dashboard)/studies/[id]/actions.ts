@@ -767,7 +767,10 @@ export async function moveBlockAction(
 }
 
 // Persiste a ordem completa da sequência (usado pelo drag-and-drop).
-export async function reorderBlocksAction(studyId: string, orderedIds: string[]) {
+export async function reorderBlocksAction(
+  studyId: string,
+  orderedIds: string[]
+): Promise<{ ok: boolean }> {
   const { study } = await getStudyOrThrow(studyId)
   blockIfLive(study, studyId, "missions")
 
@@ -778,10 +781,12 @@ export async function reorderBlocksAction(studyId: string, orderedIds: string[])
   const validIds = new Set(blocks.map((b) => b.id))
   const ids = orderedIds.filter((id) => validIds.has(id))
   // Precisa conter exatamente todos os blocos do estudo (nada a mais/menos).
-  if (ids.length !== blocks.length) return
+  if (ids.length !== blocks.length) return { ok: false }
 
-  await Promise.all(
+  // tudo ou nada: uma ordem salva pela metade embaralharia a sequência
+  await prisma.$transaction(
     ids.map((id, i) => prisma.block.update({ where: { id }, data: { order: i } }))
   )
   revalidatePath(`/studies/${studyId}`)
+  return { ok: true }
 }

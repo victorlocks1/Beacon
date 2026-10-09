@@ -139,7 +139,9 @@ export function SequenceList({
     const ordered = items.map((b) => b.id)
     // Só grava se a ordem mudou de fato
     if (ordered.join(",") !== signature) {
-      startTransition(() => reorderBlocksAction(studyId, ordered))
+      startTransition(async () => {
+        await reorderBlocksAction(studyId, ordered)
+      })
     }
   }
 
