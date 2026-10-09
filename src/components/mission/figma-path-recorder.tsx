@@ -6,7 +6,7 @@ import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
 import { figmaEmbedUrl, runEmbedHotspotAction, actsOnPress } from "@/lib/figma-embed"
 import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
-import { clickContentPoint, hotspotAt } from "@/lib/figma-clicks"
+import { clickContentPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX } from "@/lib/figma-clicks"
 import { frameLayout, type DeviceType } from "@/lib/device"
 import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
@@ -98,7 +98,7 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
   useEffect(() => {
     if (!recording) return
     // press pendente: um clique = press + release quase sem movimento
-    type Press = { t: number; x: number; y: number; ox: number; oy: number; handled: boolean; acted?: boolean; nodeId?: string; sfId?: string }
+    type Press = { t: number; x: number; y: number; ox: number; oy: number; handled: boolean; acted?: boolean; timer?: ReturnType<typeof setTimeout>; nodeId?: string; sfId?: string }
     let pending: Press | null = null
     let navTimer: ReturnType<typeof setTimeout> | null = null
     // executa (uma vez por clique) a ação do hotspot do Beacon sob o press
@@ -130,12 +130,16 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
         const pos = d.data?.nearestScrollingFrameMousePosition ?? d.data?.targetNodeMousePosition ?? { x: 0, y: 0 }
         const off = d.data?.nearestScrollingFrameOffset ?? { x: 0, y: 0 }
         const tNow = performance.now()
-        if (pending && tNow - pending.t < 700) {
+        // O Figma manda UM evento por clique; um 2º logo em seguida, em outra
+        // posição, é o fim de um arraste.
+        if (pending && tNow - pending.t < CLICK_PAIR_MS) {
           const p = pending
           pending = null
-          if (Math.abs(pos.x - p.x) > 14 || Math.abs(pos.y - p.y) > 14) return // arraste
-          act(p) // toque: age no soltar (com mouse já agiu no pressionar)
+          if (p.timer) clearTimeout(p.timer)
+          if (Math.abs(pos.x - p.x) > DRAG_PX || Math.abs(pos.y - p.y) > DRAG_PX) return // arraste
+          act(p)
         } else {
+          if (pending?.timer) clearTimeout(pending.timer)
           pending = {
             t: tNow,
             x: pos.x ?? 0,
@@ -146,8 +150,10 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
             nodeId: d.data?.presentedNodeId,
             sfId: d.data?.nearestScrollingFrameId,
           }
-          // com mouse, navega já no pressionar — sem esperar o soltar
-          if (actsOnPress()) act(pending)
+          // mouse/trackpad: age na hora. Toque: espera o bastante p/ descartar arraste.
+          const press = pending
+          if (actsOnPress()) act(press)
+          else press.timer = setTimeout(() => act(press), CLICK_PAIR_MS)
         }
         return
       }

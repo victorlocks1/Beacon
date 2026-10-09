@@ -14,7 +14,7 @@ import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 import { type PathStepDef } from "@/lib/path"
 import { frameLayout } from "@/lib/device"
-import { clickContentPoint, hotspotAt } from "@/lib/figma-clicks"
+import { clickContentPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX } from "@/lib/figma-clicks"
 
 interface WelcomeInfo {
   title: string
@@ -181,6 +181,10 @@ export function FigmaFlowRunner({
       handled: boolean
       // o hotspot do Beacon sob este press já mandou o protótipo navegar
       acted?: boolean
+      // este clique já foi contado (não contar de novo no 2º evento/navegação)
+      counted?: boolean
+      // em toque: espera curta para descartar arraste antes de contar
+      timer?: ReturnType<typeof setTimeout>
       nodeId: string | undefined
       // id do frame ROLÁVEL sob o clique (nearestScrollingFrameId). A posição do
       // clique vem relativa ao viewport DESSE frame; somamos a origem dele na tela
@@ -429,6 +433,8 @@ export function FigmaFlowRunner({
         oy: number
         handled: boolean
         acted?: boolean
+        counted?: boolean
+        timer?: ReturnType<typeof setTimeout>
         nodeId: string | undefined
         sfId: string | undefined
       }
@@ -522,34 +528,47 @@ export function FigmaFlowRunner({
           return
         }
 
-        if (pending && tNow - pending.t < 700) {
-          // release do gesto na MESMA tela (navegação é tratada no
-          // PRESENTED_NODE_CHANGED). Movimento grande = arraste (scroll) → descarta.
+        // O Figma manda UM evento por clique. Cada evento é um clique, salvo se
+        // outro chegar logo em seguida em outra posição (fim de um arraste).
+        const countOnce = (p: Press) => {
+          if (p.counted) return
+          p.counted = true
+          countClick(p)
+        }
+        if (pending && tNow - pending.t < CLICK_PAIR_MS) {
+          // 2º evento do MESMO gesto: longe = arraste (não é clique); perto = o
+          // mesmo clique, que conta uma vez só.
           pendingPressRef.current = null
-          if (Math.abs(px - pending.x) > 14 || Math.abs(py - pending.y) > 14) {
-            return
-          }
-          countClick(pending)
+          if (pending.timer) clearTimeout(pending.timer)
+          const moved = Math.abs(px - pending.x) > DRAG_PX || Math.abs(py - pending.y) > DRAG_PX
+          if (!moved) countOnce(pending)
+          return
+        }
+        if (pending) {
+          // o anterior ficou sozinho → era um clique (em toque o timer já contou)
+          if (pending.timer) clearTimeout(pending.timer)
+          countOnce(pending)
+        }
+        const press: NonNullable<typeof pendingPressRef.current> = {
+          t: tNow,
+          x: px,
+          y: py,
+          ox: off?.x ?? 0,
+          oy: off?.y ?? 0,
+          handled: d.data?.handled !== false,
+          nodeId: d.data?.presentedNodeId as string | undefined,
+          sfId,
+        }
+        pendingPressRef.current = press
+        if (actsOnPress()) {
+          // mouse/trackpad: não existe arraste para rolar → o clique vale na hora
+          // (conclui a tarefa / navega sem esperar nada).
+          countOnce(press)
         } else {
-          // início de um gesto (press): guarda; o clique é contado no release ou,
-          // se navegar antes, no PRESENTED_NODE_CHANGED.
-          pendingPressRef.current = {
-            t: tNow,
-            x: px,
-            y: py,
-            ox: off?.x ?? 0,
-            oy: off?.y ?? 0,
-            handled: d.data?.handled !== false,
-            nodeId: d.data?.presentedNodeId as string | undefined,
-            sfId,
-          }
-          // Com mouse, age JÁ no pressionar (sem esperar o soltar): a navegação
-          // fica imediata. O clique em si continua sendo contado no soltar.
-          if (actsOnPress()) {
-            const press = pendingPressRef.current
-            const hit = hotspotUnder(press)
-            if (hit && !isGoalHotspot(hit.id)) actOnHotspot(press, hit)
-          }
+          // toque: espera o suficiente para descartar um arraste (rolagem) e conta
+          press.timer = setTimeout(() => {
+            if (missionRef.current === missionId) countOnce(press)
+          }, CLICK_PAIR_MS)
         }
       }
 
@@ -562,8 +581,13 @@ export function FigmaFlowRunner({
           if (changed) {
             // o press pendente foi o clique que disparou esta navegação → conta
             // na tela de ORIGEM (antes de empurrar a nova tela no caminho).
-            if (pendingPressRef.current) {
-              countClick(pendingPressRef.current)
+            const pp = pendingPressRef.current
+            if (pp) {
+              if (pp.timer) clearTimeout(pp.timer)
+              if (!pp.counted) {
+                pp.counted = true
+                countClick(pp)
+              }
               pendingPressRef.current = null
               postNavRef.current = now()
             }

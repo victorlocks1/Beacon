@@ -3,8 +3,16 @@
 // posição no viewport do frame rolável E o offset de scroll. Isso permite calcular
 // a posição do clique no CONTEÚDO (viewport + offset) para o heatmap "desenrolado".
 //
-// Mantém a MESMA lógica do runner (janela de 700ms, ignore de 250ms pós-navegação,
-// descarte de arraste > 14px) — validado contra os Event reais com ~1,4% de desvio.
+// Mantém a MESMA lógica do runner (clique = evento isolado; janela de
+// CLICK_PAIR_MS para detectar arraste; ignore de 250ms pós-navegação).
+
+// O embed do Figma manda, na prática, UM evento MOUSE_PRESS_OR_RELEASE por
+// clique (medido nos logs: ~68% dos eventos chegam isolados). Um segundo evento
+// só aparece logo em seguida quando é o fim de um arraste (posição diferente)
+// ou um eco do mesmo clique (mesma posição). Por isso: cada evento É um clique,
+// a menos que outro chegue dentro de CLICK_PAIR_MS em outra posição (arraste).
+export const CLICK_PAIR_MS = 350
+export const DRAG_PX = 14
 
 type Pt = { x: number; y: number }
 export type RawFigmaEvent = {
@@ -84,6 +92,7 @@ export function extractCountedClicks(
   for (const e of events) {
     // estado reseta por missão (igual ao runner ao trocar de tarefa)
     if (e.missionId !== curMission) {
+      if (pending) emit(pending) // clique isolado ainda em aberto
       curMission = e.missionId
       pending = null
       postNav = 0
@@ -106,26 +115,29 @@ export function extractCountedClicks(
       const tNow = e.clientTsMs
 
       if (!pending && tNow - postNav < 250) continue
-      if (pending && tNow - pending.t < 700) {
+      if (pending && tNow - pending.t < CLICK_PAIR_MS) {
+        // 2º evento do MESMO gesto: longe = arraste (não é clique); perto = o
+        // mesmo clique (conta uma vez).
         const p = pending
         pending = null
-        if (Math.abs(px - p.x) > 14 || Math.abs(py - p.y) > 14) continue // arraste
+        if (Math.abs(px - p.x) > DRAG_PX || Math.abs(py - p.y) > DRAG_PX) continue
         emit(p)
-      } else {
-        pending = {
-          t: tNow,
-          x: px,
-          y: py,
-          ox: off.x,
-          oy: off.y,
-          tgt: tgtId,
-          tx: tgtPos?.x ?? px,
-          ty: tgtPos?.y ?? py,
-          handled,
-          nodeId: presentedId,
-          sfId,
-          m: e.missionId,
-        }
+        continue
+      }
+      if (pending) emit(pending) // o anterior ficou sozinho → era um clique
+      pending = {
+        t: tNow,
+        x: px,
+        y: py,
+        ox: off.x,
+        oy: off.y,
+        tgt: tgtId,
+        tx: tgtPos?.x ?? px,
+        ty: tgtPos?.y ?? py,
+        handled,
+        nodeId: presentedId,
+        sfId,
+        m: e.missionId,
       }
     } else if (e.type === "PRESENTED_NODE_CHANGED") {
       const nodeId = (d.presentedNodeId as string | undefined) || undefined
@@ -142,6 +154,7 @@ export function extractCountedClicks(
       }
     }
   }
+  if (pending) emit(pending) // último clique isolado
   return out
 }
 
