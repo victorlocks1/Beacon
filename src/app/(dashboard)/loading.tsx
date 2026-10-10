@@ -1,19 +1,19 @@
-// Mostrado IMEDIATAMENTE ao clicar num link do painel, enquanto o servidor
-// busca os dados da próxima página. Sem isso, o clique parece "não ter pego":
-// a tela antiga fica parada até a nova chegar inteira.
+import { Skeleton, LoadingRegion } from "@/components/ui/skeleton"
+
+// Lista de projetos (e padrão do painel): título, abas e grade de cartões.
 export default function DashboardLoading() {
   return (
-    <div className="max-w-[1600px] mx-auto animate-pulse" aria-busy="true" aria-label="Carregando">
+    <LoadingRegion className="max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between mb-8">
-        <div className="h-9 w-56 rounded-xl bg-surface-container-high" />
-        <div className="h-10 w-36 rounded-full bg-surface-container-high" />
+        <Skeleton className="h-9 w-48" />
+        <Skeleton className="h-10 w-36 rounded-full" />
       </div>
-      <div className="h-10 w-64 rounded-lg bg-surface-container-high mb-8" />
+      <Skeleton className="h-10 w-64 mb-8" />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }, (_, i) => (
-          <div key={i} className="h-36 rounded-3xl border border-outline-variant bg-surface-container-low" />
+          <Skeleton key={i} className="h-36 rounded-3xl" />
         ))}
       </div>
-    </div>
+    </LoadingRegion>
   )
 }
