@@ -458,15 +458,17 @@ export function FigmaImportDialog({
   )
 }
 
-// O teste roda no protótipo do Figma embutido; se o arquivo não for público, o
-// participante vê a tela de login do Figma em vez do protótipo.
+// Arquivo restrito (login da empresa ou senha): o Beacon roda o teste em RÉPLICA
+// — as telas viram imagens e a navegação usa os hotspots — para o participante
+// não precisar de acesso ao Figma.
 function PrivateFileWarning() {
   return (
-    <div className="rounded-xl border border-error/30 bg-error-container px-4 py-3 text-left text-body-small text-on-error-container">
-      <strong className="font-medium">Este arquivo do Figma não é público.</strong> Quem não estiver
-      logado no Figma (com acesso ao arquivo) verá um pedido de login em vez do protótipo e não
-      conseguirá fazer o teste. No Figma, abra <strong className="font-medium">Share</strong> e escolha{" "}
-      <strong className="font-medium">Anyone with the link — can view</strong>, sem senha.
+    <div className="rounded-xl border border-outline-variant bg-surface-container-high/50 px-4 py-3 text-left text-body-small text-on-surface-variant">
+      <strong className="font-medium text-on-surface">Este arquivo do Figma é restrito</strong> (pede
+      login ou senha). Para os participantes não precisarem de acesso ao Figma, o Beacon vai rodar o
+      teste nas <strong className="font-medium text-on-surface">imagens das telas com os hotspots</strong>,
+      sem o protótipo ao vivo. Confira em Revisão se a navegação ficou como você espera — animações e
+      rolagens internas do Figma não são reproduzidas.
     </div>
   )
 }

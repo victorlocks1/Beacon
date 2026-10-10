@@ -19,6 +19,7 @@ import { deleteScreenAction, moveScreenAction } from "./actions"
 import { StudyBuilder, type BuilderBlock } from "@/components/study/builder/study-builder"
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
+import { runsLiveFigma } from "@/lib/figma-access"
 import { susStatementsFor, SUS_STATEMENTS, SUS_OPTIONS } from "@/lib/sus"
 import { asqStatementsFor, ASQ_STATEMENTS, ASQ_ANCHORS, ASQ_LABELS } from "@/lib/sum"
 import {
@@ -163,7 +164,9 @@ export default async function StudyPage({
       targetScreenId: h.targetScreenId,
     })),
   }))
-  const builderFigmaKey = study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null
+  // Chave do Figma só quando o teste roda AO VIVO (arquivo público). Em réplica
+  // (arquivo restrito) o construtor usa o player de imagens, como o testador.
+  const builderFigmaKey = (await runsLiveFigma(study.prototype)) ? study.prototype!.figmaFileKey : null
   const susLang = (study.language ?? "pt") === "es" ? "es" : "pt"
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório

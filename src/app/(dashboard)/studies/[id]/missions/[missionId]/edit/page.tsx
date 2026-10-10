@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth"
+import { runsLiveFigma } from "@/lib/figma-access"
 import { prisma } from "@/lib/db"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
@@ -81,7 +82,7 @@ export default async function EditMissionPage({
         missionId={missionId}
         initial={initial}
         deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-        figmaFileKey={study.prototype?.source === "figma" ? study.prototype.figmaFileKey : null}
+        figmaFileKey={(await runsLiveFigma(study.prototype)) ? study.prototype!.figmaFileKey : null}
         screens={screens.map((s) => ({
           id: s.id,
           name: s.name,

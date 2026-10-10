@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TestRunner, type Step } from "@/components/test/test-runner"
 import { FigmaFlowRunner } from "@/components/test/figma-flow-runner"
-import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
+import { runsLiveFigma } from "@/lib/figma-access"
 import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
 import { buildExactPaths } from "@/lib/path"
 import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
@@ -136,7 +136,8 @@ export default async function ReviewPage({
   // Protótipo VIVO do Figma: a revisão roda no MESMO runner do testador (embed),
   // senão as telas — que não têm imagem no import ao vivo — apareceriam em branco.
   const proto = study.prototype
-  const isFigma = proto?.source === "figma" && !!proto.figmaFileKey
+  // mesma decisão do link do testador: público → ao vivo; restrito → réplica
+  const isFigma = await runsLiveFigma(proto)
   const figmaMaps = isFigma
     ? buildFigmaRunnerMaps(
         screens,
@@ -245,12 +246,7 @@ export default async function ReviewPage({
             {/* Fluxo inteiro em modo revisão: boas-vindas → tarefas → perguntas →
                 obrigado. Não grava nenhum dado (preview). */}
             <ReviewStage>
-              {figmaMaps && !FIGMA_EMBED_CLIENT_ID ? (
-                <p className="py-24 px-6 text-center text-body-medium text-on-surface-variant">
-                  O protótipo do Figma não pôde ser carregado: falta configurar a integração de
-                  embed (NEXT_PUBLIC_FIGMA_EMBED_CLIENT_ID) neste ambiente.
-                </p>
-              ) : figmaMaps ? (
+              {figmaMaps ? (
                 <FigmaFlowRunner
                   token=""
                   preview

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db"
 import { notFound } from "next/navigation"
 import { TestRunner } from "@/components/test/test-runner"
 import { FigmaFlowRunner } from "@/components/test/figma-flow-runner"
-import { FIGMA_EMBED_CLIENT_ID } from "@/lib/figma-embed"
+import { runsLiveFigma } from "@/lib/figma-access"
 import { tt, type Lang } from "@/lib/i18n"
 import { susStatementsFor } from "@/lib/sus"
 import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
@@ -169,7 +169,9 @@ export default async function TestRunPage({
   }
 
   // ─── Protótipo VIVO do Figma (embed) é o padrão para estudos do Figma ───
-  const canEmbed = proto?.source === "figma" && !!proto.figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
+  // Arquivo público → embed vivo. Arquivo restrito (login/senha) → RÉPLICA: o
+  // mesmo teste roda nas imagens das telas + hotspots, sem depender do Figma.
+  const canEmbed = await runsLiveFigma(proto)
   if (canEmbed) {
     const maps = buildFigmaRunnerMaps(
       screens,
@@ -196,12 +198,13 @@ export default async function TestRunPage({
     )
   }
 
-  if (proto?.source === "figma" && screens.every((sc) => !sc.imageUrl)) {
+  // Réplica precisa das imagens das telas (baixadas na importação).
+  if (proto?.source === "figma" && screens.some((sc) => !sc.imageUrl)) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-surface">
         <p className="max-w-md text-center text-body-medium text-on-surface-variant">
-          Este protótipo do Figma não pôde ser carregado (integração de embed não configurada).
-          Avise quem compartilhou o link.
+          Este teste ainda não está pronto: as telas do protótipo não foram carregadas. Avise quem
+          compartilhou o link.
         </p>
       </div>
     )

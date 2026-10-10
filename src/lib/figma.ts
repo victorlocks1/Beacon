@@ -168,17 +168,6 @@ async function figmaApi<T>(token: string, path: string, attempt = 0): Promise<T>
   return res.json() as Promise<T>
 }
 
-/**
- * Quem pode ABRIR o arquivo pelo link ("view"/"edit" = qualquer pessoa;
- * "org_view"/"org_edit" = só a organização; "inherit" = restrito). O protótipo
- * embutido obedece a isso: se não for público, o participante vê a tela de
- * login do Figma. Retorna null se o Figma não informar.
- */
-export async function figmaGetLinkAccess(token: string, fileKey: string): Promise<string | null> {
-  const file = await figmaApi<{ linkAccess?: string }>(token, `/v1/files/${fileKey}?depth=1`)
-  return file.linkAccess ?? null
-}
-
 export async function figmaGetMe(token: string): Promise<{ id: string; handle: string }> {
   return figmaApi(token, "/v1/me")
 }

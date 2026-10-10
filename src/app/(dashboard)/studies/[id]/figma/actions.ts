@@ -5,11 +5,11 @@ import { supabase, removeStorageByUrls } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { encryptSecret, decryptSecret } from "@/lib/crypto"
+import { figmaIsPublic } from "@/lib/figma-access"
 import {
   parseFigmaUrl,
   figmaGetMe,
   figmaGetImages,
-  figmaGetLinkAccess,
   collectImportPlan,
   type ImportScreen,
 } from "@/lib/figma"
@@ -109,8 +109,8 @@ type InspectResult =
       fileKey: string
       nodeId: string | null
       screens: ImportScreen[]
-      // false = o arquivo NÃO abre para qualquer pessoa com o link (participantes
-      // verão o login do Figma); null = o Figma não informou
+      // false = o arquivo NÃO abre para qualquer pessoa com o link → o teste roda
+      // em réplica (imagens + hotspots); null = não deu para consultar o Figma
       publicLink: boolean | null
     }
   | { ok: false; error: string }
@@ -146,14 +146,8 @@ export async function figmaInspectAction(studyId: string, url: string): Promise<
     } catch {
       /* sem miniaturas desta vez */
     }
-    // o protótipo embutido só abre sem login se o link do arquivo for público
-    let publicLink: boolean | null = null
-    try {
-      const access = await figmaGetLinkAccess(token, fileKey)
-      if (access) publicLink = access === "view" || access === "edit"
-    } catch {
-      /* sem essa informação desta vez */
-    }
+    // público → teste ao vivo; restrito → réplica (imagens + hotspots)
+    const publicLink = await figmaIsPublic(fileKey)
     return { ok: true, fileKey, nodeId, screens, publicLink }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
