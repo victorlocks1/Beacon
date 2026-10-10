@@ -1,6 +1,7 @@
 import { supabaseServer } from "@/lib/supabase-server"
 import { prisma } from "@/lib/db"
 import { redirect } from "next/navigation"
+import { cache } from "react"
 
 // Sessão no MESMO formato do NextAuth anterior: session.user.id = User.id do
 // Beacon. Assim todos os pontos que já usavam `auth()` continuam funcionando sem
@@ -10,7 +11,10 @@ export type Session = {
   user: { id: string; email: string; name: string | null }
 } | null
 
-export async function auth(): Promise<Session> {
+// `cache` do React: dentro de UMA mesma requisição, layout, página e actions
+// compartilham o resultado — antes cada um refazia a ida ao Supabase Auth e a
+// consulta do usuário (2–3 vezes por clique).
+export const auth = cache(async function auth(): Promise<Session> {
   const supabase = await supabaseServer()
   const {
     data: { user },
@@ -24,7 +28,7 @@ export async function auth(): Promise<Session> {
   })
   if (!dbUser) return null
   return { user: { id: dbUser.id, email: dbUser.email, name: dbUser.name } }
-}
+})
 
 export async function signOut(opts?: { redirectTo?: string }) {
   const supabase = await supabaseServer()

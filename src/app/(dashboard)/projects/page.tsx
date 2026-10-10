@@ -18,24 +18,26 @@ export default async function ProjectsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const projects = await prisma.project.findMany({
-    where: { ownerId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { studies: true } } },
-  })
+  // as duas consultas são independentes → em paralelo
+  const [projects, shared] = await Promise.all([
+    prisma.project.findMany({
+      where: { ownerId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      include: { _count: { select: { studies: true } } },
+    }),
+    prisma.studyMember.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      include: {
+        study: {
+          select: { id: true, title: true, owner: { select: { name: true, email: true } } },
+        },
+      },
+    }),
+  ])
 
   const active = projects.filter((p) => !p.archived)
   const archived = projects.filter((p) => p.archived)
-
-  const shared = await prisma.studyMember.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    include: {
-      study: {
-        select: { id: true, title: true, owner: { select: { name: true, email: true } } },
-      },
-    },
-  })
 
   return (
     <div className="max-w-[1600px] mx-auto">

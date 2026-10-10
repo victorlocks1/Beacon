@@ -33,7 +33,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // tudo, menos assets estáticos e imagens
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // tudo, menos assets estáticos, imagens e as rotas PÚBLICAS do testador
+    // (/t/... e /api/t/...): elas não usam login, então não precisam renovar a
+    // sessão a cada evento enviado durante o teste.
+    "/((?!_next/static|_next/image|favicon.ico|t/|api/t/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 }
