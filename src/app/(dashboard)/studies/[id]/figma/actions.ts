@@ -9,6 +9,7 @@ import {
   parseFigmaUrl,
   figmaGetMe,
   figmaGetImages,
+  figmaGetLinkAccess,
   collectImportPlan,
   type ImportScreen,
 } from "@/lib/figma"
@@ -103,7 +104,15 @@ function figmaTokenScopeHint(e: unknown): string | null {
 }
 
 type InspectResult =
-  | { ok: true; fileKey: string; nodeId: string | null; screens: ImportScreen[] }
+  | {
+      ok: true
+      fileKey: string
+      nodeId: string | null
+      screens: ImportScreen[]
+      // false = o arquivo NÃO abre para qualquer pessoa com o link (participantes
+      // verão o login do Figma); null = o Figma não informou
+      publicLink: boolean | null
+    }
   | { ok: false; error: string }
 
 export async function figmaInspectAction(studyId: string, url: string): Promise<InspectResult> {
@@ -137,7 +146,15 @@ export async function figmaInspectAction(studyId: string, url: string): Promise<
     } catch {
       /* sem miniaturas desta vez */
     }
-    return { ok: true, fileKey, nodeId, screens }
+    // o protótipo embutido só abre sem login se o link do arquivo for público
+    let publicLink: boolean | null = null
+    try {
+      const access = await figmaGetLinkAccess(token, fileKey)
+      if (access) publicLink = access === "view" || access === "edit"
+    } catch {
+      /* sem essa informação desta vez */
+    }
+    return { ok: true, fileKey, nodeId, screens, publicLink }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
     return {

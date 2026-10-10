@@ -124,6 +124,9 @@ export function FigmaFlowRunner({
   // um hotspot do Beacon acabou de mandar o protótipo navegar: sinal imediato de
   // "clique reconhecido" até a nova tela aparecer
   const [navigating, setNavigating] = useState(false)
+  // O Figma não entregou o protótipo (INITIAL_LOAD não chegou): quase sempre é a
+  // tela de login/senha do Figma no lugar do protótipo (arquivo não público).
+  const [embedBlocked, setEmbedBlocked] = useState(false)
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loadProgress, setLoadProgress] = useState(0) // 0..100 da barra de carregamento
   // conclusão da tarefa (feedback + botão continuar) antes de seguir
@@ -263,8 +266,13 @@ export function FigmaFlowRunner({
       })
     )
     epochRef.current = now()
+    setEmbedBlocked(false)
     // rede de segurança: se o INITIAL_LOAD não chegar, esconde o loader mesmo assim
-    const t = setTimeout(() => setEmbedLoaded(true), 10000)
+    // e avisa que o protótipo não abriu (o Figma mostra login/senha no lugar)
+    const t = setTimeout(() => {
+      setEmbedLoaded(true)
+      setEmbedBlocked(true)
+    }, 10000)
     return () => clearTimeout(t)
   }, [fileKey, currentStartNode, layout.scaling])
 
@@ -417,7 +425,10 @@ export function FigmaFlowRunner({
       })
 
       // protótipo pronto → esconde o loader
-      if (d.type === "INITIAL_LOAD") setEmbedLoaded(true)
+      if (d.type === "INITIAL_LOAD") {
+        setEmbedLoaded(true)
+        setEmbedBlocked(false)
+      }
 
       if (!startedRef.current || !missionRef.current) return
       const missionId = missionRef.current
@@ -985,6 +996,25 @@ export function FigmaFlowRunner({
               display: "block",
             }}
           />
+        )}
+
+        {/* O protótipo não abriu: avisa, em vez de deixar a pessoa diante de uma
+            tela de login/senha do Figma sem entender o que houve */}
+        {embedBlocked && (
+          <div className="absolute inset-x-3 bottom-3 z-20 rounded-2xl border border-error/30 bg-error-container px-4 py-3 text-body-small text-on-error-container shadow-md">
+            {preview ? (
+              <>
+                <strong className="font-medium">O Figma não liberou este protótipo.</strong> Se aparece um
+                pedido de login ou de senha, os participantes verão a mesma coisa e não conseguirão fazer
+                o teste. No Figma, abra <strong className="font-medium">Share</strong>, deixe{" "}
+                <strong className="font-medium">Anyone with the link — can view</strong> e remova a senha.
+              </>
+            ) : lang === "es" ? (
+              "El prototipo no se cargó. Si ves una pantalla de inicio de sesión o de contraseña, avisa a quien te envió esta prueba."
+            ) : (
+              "O protótipo não carregou. Se aparecer um pedido de login ou de senha, avise quem te enviou este teste."
+            )}
+          </div>
         )}
 
         {/* Clique num hotspot reconhecido: barra no topo até a nova tela aparecer */}

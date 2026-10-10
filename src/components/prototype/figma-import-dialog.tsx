@@ -64,6 +64,8 @@ export function FigmaImportDialog({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [startId, setStartId] = useState<string | null>(null)
   const [result, setResult] = useState<{ screens: number; hotspots: number } | null>(null)
+  // false = arquivo do Figma não é público (participantes veriam o login do Figma)
+  const [publicLink, setPublicLink] = useState<boolean | null>(null)
 
   function reset() {
     setStep("loading")
@@ -124,6 +126,7 @@ export function FigmaImportDialog({
       setFileKey(res.fileKey)
       setEntryNodeId(res.nodeId)
       setScreens(res.screens)
+      setPublicLink(res.publicLink)
       setSelected(new Set(res.screens.map((s) => s.figmaId)))
       setStartId(res.screens.find((s) => s.isStart)?.figmaId ?? null)
       setStep("review")
@@ -356,6 +359,7 @@ export function FigmaImportDialog({
                   </button>
                 </div>
                 {/* Transparência: o que do Figma vira hotspot e o que fica de fora */}
+                {publicLink === false && <PrivateFileWarning />}
                 <ImportSummary screens={screens.filter((s) => selected.has(s.figmaId))} />
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {screens.map((s) => {
@@ -434,6 +438,7 @@ export function FigmaImportDialog({
 
             {step === "done" && result && (
               <div className="py-10 flex flex-col items-center gap-3 text-center">
+                {publicLink === false && <PrivateFileWarning />}
                 <div className="h-12 w-12 rounded-full bg-emerald-600 text-white flex items-center justify-center">
                   <Check className="h-6 w-6" />
                 </div>
@@ -450,6 +455,19 @@ export function FigmaImportDialog({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// O teste roda no protótipo do Figma embutido; se o arquivo não for público, o
+// participante vê a tela de login do Figma em vez do protótipo.
+function PrivateFileWarning() {
+  return (
+    <div className="rounded-xl border border-error/30 bg-error-container px-4 py-3 text-left text-body-small text-on-error-container">
+      <strong className="font-medium">Este arquivo do Figma não é público.</strong> Quem não estiver
+      logado no Figma (com acesso ao arquivo) verá um pedido de login em vez do protótipo e não
+      conseguirá fazer o teste. No Figma, abra <strong className="font-medium">Share</strong> e escolha{" "}
+      <strong className="font-medium">Anyone with the link — can view</strong>, sem senha.
+    </div>
   )
 }
 
