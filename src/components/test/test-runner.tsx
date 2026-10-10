@@ -428,7 +428,10 @@ export function TestRunner({
     const stageNode = (
       <div
         className={cn(
-          "transition-opacity duration-300",
+          // w-full + min-w-0: o protótipo se limita à largura disponível. Sem isso,
+          // em janelas mais estreitas que o quadro (1280px no web) ele estourava a
+          // tela e as laterais ficavam cortadas, sem como rolar até elas.
+          "w-full min-w-0 transition-opacity duration-300",
           !started && "opacity-40 pointer-events-none select-none"
         )}
         aria-hidden={!started}

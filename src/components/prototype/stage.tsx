@@ -64,7 +64,10 @@ const OVERLAY_EXIT_MS = 240
 
 function frameStyles(scroll: ScrollMode, device: DeviceType) {
   const w = deviceMaxWidth[device]
-  const h = deviceViewportHeight[device]
+  // Altura do "viewport" do dispositivo, mas nunca maior que a janela de quem
+  // está testando: num notebook de 768px, um quadro fixo de 800px ficava com o
+  // topo cortado e inalcançável.
+  const h = `min(${deviceViewportHeight[device]}px, 88vh)`
   switch (scroll) {
     case "horizontal":
       return {
