@@ -123,6 +123,8 @@ export function FigmaFlowRunner({
   // O Figma não entregou o protótipo (INITIAL_LOAD não chegou): quase sempre é a
   // tela de login/senha do Figma no lugar do protótipo (arquivo não público).
   const [embedBlocked, setEmbedBlocked] = useState(false)
+  // o Figma já deu sinal de vida neste carregamento (lido pelo temporizador)
+  const embedSignalRef = useRef(false)
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loadProgress, setLoadProgress] = useState(0) // 0..100 da barra de carregamento
   // conclusão da tarefa (feedback + botão continuar) antes de seguir
@@ -263,13 +265,16 @@ export function FigmaFlowRunner({
     )
     epochRef.current = now()
     setEmbedBlocked(false)
+    embedSignalRef.current = false
     // Rede de segurança: se o Figma não der sinal nenhum, esconde o loader e avisa
     // que o protótipo não abriu (no lugar dele o Figma mostra login/senha).
     // Protótipos grandes levam mais de 10s para carregar (medido: ~11s) — com o
     // limite antigo de 10s o aviso aparecia por engano em protótipos liberados.
     const t = setTimeout(() => {
       setEmbedLoaded(true)
-      setEmbedBlocked(true)
+      // só é bloqueio se o Figma NÃO deu sinal (antes o aviso disparava sempre,
+      // mesmo com o protótipo carregado)
+      if (!embedSignalRef.current) setEmbedBlocked(true)
     }, EMBED_BLOCKED_AFTER_MS)
     return () => clearTimeout(t)
   }, [fileKey, currentStartNode, layout.scaling, mission?.id])
@@ -425,6 +430,7 @@ export function FigmaFlowRunner({
       // Qualquer evento do Figma prova que o protótipo abriu → esconde o loader e
       // o aviso de bloqueio (com login/senha na frente, o Figma não manda nada).
       if (d.type === "INITIAL_LOAD" || d.type === "PRESENTED_NODE_CHANGED") {
+        embedSignalRef.current = true
         setEmbedLoaded(true)
         setEmbedBlocked(false)
       }
