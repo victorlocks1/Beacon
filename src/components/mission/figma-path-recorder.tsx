@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
-import { figmaEmbedUrl, runEmbedHotspotAction, actsOnPress } from "@/lib/figma-embed"
+import { figmaEmbedUrl, figmaEmbedFrameStyle, runEmbedHotspotAction, actsOnPress } from "@/lib/figma-embed"
 import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
 import { clickContentPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX } from "@/lib/figma-clicks"
 import { frameLayout, type DeviceType } from "@/lib/device"
@@ -232,9 +232,8 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
                   title="Protótipo"
                   src={embedSrc}
                   allowFullScreen
-                  // absoluto: não depende de o navegador resolver altura em %
-                  // dentro de um quadro dimensionado por aspect-ratio
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                  // mesmo enquadramento do testador (sem a margem do Figma)
+                  style={figmaEmbedFrameStyle()}
                 />
               )}
             </div>

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ClipboardList, Flag, Play, Check, ClipboardCheck, MousePointerClick, Clock, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { figmaEmbedUrl, runEmbedHotspotAction, actsOnPress, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
+import { figmaEmbedUrl, figmaEmbedFrameStyle, runEmbedHotspotAction, actsOnPress, FIGMA_EVENT_TYPES } from "@/lib/figma-embed"
 import { type RunnerHotspot } from "@/lib/figma-runner"
 import { QuestionView, type StepQuestion, type AnswerPayload } from "@/components/test/question-view"
 import { SeqScale } from "@/components/test/seq-scale"
@@ -44,12 +44,6 @@ interface OurEvent {
 
 const VALID = new Set<string>(FIGMA_EVENT_TYPES)
 
-// Zoom no embed. 1 = sem recorte (protótipo SEM device frame no Figma → a tela
-// 9:20 preenche o quadro 9:20 exatamente, sem preto e sem cortar as laterais).
-// Só aumente se o protótipo tiver moldura no Figma (o certo é Device: None lá).
-const FRAME_CROP = 1.0
-// Fração do excesso vertical cortada do TOPO (só relevante com FRAME_CROP > 1).
-const FRAME_CROP_TOP = 0.3
 
 // Runner do protótipo VIVO do Figma no fluxo completo: boas-vindas → tarefas
 // (painel + embed) → perguntas → obrigado. Captura os eventos da Embed API
@@ -977,24 +971,16 @@ export function FigmaFlowRunner({
         aria-hidden={!taskStarted}
       >
         {embedSrc && (
-          /* Recorte da moldura do Figma: o iframe fica maior que o quadro e
-             centralizado, e o overflow-hidden do quadro corta a borda preta
-             do device frame. FRAME_CROP=1 desliga o recorte. */
+          /* O iframe é maior que o quadro pela margem que o visualizador do
+             Figma deixa em volta; o overflow-hidden do quadro corta essa margem
+             e a tela do DS ocupa o quadro inteiro (ver figmaEmbedFrameStyle). */
           <iframe
             ref={iframeRef}
             title="Protótipo"
             src={embedSrc}
             allowFullScreen
             loading="eager"
-            style={{
-              position: "absolute",
-              width: `${FRAME_CROP * 100}%`,
-              height: `${FRAME_CROP * 100}%`,
-              left: `${-(FRAME_CROP - 1) * 50}%`,
-              top: `${-(FRAME_CROP - 1) * FRAME_CROP_TOP * 100}%`,
-              border: "none",
-              display: "block",
-            }}
+            style={figmaEmbedFrameStyle()}
           />
         )}
 

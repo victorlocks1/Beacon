@@ -19,7 +19,9 @@ export type ScrollMode = "none" | "vertical" | "horizontal" | "both"
 // Proporção (largura/altura) do viewport de cada dispositivo e o quanto um frame
 // pode ser mais alto que isso antes de ser tratado como PÁGINA LONGA (rola).
 const viewportAspect: Record<DeviceType, number> = {
-  mobile: 9 / 19.5,
+  // 360×800: a tela padrão de celular do DS (a mesma de deviceMaxWidth/
+  // deviceViewportHeight) e o "Device" que o Figma usa nesses protótipos
+  mobile: 360 / 800,
   tablet: 3 / 4,
   desktop: 16 / 10,
 }
@@ -49,7 +51,9 @@ export function frameLayout(width: number, height: number, device: DeviceType): 
   return {
     aspect: vp,
     longPage,
-    // web: nunca amplia além de 100% (pixel real); mobile/tablet preenchem a largura
-    scaling: device === "desktop" ? "scale-down-width" : "fit-width",
+    // web: encaixa na largura sem ampliar além de 100% (pixel real) e rola.
+    // mobile/tablet: "contain" mostra a tela do aparelho INTEIRA (a página longa
+    // rola dentro dela). "fit-width" ampliava e cortava o rodapé (barra de abas).
+    scaling: device === "desktop" ? "scale-down-width" : "contain",
   }
 }

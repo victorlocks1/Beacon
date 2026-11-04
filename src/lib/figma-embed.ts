@@ -25,6 +25,14 @@ export function figmaEmbedUrl(opts: {
   u.searchParams.set("scaling", opts.scaling ?? "contain")
   u.searchParams.set("content-scaling", "fixed")
   if (opts.hideUi !== false) u.searchParams.set("hide-ui", "1")
+  // Sem a moldura de aparelho que o Figma desenha conforme o "Device" do
+  // protótipo: com ela, a tela real (o frame do DS) aparecia encolhida dentro de
+  // um celular preto. O quadro do Beacon já tem o formato do dispositivo.
+  u.searchParams.set("device-frame", "false")
+  // sem rodapé do Figma e sem zoom/arrastar o canvas: o participante interage
+  // só com o protótipo
+  u.searchParams.set("footer", "false")
+  u.searchParams.set("viewport-controls", "false")
   // No testador escondemos as dicas azuis (não entregar a área clicável). Na
   // revisão mantemos ligadas. Padrão do Figma é mostrar (1).
   if (opts.hotspotHints === false) u.searchParams.set("hotspot-hints", "0")
@@ -38,6 +46,31 @@ export const FIGMA_EVENT_TYPES = [
   "MOUSE_PRESS_OR_RELEASE",
   "NEW_STATE",
 ] as const
+
+// ── Margem do visualizador do Figma ──
+// No navegador de computador, o visualizador do Figma deixa uma margem FIXA de
+// ~48px em volta do protótipo (medido: igual em quadros de 200, 330 e 460px de
+// largura). Num quadro de celular isso encolhia a tela do DS para ~70% e deixava
+// uma borda preta. Compensamos aumentando o iframe 48px para cada lado — o quadro
+// do Beacon (overflow hidden) corta exatamente a margem. Em aparelhos móveis o
+// Figma não põe essa margem, então ali o iframe fica do tamanho do quadro.
+export const FIGMA_VIEWER_PADDING_PX = 48
+
+export function figmaEmbedFrameStyle(): React.CSSProperties {
+  const mobile =
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+  const pad = mobile ? 0 : FIGMA_VIEWER_PADDING_PX
+  return {
+    position: "absolute",
+    left: -pad,
+    top: -pad,
+    width: `calc(100% + ${pad * 2}px)`,
+    height: `calc(100% + ${pad * 2}px)`,
+    border: "none",
+    display: "block",
+  }
+}
 
 // ── Controle do protótipo embutido (Embed API: mensagens para o iframe) ──
 const FIGMA_ORIGIN = "https://www.figma.com"
