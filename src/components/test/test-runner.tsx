@@ -334,8 +334,8 @@ export function TestRunner({
     advance()
   }
 
-  // No preview/revisão o protótipo já fica interativo (sem "Iniciar tarefa").
-  const started = preview || taskStarted
+  // Revisão = mesma experiência do participante: começa em "Iniciar tarefa".
+  const started = taskStarted
   let content: React.ReactNode
 
   if (welcome && !flowStarted) {
@@ -447,8 +447,8 @@ export function TestRunner({
     )
 
     content =
-      isMobile || preview ? (
-        // ─── MOBILE ou PREVIEW (revisão) — layout dividido. Inalterado. ───
+      isMobile ? (
+        // ─── MOBILE — layout dividido (tarefa | protótipo) ───
         <div
           className={
             "min-h-screen grid grid-cols-1 " +
@@ -458,11 +458,7 @@ export function TestRunner({
           <div className="flex flex-col justify-center px-6 py-10 md:px-12 lg:px-16 bg-surface">
             <div className="w-full max-w-md md:ml-auto md:mr-8 space-y-6">
               {taskHeader}
-              {preview ? (
-                <Button onClick={advance} className="h-12 px-6" size="lg">
-                  {isLastStep ? "Concluir revisão" : "Avançar"}
-                </Button>
-              ) : !started ? (
+              {!started ? (
                 <Button onClick={startTask} className="h-12 px-6" size="lg">
                   <Play className="h-4 w-4 mr-2" />
                   {s.startTask}

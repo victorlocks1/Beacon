@@ -2,12 +2,22 @@
 import { useEffect, useState } from "react"
 import { Play, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { TesterEntryCard } from "@/components/test/tester-entry-card"
+import { tt, type Lang } from "@/lib/i18n"
 
-// A revisão roda o fluxo EXATAMENTE como o testador vê: em tela cheia, sem a
-// moldura do painel (que cortava/encolhia o protótipo). O fluxo só é montado ao
-// abrir, e é desmontado ao sair — cada abertura começa do zero.
-export function ReviewStage({ children }: { children: React.ReactNode }) {
+// A revisão roda o fluxo EXATAMENTE como o testador vê: em tela cheia, começando
+// pelo mesmo cartão de boas-vindas do link, e depois o mesmo fluxo (children).
+// Só não grava nada. É montado ao abrir e desmontado ao sair — cada abertura
+// começa do zero.
+export function ReviewStage({
+  entry,
+  children,
+}: {
+  entry: { lang: Lang; welcomeTitle: string | null; welcomeMessage: string | null; howItWorks: string | null }
+  children: React.ReactNode
+}) {
   const [open, setOpen] = useState(false)
+  const [started, setStarted] = useState(false) // passou do cartão de boas-vindas
 
   // trava a rolagem da página por baixo e fecha no Esc
   useEffect(() => {
@@ -32,7 +42,14 @@ export function ReviewStage({ children }: { children: React.ReactNode }) {
           Abre o fluxo completo em tela cheia, do jeito que aparece no link do testador. Nada é
           gravado.
         </p>
-        <Button size="lg" className="h-12 px-6" onClick={() => setOpen(true)}>
+        <Button
+          size="lg"
+          className="h-12 px-6"
+          onClick={() => {
+            setStarted(false)
+            setOpen(true)
+          }}
+        >
           <Play className="h-4 w-4 mr-2" />
           Iniciar revisão
         </Button>
@@ -42,7 +59,18 @@ export function ReviewStage({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="fixed inset-0 z-[100] overflow-auto bg-surface">
-      {children}
+      {started ? (
+        children
+      ) : (
+        <TesterEntryCard
+          {...entry}
+          startButton={
+            <Button size="lg" className="h-12 px-8" onClick={() => setStarted(true)}>
+              {tt(entry.lang).start}
+            </Button>
+          }
+        />
+      )}
       <button
         type="button"
         onClick={() => setOpen(false)}

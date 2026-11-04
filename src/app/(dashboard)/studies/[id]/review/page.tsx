@@ -4,16 +4,10 @@ import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TestRunner, type Step } from "@/components/test/test-runner"
-import { FigmaFlowRunner } from "@/components/test/figma-flow-runner"
-import { runsLiveFigma } from "@/lib/figma-access"
-import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
-import { buildExactPaths } from "@/lib/path"
-import { asqStatementsFor, ASQ_ANCHORS } from "@/lib/sum"
 import { type Lang } from "@/lib/i18n"
-import { susStatementsFor } from "@/lib/sus"
 import { CommentsBoard, type BoardComment } from "@/components/comments/comments-board"
 import { ReviewStage } from "@/components/review/review-stage"
+import { TesterRun, testerStudyInclude } from "@/components/test/tester-flow"
 
 export default async function ReviewPage({
   params,
@@ -23,142 +17,15 @@ export default async function ReviewPage({
   const { id: studyId } = await params
   const { userId, isOwner } = await requireStudyView(studyId)
 
+  // mesma consulta do link do testador (o fluxo é o mesmo componente)
   const study = await prisma.study.findUnique({
     where: { id: studyId },
-    include: {
-      prototype: {
-        include: {
-          screens: {
-            orderBy: { order: "asc" },
-            include: { hotspots: true, scrollRegions: true },
-          },
-        },
-      },
-      blocks: {
-        orderBy: { order: "asc" },
-        include: {
-          mission: {
-            include: {
-              goals: true,
-              goalHotspots: true,
-              paths: { include: { steps: { orderBy: { order: "asc" } } } },
-              questions: { orderBy: { order: "asc" } },
-            },
-          },
-          question: true,
-        },
-      },
-    },
+    include: testerStudyInclude,
   })
   if (!study) return null
 
   const screens = study.prototype?.screens ?? []
   const lang = (study.language ?? "pt") as Lang
-
-  // Monta os passos do fluxo (idêntico ao testador): missões + perguntas.
-  // tela exibida junto com a pergunta (quando o criador escolheu uma)
-  const questionScreen = (screenId: string | null) => {
-    const sc = screenId ? screens.find((x) => x.id === screenId) : null
-    return sc ? { name: sc.name, imageUrl: sc.imageUrl } : null
-  }
-
-  const toQuestionStep = (q: {
-    id: string
-    type: string
-    title: string
-    description: string | null
-    required: boolean
-    options: unknown
-    screenId: string | null
-  }): Step => ({
-    kind: "question",
-    question: {
-      id: q.id,
-      type: q.type as "open" | "choice" | "rating" | "binary",
-      title: q.title,
-      description: q.description,
-      required: q.required,
-      options: (q.options as string[] | null) ?? [],
-      screen: questionScreen(q.screenId),
-    },
-  })
-
-  const reviewSteps: Step[] = study.blocks.flatMap((b): Step[] => {
-    if (b.type === "mission" && b.mission) {
-      const m = b.mission
-      const goalScreenIds =
-        m.successType === "path"
-          ? [
-              ...new Set(
-                m.paths
-                  .map((p) => p.steps[p.steps.length - 1]?.screenId)
-                  .filter((sid): sid is string => !!sid)
-              ),
-            ]
-          : m.goals.map((g) => g.goalScreenId)
-      return [
-        {
-          kind: "mission",
-          mission: {
-            id: m.id,
-            task: m.task,
-            description: m.description,
-            startScreenId: m.startScreenId,
-            goalScreenIds,
-            goalHotspotIds: m.goalHotspots.map((g) => g.hotspotId),
-          },
-        },
-        ...m.questions.map(toQuestionStep),
-      ]
-    }
-    if (b.type === "question" && b.question) {
-      return [toQuestionStep(b.question)]
-    }
-    return []
-  })
-
-  // Sem nenhuma missão, mas com telas: adiciona um passo de EXPLORAÇÃO LIVRE do
-  // protótipo, para a revisão do fluxo não perder o protótipo.
-  const hasMissionStep = reviewSteps.some((st) => st.kind === "mission")
-  if (!hasMissionStep && screens.length > 0) {
-    reviewSteps.unshift({
-      kind: "mission",
-      mission: {
-        id: "__explore__",
-        task: "Explore o protótipo",
-        description: "Navegue livremente pelas telas para revisar o fluxo.",
-        startScreenId: screens[0].id,
-        goalScreenIds: [], // sem objetivo: avança pelo botão "Avançar"
-      },
-    })
-  }
-
-  // Protótipo VIVO do Figma: a revisão roda no MESMO runner do testador (embed),
-  // senão as telas — que não têm imagem no import ao vivo — apareceriam em branco.
-  const proto = study.prototype
-  // mesma decisão do link do testador: público → ao vivo; restrito → réplica
-  const isFigma = await runsLiveFigma(proto)
-  const figmaMaps = isFigma
-    ? buildFigmaRunnerMaps(
-        screens,
-        reviewSteps.flatMap((st) => {
-          if (st.kind !== "mission") return []
-          const m = study.blocks.find((b) => b.mission?.id === st.mission.id)?.mission
-          return [
-            {
-              ...st.mission,
-              successType: m?.successType ?? "screen",
-              paths: m ? buildExactPaths(m.paths, screens) : [],
-            },
-          ]
-        })
-      )
-    : null
-  const susLang = lang === "es" ? "es" : "pt"
-
-  const missionCount = reviewSteps.filter(
-    (st) => st.kind === "mission" && st.mission.id !== "__explore__"
-  ).length
 
   // Tarefas para o contexto dos comentários (âncoras: tela inicial + objetivos).
   const commentTasks = study.blocks
@@ -231,7 +98,7 @@ export default async function ReviewPage({
         </div>
       </div>
 
-      {reviewSteps.length === 0 ? (
+      {study.blocks.length === 0 ? (
         <div className="text-center py-24 border border-outline-variant rounded-3xl bg-surface-container-low text-on-surface-variant">
           Este estudo ainda não tem tarefas ou perguntas.
         </div>
@@ -245,69 +112,17 @@ export default async function ReviewPage({
           <TabsContent value="preview">
             {/* Fluxo inteiro em modo revisão: boas-vindas → tarefas → perguntas →
                 obrigado. Não grava nenhum dado (preview). */}
-            <ReviewStage>
-              {figmaMaps ? (
-                <FigmaFlowRunner
-                  token=""
-                  preview
-                  lang={lang}
-                  fileKey={proto!.figmaFileKey!}
-                  steps={reviewSteps}
-                  deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-                  welcome={{
-                    title: study.welcomeTitle ?? "",
-                    message: study.welcomeMessage ?? "",
-                    taskCount: missionCount,
-                  }}
-                  howItWorks={study.howItWorks}
-                  thanksTitle={study.thanksTitle}
-                  thanksMessage={study.thanksMessage}
-                  susStatements={susStatementsFor(susLang, study.susStatements)}
-                  sumEnabled={study.sumEnabled}
-                  sumStatements={asqStatementsFor(susLang, study.sumStatements)}
-                  sumAnchors={ASQ_ANCHORS[susLang]}
-                  {...figmaMaps}
-                />
-              ) : (
-              <TestRunner
-                token=""
-                lang={lang}
-                preview
-                welcome={{
-                  title: study.welcomeTitle ?? "",
-                  message: study.welcomeMessage ?? "",
-                  taskCount: missionCount,
-                }}
-                howItWorks={study.howItWorks}
-                susStatements={susStatementsFor(lang === "es" ? "es" : "pt", study.susStatements)}
-                deviceType={(study.deviceType ?? "desktop") as "desktop" | "tablet" | "mobile"}
-                screens={screens.map((s) => ({
-                  id: s.id,
-                  name: s.name,
-                  imageUrl: s.imageUrl,
-                  width: s.width,
-                  height: s.height,
-                  scroll: s.scroll,
-                  hotspots: s.hotspots.map((h) => ({
-                    id: h.id,
-                    coords: h.coords as { x: number; y: number; w: number; h: number },
-                    action: h.action,
-                    overlayPosition: h.overlayPosition,
-                    targetScreenId: h.targetScreenId,
-                  })),
-                  scrollRegions: s.scrollRegions.map((r) => ({
-                    id: r.id,
-                    kind: r.kind as "scroll" | "fixed",
-                    coords: r.coords as { x: number; y: number; w: number; h: number },
-                    axis: r.axis as "horizontal" | "vertical" | "both",
-                    imageUrl: r.imageUrl,
-                    contentBox: r.contentBox as { x: number; y: number; w: number; h: number } | null,
-                    pieces: r.pieces as { url: string; x: number; y: number; w: number; h: number }[] | null,
-                  })),
-                }))}
-                steps={reviewSteps}
-              />
-              )}
+            {/* A MESMA página do participante: cartão de entrada + fluxo. Só não
+                grava nada (preview). */}
+            <ReviewStage
+              entry={{
+                lang,
+                welcomeTitle: study.welcomeTitle,
+                welcomeMessage: study.welcomeMessage,
+                howItWorks: study.howItWorks,
+              }}
+            >
+              <TesterRun study={study} token="" preview />
             </ReviewStage>
           </TabsContent>
 
