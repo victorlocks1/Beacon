@@ -43,6 +43,8 @@ interface OurEvent {
 }
 
 const VALID = new Set<string>(FIGMA_EVENT_TYPES)
+// Sem nenhum sinal do Figma depois disso → protótipo bloqueado (login/senha).
+const EMBED_BLOCKED_AFTER_MS = 30000
 
 
 // Runner do protótipo VIVO do Figma no fluxo completo: boas-vindas → tarefas
@@ -261,14 +263,16 @@ export function FigmaFlowRunner({
     )
     epochRef.current = now()
     setEmbedBlocked(false)
-    // rede de segurança: se o INITIAL_LOAD não chegar, esconde o loader mesmo assim
-    // e avisa que o protótipo não abriu (o Figma mostra login/senha no lugar)
+    // Rede de segurança: se o Figma não der sinal nenhum, esconde o loader e avisa
+    // que o protótipo não abriu (no lugar dele o Figma mostra login/senha).
+    // Protótipos grandes levam mais de 10s para carregar (medido: ~11s) — com o
+    // limite antigo de 10s o aviso aparecia por engano em protótipos liberados.
     const t = setTimeout(() => {
       setEmbedLoaded(true)
       setEmbedBlocked(true)
-    }, 10000)
+    }, EMBED_BLOCKED_AFTER_MS)
     return () => clearTimeout(t)
-  }, [fileKey, currentStartNode, layout.scaling])
+  }, [fileKey, currentStartNode, layout.scaling, mission?.id])
 
   // Barra de carregamento: enche SEMPRE avançando (desacelera perto do fim mas
   // nunca congela) enquanto o embed não está pronto; completa quando fica pronto.
@@ -418,8 +422,9 @@ export function FigmaFlowRunner({
         missionId: startedRef.current ? missionRef.current : null,
       })
 
-      // protótipo pronto → esconde o loader
-      if (d.type === "INITIAL_LOAD") {
+      // Qualquer evento do Figma prova que o protótipo abriu → esconde o loader e
+      // o aviso de bloqueio (com login/senha na frente, o Figma não manda nada).
+      if (d.type === "INITIAL_LOAD" || d.type === "PRESENTED_NODE_CHANGED") {
         setEmbedLoaded(true)
         setEmbedBlocked(false)
       }
@@ -976,6 +981,10 @@ export function FigmaFlowRunner({
              e a tela do DS ocupa o quadro inteiro (ver figmaEmbedFrameStyle). */
           <iframe
             ref={iframeRef}
+            // Remonta o iframe a CADA tarefa: duas tarefas seguidas que começam na
+            // mesma tela teriam a mesma URL e o navegador não recarregaria — a 2ª
+            // começaria onde a 1ª parou, sem o sinal de carregamento do Figma.
+            key={mission?.id ?? "embed"}
             title="Protótipo"
             src={embedSrc}
             allowFullScreen
