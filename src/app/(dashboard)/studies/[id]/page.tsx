@@ -20,6 +20,7 @@ import { StudyBuilder, type BuilderBlock } from "@/components/study/builder/stud
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import { runsLiveFigma } from "@/lib/figma-access"
+import { FigmaImagesSyncBanner } from "@/components/prototype/figma-images-sync"
 import { susStatementsFor, SUS_STATEMENTS, SUS_OPTIONS } from "@/lib/sus"
 import { asqStatementsFor, ASQ_STATEMENTS, ASQ_ANCHORS, ASQ_LABELS } from "@/lib/sum"
 import {
@@ -166,6 +167,10 @@ export default async function StudyPage({
   }))
   // Chave do Figma só quando o teste roda AO VIVO (arquivo público). Em réplica
   // (arquivo restrito) o construtor usa o player de imagens, como o testador.
+  // Telas do Figma ainda sem imagem: obrigatórias para a réplica, a tela das
+  // perguntas, os hotspots e os heatmaps. São baixadas pelo banner abaixo.
+  const missingFigmaImages =
+    study.prototype?.source === "figma" ? screens.filter((s) => !s.imageUrl && s.figmaNodeId).length : 0
   const builderFigmaKey = (await runsLiveFigma(study.prototype)) ? study.prototype!.figmaFileKey : null
   const susLang = (study.language ?? "pt") === "es" ? "es" : "pt"
 
@@ -194,7 +199,12 @@ export default async function StudyPage({
         <StudyHeaderActions
           studyId={study.id}
           status={study.status as "draft" | "live" | "closed"}
-          canPublish={screens.length > 0 && missions.length > 0}
+          canPublish={screens.length > 0 && missions.length > 0 && missingFigmaImages === 0}
+          publishHint={
+            missingFigmaImages > 0
+              ? "Aguarde as imagens das telas do Figma terminarem de carregar"
+              : undefined
+          }
           shareCode={study.shareCode}
           members={study.members.map((m) => ({
             userId: m.user.id,
@@ -210,6 +220,10 @@ export default async function StudyPage({
           distorcer os resultados. Use <strong className="text-on-surface font-medium">Encerrar</strong> para fazer
           alterações.
         </div>
+      )}
+
+      {missingFigmaImages > 0 && (
+        <FigmaImagesSyncBanner studyId={study.id} missing={missingFigmaImages} total={screens.length} />
       )}
 
       <Tabs defaultValue={activeTab} className="lg:flex-1 lg:min-h-0">

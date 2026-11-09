@@ -38,12 +38,14 @@ export function StudyHeaderActions({
   studyId,
   status,
   canPublish,
+  publishHint,
   members,
   shareCode,
 }: {
   studyId: string
   status: Status
   canPublish: boolean
+  publishHint?: string // por que não dá para publicar ainda (se houver motivo específico)
   members: ShareMember[]
   shareCode: string | null
 }) {
@@ -91,7 +93,7 @@ export function StudyHeaderActions({
       {status === "draft" && (
         <Button
           disabled={pending || !canPublish}
-          title={canPublish ? undefined : "Adicione telas e uma missão primeiro"}
+          title={canPublish ? undefined : publishHint ?? "Adicione telas e uma missão primeiro"}
           onClick={() =>
             startTransition(async () => {
               try {

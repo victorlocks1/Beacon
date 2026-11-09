@@ -1,6 +1,4 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 import {
   Select,
@@ -9,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { loadFigmaImagesAction } from "@/app/(dashboard)/studies/[id]/figma/actions"
+import { useFigmaImageSync } from "@/components/prototype/figma-images-sync"
 
 export interface QuestionScreenOption {
   id: string
@@ -34,23 +32,10 @@ export function QuestionScreenField({
   value: string | null
   onChange: (screenId: string | null) => void
 }) {
-  const router = useRouter()
   const screen = screens.find((s) => s.id === value) ?? null
-  // Tela do Figma ao vivo ainda sem imagem: baixa (uma vez) para poder exibi-la.
+  // Tela do Figma ainda sem imagem: baixa as que faltam para poder exibi-la.
   const needsImage = !!screen && !screen.imageUrl && !!screen.figmaNodeId && !!studyId
-  const [loading, setLoading] = useState(false)
-  const fired = useRef(false)
-  useEffect(() => {
-    if (!needsImage || fired.current) return
-    fired.current = true
-    setLoading(true)
-    loadFigmaImagesAction(studyId!)
-      .then((res) => {
-        if (res.ok && res.loaded > 0) router.refresh()
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [needsImage, studyId, router])
+  const { running: loading, error: loadError } = useFigmaImageSync(studyId ?? "", needsImage ? 1 : 0)
 
   if (screens.length === 0) return null
   const label = (s: QuestionScreenOption) => `Tela ${s.order + 1}: ${s.name}`
@@ -91,7 +76,9 @@ export function QuestionScreenField({
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {loading
               ? "Carregando a imagem da tela…"
-              : "Esta tela ainda não tem imagem; ela só aparece para o testador depois de carregada."}
+              : loadError
+                ? `Não foi possível carregar a imagem desta tela: ${loadError}`
+                : "Esta tela ainda não tem imagem; ela só aparece para o testador depois de carregada."}
           </p>
         ))}
     </div>

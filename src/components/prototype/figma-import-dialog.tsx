@@ -26,7 +26,6 @@ import {
   disconnectFigmaAction,
   figmaInspectAction,
   figmaLiveImportAction,
-  loadFigmaImagesAction,
 } from "@/app/(dashboard)/studies/[id]/figma/actions"
 import type { ImportScreen, IgnoredReason } from "@/lib/figma"
 
@@ -159,13 +158,8 @@ export function FigmaImportDialog({
       setStep("done")
       router.refresh()
       toast.success(`${res.screens} tela(s) importada(s)`)
-      // Baixa as imagens das telas em segundo plano (miniaturas, comentários e
-      // fundo do heatmap). O teste em si usa o embed vivo e não depende disso.
-      loadFigmaImagesAction(studyId)
-        .then((img) => {
-          if (img.ok && img.loaded) router.refresh()
-        })
-        .catch(() => {})
+      // As imagens das telas são baixadas pela página do estudo, com progresso
+      // visível (FigmaImagesSyncBanner), logo após este refresh.
     } catch (e) {
       setError(msg(e) || "Falha na importação.")
       setStep("review")

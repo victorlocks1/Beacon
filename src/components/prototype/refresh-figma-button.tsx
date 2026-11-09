@@ -41,8 +41,14 @@ export function RefreshFigmaButton({ studyId }: { studyId: string }) {
 
       // baixa as imagens das telas aqui mesmo (fundo do heatmap), sem esperar
       // abrir os Resultados
-      const img = await loadFigmaImagesAction(studyId)
-      if (!img.ok) toast.error(img.error)
+      for (let round = 0; round < 50; round++) {
+        const img = await loadFigmaImagesAction(studyId, { limit: 6 })
+        if (!img.ok) {
+          toast.error(img.error)
+          break
+        }
+        if (img.remaining === 0) break
+      }
       router.refresh()
 
       // estado breve de "carregado com sucesso" e volta pro normal

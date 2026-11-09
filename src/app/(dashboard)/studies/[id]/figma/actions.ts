@@ -366,8 +366,15 @@ export async function figmaLiveImportAction(
 // Carrega as imagens das telas sob demanda (fundo do heatmap). O import ao vivo
 // não baixa imagens; esta action busca só as que faltam (imageUrl vazio).
 export async function loadFigmaImagesAction(
-  studyId: string
-): Promise<{ ok: true; loaded: number } | { ok: false; error: string }> {
+  studyId: string,
+  opts: { limit?: number } = {}
+): Promise<{ ok: true; loaded: number; remaining: number } | { ok: false; error: string }> {
+  // Baixa as imagens das telas que ainda não têm, em LOTES PEQUENOS. Antes pedia
+  // todas ao Figma numa chamada só: com dezenas de telas longas em alta resolução
+  // o Figma falhava/estourava o tempo e NENHUMA imagem era salva — e o erro era
+  // engolido. Agora cada chamada processa poucas telas e devolve quantas faltam;
+  // quem chama repete até zerar (ver useFigmaImageSync).
+  const limit = Math.max(1, Math.min(opts.limit ?? 6, 20))
   try {
     const userId = await requireUser()
     const study = await prisma.study.findUnique({
@@ -377,35 +384,68 @@ export async function loadFigmaImagesAction(
     if (!study) return { ok: false, error: "Study não encontrado" }
     const proto = study.prototype
     if (!proto?.figmaFileKey) return { ok: false, error: "Estudo sem protótipo do Figma." }
+    const fileKey = proto.figmaFileKey
 
+    const missingWhere = { prototypeId: proto.id, imageUrl: "", figmaNodeId: { not: null } }
     const screens = await prisma.screen.findMany({
-      where: { prototypeId: proto.id, imageUrl: "", figmaNodeId: { not: null } },
+      where: missingWhere,
+      orderBy: { order: "asc" },
+      take: limit,
       select: { id: true, figmaNodeId: true },
     })
-    if (!screens.length) return { ok: true, loaded: 0 }
+    if (!screens.length) return { ok: true, loaded: 0, remaining: 0 }
 
     const token = await getDecryptedToken(userId)
-    const nodeIds = screens.map((s) => s.figmaNodeId as string)
-    const urls = await figmaGetImages(token, proto.figmaFileKey, nodeIds, { scale: 2, format: "png" })
+    // URL de exportação de cada tela. Se o lote falhar (ex.: tela pesada demais
+    // para o Figma renderizar), tenta uma a uma — uma tela ruim não trava as outras.
+    let urls: Record<string, string> = {}
+    let lastError: string | null = null
+    try {
+      urls = await figmaGetImages(token, fileKey, screens.map((s) => s.figmaNodeId as string), {
+        scale: 2,
+        format: "png",
+      })
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e)
+      for (const sc of screens) {
+        try {
+          Object.assign(urls, await figmaGetImages(token, fileKey, [sc.figmaNodeId as string], { scale: 2, format: "png" }))
+        } catch (e2) {
+          lastError = e2 instanceof Error ? e2.message : String(e2)
+        }
+      }
+    }
 
     let loaded = 0
-    for (let i = 0; i < screens.length; i += 4) {
-      const batch = screens.slice(i, i + 4)
-      await Promise.all(
-        batch.map(async (sc, j) => {
-          const src = urls[sc.figmaNodeId as string]
-          if (!src) return
-          const publicUrl = await downloadAndUpload(studyId, src, i + j)
+    await Promise.all(
+      screens.map(async (sc, j) => {
+        const src = urls[sc.figmaNodeId as string]
+        if (!src) return
+        try {
+          const publicUrl = await downloadAndUpload(studyId, src, j)
           await prisma.screen.update({ where: { id: sc.id }, data: { imageUrl: publicUrl } })
           loaded++
-        })
-      )
-    }
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : String(e)
+        }
+      })
+    )
+    const remaining = await prisma.screen.count({ where: missingWhere })
+    revalidatePath(`/studies/${studyId}`)
     revalidatePath(`/studies/${studyId}/results`)
-    return { ok: true, loaded }
+    // nenhuma imagem neste lote = falha real (não adianta repetir em seguida)
+    if (loaded === 0) {
+      return {
+        ok: false,
+        error:
+          figmaTokenScopeHint(new Error(lastError ?? "")) ??
+          (lastError ? `O Figma não devolveu as imagens: ${lastError}` : "O Figma não devolveu as imagens das telas."),
+      }
+    }
+    return { ok: true, loaded, remaining }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
-    return { ok: false, error: e instanceof Error ? e.message : "Falha ao carregar imagens." }
+    return { ok: false, error: figmaTokenScopeHint(e) ?? (e instanceof Error ? e.message : "Falha ao carregar imagens.") }
   }
 }
 
