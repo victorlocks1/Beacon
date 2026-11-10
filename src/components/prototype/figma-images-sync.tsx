@@ -23,8 +23,9 @@ export function useFigmaImageSync(studyId: string, missing: number, { auto = tru
     setRunning(true)
     setError(null)
     try {
-      for (let round = 0; round < 50; round++) {
-        const res = await loadFigmaImagesAction(studyId, { limit: 6 })
+      // cada rodada = 1 pedido ao Figma (até 40 telas); para no primeiro erro
+      for (let round = 0; round < 5; round++) {
+        const res = await loadFigmaImagesAction(studyId)
         if (!res.ok) {
           setError(res.error)
           break

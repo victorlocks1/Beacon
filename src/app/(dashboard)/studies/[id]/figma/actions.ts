@@ -11,6 +11,7 @@ import {
   figmaGetMe,
   figmaGetImages,
   collectImportPlan,
+  FigmaRateLimitError,
   type ImportScreen,
 } from "@/lib/figma"
 
@@ -140,7 +141,8 @@ export async function figmaInspectAction(studyId: string, url: string): Promise<
         token,
         fileKey,
         screens.map((s) => s.figmaId),
-        { scale: 1, format: "png" }
+        // scale 2: a mesma exportação serve de imagem da tela (sem novo pedido)
+        { scale: 2, format: "png" }
       )
       for (const s of screens) s.thumbUrl = thumbs[s.figmaId]
     } catch {
@@ -351,6 +353,11 @@ export async function figmaLiveImportAction(
     }
     // interações do Figma → hotspots do Beacon
     const hotspots = await importFigmaHotspots(screens, nodeToScreen)
+    // imagens das telas a partir das miniaturas já exportadas (sem novo pedido)
+    await saveImportThumbnails(
+      studyId,
+      screens.map((s) => ({ screenId: nodeToScreen.get(s.figmaId)!, url: s.thumbUrl }))
+    )
 
     revalidatePath(`/studies/${studyId}`)
     return { ok: true, screens: screens.length, hotspots }
@@ -365,87 +372,119 @@ export async function figmaLiveImportAction(
 
 // Carrega as imagens das telas sob demanda (fundo do heatmap). O import ao vivo
 // não baixa imagens; esta action busca só as que faltam (imageUrl vazio).
-export async function loadFigmaImagesAction(
+// Exporta as imagens das telas num ÚNICO pedido ao Figma (até 40 telas por
+// pedido, como o Figma recomenda) e guarda no Beacon. Antes eram vários pedidos
+// pequenos e, em falha, um por tela: com o limite de assentos View/Collab
+// (~20 pedidos/mês) isso esgotava a cota. Só troca a imagem de uma tela quando a
+// nova chegou — se o Figma recusar, as imagens atuais ficam.
+async function exportScreenImages(
   studyId: string,
-  opts: { limit?: number } = {}
+  token: string,
+  fileKey: string,
+  screens: { id: string; figmaNodeId: string | null }[]
+): Promise<{ loaded: number; error: string | null }> {
+  const targets = screens.filter((s) => s.figmaNodeId)
+  if (!targets.length) return { loaded: 0, error: null }
+  let urls: Record<string, string>
+  try {
+    urls = await figmaGetImages(token, fileKey, targets.map((s) => s.figmaNodeId as string), {
+      scale: 2,
+      format: "png",
+    })
+  } catch (e) {
+    return {
+      loaded: 0,
+      error:
+        e instanceof FigmaRateLimitError
+          ? e.message
+          : figmaTokenScopeHint(e) ?? (e instanceof Error ? `O Figma não devolveu as imagens: ${e.message}` : "O Figma não devolveu as imagens."),
+    }
+  }
+  let loaded = 0
+  let error: string | null = null
+  for (let i = 0; i < targets.length; i += 4) {
+    await Promise.all(
+      targets.slice(i, i + 4).map(async (sc, j) => {
+        const src = urls[sc.figmaNodeId as string]
+        if (!src) return
+        try {
+          const publicUrl = await downloadAndUpload(studyId, src, i + j)
+          const old = await prisma.screen.findUnique({ where: { id: sc.id }, select: { imageUrl: true } })
+          await prisma.screen.update({ where: { id: sc.id }, data: { imageUrl: publicUrl } })
+          if (old?.imageUrl) await removeStorageByUrls([old.imageUrl])
+          loaded++
+        } catch (e) {
+          error = e instanceof Error ? e.message : String(e)
+        }
+      })
+    )
+  }
+  if (loaded < targets.length && !error) error = "O Figma não exportou algumas telas."
+  return { loaded, error }
+}
+
+export async function loadFigmaImagesAction(
+  studyId: string
 ): Promise<{ ok: true; loaded: number; remaining: number } | { ok: false; error: string }> {
-  // Baixa as imagens das telas que ainda não têm, em LOTES PEQUENOS. Antes pedia
-  // todas ao Figma numa chamada só: com dezenas de telas longas em alta resolução
-  // o Figma falhava/estourava o tempo e NENHUMA imagem era salva — e o erro era
-  // engolido. Agora cada chamada processa poucas telas e devolve quantas faltam;
-  // quem chama repete até zerar (ver useFigmaImageSync).
-  const limit = Math.max(1, Math.min(opts.limit ?? 6, 20))
   try {
     const userId = await requireUser()
     const study = await prisma.study.findUnique({
       where: { id: studyId, ownerId: userId },
       include: { prototype: true },
     })
-    if (!study) return { ok: false, error: "Study não encontrado" }
+    if (!study) return { ok: false, error: "Só a pessoa que criou o estudo pode carregar as telas do Figma." }
     const proto = study.prototype
     if (!proto?.figmaFileKey) return { ok: false, error: "Estudo sem protótipo do Figma." }
-    const fileKey = proto.figmaFileKey
 
     const missingWhere = { prototypeId: proto.id, imageUrl: "", figmaNodeId: { not: null } }
+    // até 40 telas = 1 pedido ao Figma
     const screens = await prisma.screen.findMany({
       where: missingWhere,
       orderBy: { order: "asc" },
-      take: limit,
+      take: 40,
       select: { id: true, figmaNodeId: true },
     })
     if (!screens.length) return { ok: true, loaded: 0, remaining: 0 }
 
     const token = await getDecryptedToken(userId)
-    // URL de exportação de cada tela. Se o lote falhar (ex.: tela pesada demais
-    // para o Figma renderizar), tenta uma a uma — uma tela ruim não trava as outras.
-    let urls: Record<string, string> = {}
-    let lastError: string | null = null
-    try {
-      urls = await figmaGetImages(token, fileKey, screens.map((s) => s.figmaNodeId as string), {
-        scale: 2,
-        format: "png",
-      })
-    } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e)
-      for (const sc of screens) {
-        try {
-          Object.assign(urls, await figmaGetImages(token, fileKey, [sc.figmaNodeId as string], { scale: 2, format: "png" }))
-        } catch (e2) {
-          lastError = e2 instanceof Error ? e2.message : String(e2)
-        }
-      }
-    }
-
-    let loaded = 0
-    await Promise.all(
-      screens.map(async (sc, j) => {
-        const src = urls[sc.figmaNodeId as string]
-        if (!src) return
-        try {
-          const publicUrl = await downloadAndUpload(studyId, src, j)
-          await prisma.screen.update({ where: { id: sc.id }, data: { imageUrl: publicUrl } })
-          loaded++
-        } catch (e) {
-          lastError = e instanceof Error ? e.message : String(e)
-        }
-      })
-    )
+    const { loaded, error } = await exportScreenImages(studyId, token, proto.figmaFileKey, screens)
     const remaining = await prisma.screen.count({ where: missingWhere })
     revalidatePath(`/studies/${studyId}`)
     revalidatePath(`/studies/${studyId}/results`)
-    // nenhuma imagem neste lote = falha real (não adianta repetir em seguida)
-    if (loaded === 0) {
-      return {
-        ok: false,
-        error:
-          figmaTokenScopeHint(new Error(lastError ?? "")) ??
-          (lastError ? `O Figma não devolveu as imagens: ${lastError}` : "O Figma não devolveu as imagens das telas."),
-      }
-    }
+    if (loaded === 0) return { ok: false, error: error ?? "O Figma não devolveu as imagens das telas." }
     return { ok: true, loaded, remaining }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
     return { ok: false, error: figmaTokenScopeHint(e) ?? (e instanceof Error ? e.message : "Falha ao carregar imagens.") }
+  }
+}
+
+// As miniaturas da revisão da importação já são exportadas pelo Figma: guardá-las
+// como imagem das telas evita gastar outro pedido (limitado) só para isso.
+// Aceita apenas URLs de exportação do Figma.
+function isFigmaExportUrl(url: string | undefined): url is string {
+  if (!url) return false
+  try {
+    const h = new URL(url).hostname
+    return h.endsWith(".amazonaws.com") || h.endsWith(".figma.com") || h === "figma.com"
+  } catch {
+    return false
+  }
+}
+
+async function saveImportThumbnails(studyId: string, pairs: { screenId: string; url: string | undefined }[]) {
+  const ok = pairs.filter((p): p is { screenId: string; url: string } => isFigmaExportUrl(p.url))
+  for (let i = 0; i < ok.length; i += 4) {
+    await Promise.all(
+      ok.slice(i, i + 4).map(async (p, j) => {
+        try {
+          const publicUrl = await downloadAndUpload(studyId, p.url, 30000 + i + j)
+          await prisma.screen.update({ where: { id: p.screenId }, data: { imageUrl: publicUrl } })
+        } catch {
+          /* fica sem imagem; o banner do estudo tenta de novo */
+        }
+      })
+    )
   }
 }
 
@@ -458,7 +497,9 @@ export async function loadFigmaImagesAction(
 // usa o embed VIVO, as mudanças de fluxo já aparecem lá automaticamente.
 export async function figmaRefreshAction(
   studyId: string
-): Promise<{ ok: true; updated: number; added: number } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; updated: number; added: number; imagesWarning?: string | null } | { ok: false; error: string }
+> {
   try {
     const { study, userId } = await getOwnedEditableStudy(studyId)
     const proto = study.prototype
@@ -529,13 +570,20 @@ export async function figmaRefreshAction(
       data: { figmaStartNodeId: startNodeId, figmaEntryNodeId: scope },
     })
 
-    // limpa imagens antigas do heatmap → o auto-loader baixa versões novas
-    await removeStorageByUrls(existing.map((s) => s.imageUrl))
-    await prisma.screen.updateMany({ where: { prototypeId: proto.id }, data: { imageUrl: "" } })
+    // Imagens atualizadas num pedido só (até 40 telas). Antes apagava todas e
+    // deixava para baixar depois — se o Figma recusasse, o estudo ficava sem
+    // imagem nenhuma. Agora cada tela só troca de imagem quando a nova chegou.
+    const all = await prisma.screen.findMany({
+      where: { prototypeId: proto.id, figmaNodeId: { not: null } },
+      orderBy: { order: "asc" },
+      take: 40,
+      select: { id: true, figmaNodeId: true },
+    })
+    const img = await exportScreenImages(studyId, token, proto.figmaFileKey, all)
 
     revalidatePath(`/studies/${studyId}`)
     revalidatePath(`/studies/${studyId}/results`)
-    return { ok: true, updated, added }
+    return { ok: true, updated, added, imagesWarning: img.error }
   } catch (e) {
     if (isNextControlFlow(e)) throw e
     return { ok: false, error: e instanceof Error ? e.message : "Falha ao atualizar o protótipo." }

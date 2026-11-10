@@ -132,6 +132,41 @@ function safeUrl(s: string): URL | null {
 // ---------------------------------------------------------------------------
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * O Figma recusou por limite de requisições (429). Traz quanto esperar e o tipo
+ * de limite: "low" = assento View/Collab (o Figma limita a ~20 pedidos de
+ * arquivo/imagem POR MÊS); "high" = Full/Dev (limite por minuto).
+ */
+export class FigmaRateLimitError extends Error {
+  constructor(
+    public retryAfterSec: number | null,
+    public limitType: string | null
+  ) {
+    super(figmaRateLimitMessage(retryAfterSec, limitType))
+    this.name = "FigmaRateLimitError"
+  }
+}
+
+function humanWait(sec: number | null): string {
+  if (!sec || sec <= 0) return "alguns minutos"
+  if (sec < 90) return `${Math.ceil(sec)} segundos`
+  if (sec < 2 * 3600) return `${Math.ceil(sec / 60)} minutos`
+  if (sec < 48 * 3600) return `${Math.ceil(sec / 3600)} horas`
+  return `${Math.ceil(sec / 86400)} dias`
+}
+
+export function figmaRateLimitMessage(retryAfterSec: number | null, limitType: string | null): string {
+  if (limitType === "low") {
+    return (
+      `O Figma bloqueou novas exportações desta conta por ${humanWait(retryAfterSec)}. ` +
+      "O token conectado é de um assento View ou Collab, que o Figma limita a cerca de 20 " +
+      "pedidos de arquivo/imagem por mês. Para não depender desse limite, conecte o token de " +
+      "alguém com assento Full ou Dev (em Importar do Figma → Trocar token)."
+    )
+  }
+  return `O Figma limitou as requisições. Tente novamente em ${humanWait(retryAfterSec)}.`
+}
+
 // Chama a REST API do Figma com retry/backoff em 429 (rate limit) e 5xx.
 // Respeita o header Retry-After quando presente. Evita falhar o import por um
 // limite temporário — importante porque reimportamos bastante.
@@ -141,10 +176,11 @@ async function figmaApi<T>(token: string, path: string, attempt = 0): Promise<T>
     cache: "no-store",
   })
 
-  if ((res.status === 429 || res.status >= 500) && attempt < 2) {
-    // Espera curta e CAPADA (inclui o Retry-After) — melhor falhar rápido com a
-    // mensagem clara do que deixar o usuário no spinner por minutos.
-    const retryAfter = Number(res.headers.get("retry-after"))
+  // Repete só quando a espera é curta. Num 429 com Retry-After longo (o limite
+  // mensal de assentos View/Collab) repetir só gasta mais do limite.
+  const retryAfter = Number(res.headers.get("retry-after"))
+  const shortWait = !(retryAfter > 10)
+  if ((res.status === 429 || res.status >= 500) && attempt < 2 && shortWait) {
     const base = retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt
     await sleep(Math.min(6000, base))
     return figmaApi(token, path, attempt + 1)
@@ -159,8 +195,9 @@ async function figmaApi<T>(token: string, path: string, attempt = 0): Promise<T>
       /* ignore */
     }
     if (res.status === 429) {
-      throw new Error(
-        "Figma limitou as requisições (429). Aguarde 1-2 minutos e importe de novo."
+      throw new FigmaRateLimitError(
+        retryAfter > 0 ? retryAfter : null,
+        res.headers.get("x-figma-rate-limit-type")
       )
     }
     throw new Error(`Figma API ${res.status}${detail ? `: ${detail}` : ""}`)

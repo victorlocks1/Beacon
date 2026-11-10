@@ -4,10 +4,7 @@ import { useRouter } from "next/navigation"
 import { RefreshCw, Loader2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
-import {
-  figmaRefreshAction,
-  loadFigmaImagesAction,
-} from "@/app/(dashboard)/studies/[id]/figma/actions"
+import { figmaRefreshAction } from "@/app/(dashboard)/studies/[id]/figma/actions"
 
 type Phase = "idle" | "busy" | "done"
 
@@ -41,14 +38,8 @@ export function RefreshFigmaButton({ studyId }: { studyId: string }) {
 
       // baixa as imagens das telas aqui mesmo (fundo do heatmap), sem esperar
       // abrir os Resultados
-      for (let round = 0; round < 50; round++) {
-        const img = await loadFigmaImagesAction(studyId, { limit: 6 })
-        if (!img.ok) {
-          toast.error(img.error)
-          break
-        }
-        if (img.remaining === 0) break
-      }
+      // o próprio "Atualizar" já reexportou as imagens; aqui só avisa se o Figma recusou
+      if (res.imagesWarning) toast.error(res.imagesWarning)
       router.refresh()
 
       // estado breve de "carregado com sucesso" e volta pro normal
