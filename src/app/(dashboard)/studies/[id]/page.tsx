@@ -167,11 +167,23 @@ export default async function StudyPage({
   }))
   // Chave do Figma só quando o teste roda AO VIVO (arquivo público). Em réplica
   // (arquivo restrito) o construtor usa o player de imagens, como o testador.
-  // Telas do Figma ainda sem imagem: obrigatórias para a réplica, a tela das
-  // perguntas, os hotspots e os heatmaps. São baixadas pelo banner abaixo.
-  const missingFigmaImages =
-    study.prototype?.source === "figma" ? screens.filter((s) => !s.imageUrl && s.figmaNodeId).length : 0
   const builderFigmaKey = (await runsLiveFigma(study.prototype)) ? study.prototype!.figmaFileKey : null
+  // Telas do Figma ainda sem imagem que o TESTE precisa: na réplica, todas (o
+  // teste roda nas imagens); ao vivo, só as exibidas junto com perguntas (o resto
+  // vem do embed). Baixar imagem gasta a cota da API do Figma, então ao vivo não
+  // baixamos o que o teste não usa — miniaturas e heatmap baixam sob demanda.
+  const questionScreenIds = new Set(
+    study.blocks.flatMap((b) => [
+      ...(b.question?.screenId ? [b.question.screenId] : []),
+      ...(b.mission?.questions ?? []).flatMap((q) => (q.screenId ? [q.screenId] : [])),
+    ])
+  )
+  const missingFigmaImages =
+    study.prototype?.source === "figma"
+      ? screens.filter(
+          (s) => !s.imageUrl && s.figmaNodeId && (!builderFigmaKey || questionScreenIds.has(s.id))
+        ).length
+      : 0
   const susLang = (study.language ?? "pt") === "es" ? "es" : "pt"
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
