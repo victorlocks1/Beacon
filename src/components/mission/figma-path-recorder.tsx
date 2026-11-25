@@ -74,8 +74,17 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
     return s ? `${s.order + 1}. ${s.name}` : "?"
   }
 
+  // O Figma abriu OUTRA tela no lugar da tela inicial pedida (acontece quando
+  // ela não existe mais no arquivo — ex.: frames recriados depois da importação).
+  // null = ainda não sabemos / abriu a certa.
+  const [openedElsewhere, setOpenedElsewhere] = useState<null | { node: string }>(null)
+  // a 1ª tela apresentada depois de abrir ainda não foi conferida
+  const firstPresentRef = useRef(true)
+
   const startRecording = useCallback(() => {
     if (!startScreenId) return
+    setOpenedElsewhere(null)
+    firstPresentRef.current = true
     setEmbedSrc(
       figmaEmbedUrl({ fileKey, startNodeId, host: window.location.host, scaling: layout.scaling })
     )
@@ -160,6 +169,18 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
       if (d.type !== "PRESENTED_NODE_CHANGED") return
       setNavigating(false) // a nova tela apareceu
       const nodeId = d.data?.presentedNodeId as string | undefined
+      // 1ª tela apresentada: confere se é a tela inicial pedida. Se o Figma abriu
+      // outra, o caminho NÃO pode começar pela tela escolhida — avisa e, se a
+      // tela aberta for conhecida, começa o caminho por ela.
+      if (firstPresentRef.current) {
+        firstPresentRef.current = false
+        if (nodeId && startNodeId && nodeId !== startNodeId) {
+          setOpenedElsewhere({ node: nodeId })
+          const opened = screenByNode[nodeId]
+          setRecording(opened ? [opened] : [])
+          return
+        }
+      }
       const screenId = nodeId ? screenByNode[nodeId] : undefined
       if (!screenId) return
       setRecording((r) => (r ? dedupeConsecutive([...r, screenId]) : r))
@@ -184,6 +205,18 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
 
       {recording ? (
         <div className="space-y-3 border rounded-xl p-3">
+          {openedElsewhere && (
+            <div className="rounded-xl border border-error/30 bg-error-container px-4 py-3 text-body-small text-on-error-container">
+              <strong className="font-medium">O Figma abriu outra tela, não a tela inicial escolhida.</strong>{" "}
+              Isso acontece quando essa tela não existe mais no arquivo do Figma (por exemplo, os frames
+              foram recriados depois da importação). {screenByNode[openedElsewhere.node]
+                ? `O caminho começou por “${screenById.get(screenByNode[openedElsewhere.node])?.name}”, a tela que o Figma abriu.`
+                : "A tela que o Figma abriu não está entre as telas importadas, então ela não entra no caminho."}{" "}
+              Para corrigir, use <strong className="font-medium">Atualizar protótipo</strong> na aba Protótipo e
+              escolha a tela inicial de novo.
+            </div>
+          )}
+
           {/* Breadcrumb do que já foi navegado */}
           <div className="flex items-center gap-1 flex-wrap text-xs">
             <span className="font-medium mr-1">Gravando:</span>

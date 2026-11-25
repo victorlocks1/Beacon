@@ -165,6 +165,13 @@ export function FigmaFlowRunner({
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const missionRef = useRef<string | null>(null)
   const startNodeRef = useRef<string | null>(null)
+  // Tela que o Figma está mostrando agora e a tela inicial pedida para a tarefa.
+  // Se a pedida não existe mais no arquivo, o Figma abre o início do fluxo — e o
+  // caminho da tarefa precisa começar pela tela que ele REALMENTE mostrou.
+  const presentedNowRef = useRef<string | null>(null)
+  const expectedStartRef = useRef<string | null>(null)
+  const firstPresentedRef = useRef(true)
+  const [startMismatch, setStartMismatch] = useState(false)
   const startedRef = useRef(false)
   const completedRef = useRef(false)
   const startTimeRef = useRef(0)
@@ -266,6 +273,9 @@ export function FigmaFlowRunner({
     epochRef.current = now()
     setEmbedBlocked(false)
     embedSignalRef.current = false
+    expectedStartRef.current = currentStartNode
+    firstPresentedRef.current = true
+    setStartMismatch(false)
     // Rede de segurança: se o Figma não der sinal nenhum, esconde o loader e avisa
     // que o protótipo não abriu (no lugar dele o Figma mostra login/senha).
     // Protótipos grandes levam mais de 10s para carregar (medido: ~11s) — com o
@@ -433,6 +443,15 @@ export function FigmaFlowRunner({
         embedSignalRef.current = true
         setEmbedLoaded(true)
         setEmbedBlocked(false)
+      }
+
+      if (d.type === "PRESENTED_NODE_CHANGED") {
+        const shown = (d.data?.presentedNodeId as string | undefined) ?? null
+        presentedNowRef.current = shown
+        if (firstPresentedRef.current) {
+          firstPresentedRef.current = false
+          if (shown && expectedStartRef.current && shown !== expectedStartRef.current) setStartMismatch(true)
+        }
       }
 
       if (!startedRef.current || !missionRef.current) return
@@ -706,27 +725,33 @@ export function FigmaFlowRunner({
     misclickCountRef.current = 0
     interactedRef.current = false
     setInteracted(false)
-    pathRef.current = mission.startScreenId ? [mission.startScreenId] : []
+    // tela em que a tarefa REALMENTE começa: a pedida, ou a que o Figma abriu no
+    // lugar dela (tela pedida inexistente no arquivo)
+    const shownNode = presentedNowRef.current
+    const openedInstead =
+      shownNode && currentStartNode && shownNode !== currentStartNode ? screenByNode[shownNode]?.id : undefined
+    const startId = openedInstead ?? mission.startScreenId
+    pathRef.current = startId ? [startId] : []
     missionRef.current = mission.id
-    startNodeRef.current = currentStartNode
+    startNodeRef.current = shownNode ?? currentStartNode
     pendingPressRef.current = null
     postNavRef.current = 0
     setSumValues([0, 0, 0])
     // inicializa o rastreador do caminho exato (início já conta como 1º passo)
     matchRef.current = (expectedPathsByMission[mission.id] ?? []).map((steps) => ({
       steps,
-      len: steps[0]?.ids.includes(mission.startScreenId) ? 1 : 0,
+      len: startId && steps[0]?.ids.includes(startId) ? 1 : 0,
       clean: true,
     }))
     startedRef.current = true
     // navigate inicial: marca o início da tarefa na tela inicial e persiste já
     // (permite distinguir "iniciou e sumiu" = perdida de "nunca iniciou").
-    if (mission.startScreenId) {
+    if (startId) {
       ourBufferRef.current.push({
         missionId: mission.id,
-        screenId: mission.startScreenId,
+        screenId: startId,
         type: "navigate",
-        targetScreenId: mission.startScreenId,
+        targetScreenId: startId,
         xNorm: 0,
         yNorm: 0,
         timestampMs: 0,
@@ -997,6 +1022,16 @@ export function FigmaFlowRunner({
             loading="eager"
             style={figmaEmbedFrameStyle()}
           />
+        )}
+
+        {/* Revisão: o Figma abriu outra tela no lugar da tela inicial da tarefa */}
+        {preview && startMismatch && !embedBlocked && (
+          <div className="absolute inset-x-3 top-3 z-20 rounded-2xl border border-error/30 bg-error-container px-4 py-3 text-body-small text-on-error-container shadow-md">
+            <strong className="font-medium">O Figma abriu outra tela, não a tela inicial desta tarefa.</strong>{" "}
+            Ela não existe mais no arquivo do Figma (provavelmente os frames foram recriados depois da
+            importação). Use <strong className="font-medium">Atualizar protótipo</strong> e escolha a
+            tela inicial de novo.
+          </div>
         )}
 
         {/* O protótipo não abriu: avisa, em vez de deixar a pessoa diante de uma
