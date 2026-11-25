@@ -291,8 +291,10 @@ model Mission {
   block         Block           @relation(fields: [blockId], references: [id], onDelete: Cascade)
   task          String
   description   String?
-  startScreenId String
-  startScreen   Screen          @relation("MissionStartScreen", fields: [startScreenId], references: [id], onDelete: Cascade)
+  // Opcional: excluir a tela inicial NÃO exclui a tarefa — ela fica sem tela
+  // inicial, é marcada como incompleta e bloqueia a publicação até ser escolhida.
+  startScreenId String?
+  startScreen   Screen?         @relation("MissionStartScreen", fields: [startScreenId], references: [id], onDelete: SetNull)
   successType   SuccessType
   // SUM: tempo ideal (ms) da tarefa p/ a dimensão Tempo. Nulo = estima por KLM
   // a partir do caminho exato.

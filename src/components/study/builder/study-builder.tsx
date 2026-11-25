@@ -42,7 +42,15 @@ function isRedirect(e: unknown) {
 }
 
 export type BuilderBlock =
-  | { id: string; kind: "mission"; missionId: string; task: string; startScreenId: string; initial: MissionInitial }
+  | {
+      id: string
+      kind: "mission"
+      missionId: string
+      task: string
+      startScreenId: string
+      initial: MissionInitial
+      issues?: string[] // o que falta para a tarefa poder ser testada
+    }
   | { id: string; kind: "question"; questionId: string; title: string; qtype: string; initial: QuestionInitial }
   | { id: string; kind: "sus" }
 
@@ -75,10 +83,12 @@ function BuilderRow({
   icon: Icon,
   label,
   sub,
+  warn = false,
   onDelete,
   draggable,
 }: {
   ctx: RowCtx
+  warn?: boolean // tarefa incompleta: o subtítulo vira aviso
   id: Selection
   icon: React.ElementType
   label: string
@@ -126,7 +136,12 @@ function BuilderRow({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-body-medium text-on-surface truncate">{label}</p>
-        {sub && <p className="text-label-small text-on-surface-variant truncate">{sub}</p>}
+        {sub && (
+          <p className={cn("text-label-small truncate", warn ? "text-error font-medium" : "text-on-surface-variant")}>
+            {warn && "⚠ "}
+            {sub}
+          </p>
+        )}
       </div>
       {onDelete && editable && (
         <button
@@ -311,7 +326,8 @@ export function StudyBuilder({
               id={b.id}
               icon={Flag}
               label={b.task || `Missão ${i + 1}`}
-              sub="Tarefa"
+              sub={b.issues?.length ? `Incompleta: ${b.issues.join(", ")}` : "Tarefa"}
+              warn={!!b.issues?.length}
               draggable
               onDelete={() => del(b)}
             />
@@ -440,6 +456,7 @@ export function StudyBuilder({
             studyId={studyId}
             missionId={selectedBlock.missionId}
             initial={selectedBlock.initial}
+            issues={selectedBlock.issues}
             deviceType={deviceType}
             screens={missionScreens}
             figmaFileKey={figmaFileKey}

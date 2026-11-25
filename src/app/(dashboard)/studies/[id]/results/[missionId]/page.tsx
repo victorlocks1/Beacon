@@ -130,7 +130,7 @@ export default async function MissionResultsPage({
     const cached = pathCache.get(sessionId)
     if (cached) return cached
     const path = reconstructPath(navsBySession.get(sessionId) ?? [])
-    if (path.length === 0) path.push(startScreenId)
+    if (path.length === 0 && startScreenId) path.push(startScreenId)
     pathCache.set(sessionId, path)
     return path
   }
@@ -297,7 +297,7 @@ export default async function MissionResultsPage({
   // tela inicial da tarefa entra sempre (mesmo sem evento). Telas sem clique
   // aparecem normalmente (só a imagem, sem overlay). Ordem = 1ª visita.
   const firstSeenAt = new Map<string, number>()
-  firstSeenAt.set(mission.startScreenId, -1) // inicial sempre primeiro
+  if (mission.startScreenId) firstSeenAt.set(mission.startScreenId, -1) // inicial sempre primeiro
   for (const e of events) {
     const t = Number(e.timestampMs)
     const prev = firstSeenAt.get(e.screenId)

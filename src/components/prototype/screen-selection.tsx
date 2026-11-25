@@ -1,20 +1,8 @@
 "use client"
 import { createContext, useContext, useState } from "react"
-import { useRouter } from "next/navigation"
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Trash2, Loader2 } from "lucide-react"
-import { toast } from "@/components/ui/toast"
-import { deleteScreensAction } from "@/app/(dashboard)/studies/[id]/actions"
+import { Trash2 } from "lucide-react"
+import { ScreenDeleteDialog } from "@/components/prototype/screen-delete-dialog"
 
 // Seleção de várias telas na aba Protótipo para excluir de uma vez. A lista é
 // renderizada no servidor; este provider guarda só quais telas estão marcadas.
@@ -65,34 +53,12 @@ export function ScreenCheckbox({ id, name }: { id: string; name: string }) {
   )
 }
 
-/** "Selecionar todas" + "Excluir selecionadas (N)", com confirmação. */
+/** "Selecionar todas" + "Excluir selecionadas (N)", com o aviso de impacto. */
 export function BulkScreenActions({ studyId }: { studyId: string }) {
-  const router = useRouter()
   const { selected, allIds, setAll } = useSelection()
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
   const count = selected.size
   const allOn = count > 0 && count === allIds.length
-
-  async function confirm() {
-    setBusy(true)
-    try {
-      const res = await deleteScreensAction(studyId, [...selected])
-      setOpen(false)
-      setAll(false)
-      if (res.deleted > 0) toast.success(`${res.deleted} tela(s) excluída(s)`)
-      if (res.blocked.length > 0) {
-        toast.error(
-          `${res.blocked.length} tela(s) não foram excluídas porque estão em missões: ${res.blocked.join(", ")}. Remova-as das missões antes.`
-        )
-      }
-      router.refresh()
-    } catch {
-      toast.error("Não foi possível excluir as telas.")
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <>
@@ -119,25 +85,14 @@ export function BulkScreenActions({ studyId }: { studyId: string }) {
           Excluir selecionadas ({count})
         </Button>
       )}
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir {count} tela(s)?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Remove as telas selecionadas do protótipo, com os hotspots e regiões delas, e os
-              hotspots de outras telas que levavam até elas. Telas usadas em missões não são
-              excluídas. Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={confirm} disabled={busy}>
-              {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Excluir {count} tela(s)
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ScreenDeleteDialog
+        studyId={studyId}
+        screenIds={[...selected]}
+        label={count === 1 ? "1 tela" : `${count} telas`}
+        open={open}
+        onOpenChange={setOpen}
+        onDeleted={() => setAll(false)}
+      />
     </>
   )
 }

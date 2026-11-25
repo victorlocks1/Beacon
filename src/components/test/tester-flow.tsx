@@ -114,6 +114,10 @@ export async function TesterRun({
   const testSteps: Step[] = study.blocks.flatMap((b): Step[] => {
     if (b.type === "mission" && b.mission) {
       const m = b.mission
+      // tarefa incompleta (sem tela inicial) não vai para o participante; a
+      // publicação já é bloqueada nesse caso — isto é só uma proteção extra
+      const startScreenId = m.startScreenId
+      if (!startScreenId) return []
       const goalScreenIds =
         m.successType === "path"
           ? [
@@ -131,7 +135,7 @@ export async function TesterRun({
             id: m.id,
             task: m.task,
             description: m.description,
-            startScreenId: m.startScreenId,
+            startScreenId,
             goalScreenIds,
             goalHotspotIds: m.goalHotspots.map((g) => g.hotspotId),
             successType: m.successType,

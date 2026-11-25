@@ -84,7 +84,7 @@ export default async function PreviewPage({
           })),
         }))}
         mission={
-          firstMission
+          firstMission?.startScreenId
             ? {
                 task: firstMission.task,
                 description: firstMission.description,

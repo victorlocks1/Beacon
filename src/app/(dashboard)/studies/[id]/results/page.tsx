@@ -92,7 +92,7 @@ export default async function ResultsOverviewPage({
     if (r.outcome !== "direct" && r.outcome !== "indirect") return r.outcome
     const nav = navByKey.get(`${r.missionId}:${r.sessionId}`) ?? []
     const path = reconstructPath(nav)
-    if (path.length === 0) path.push(meta.start)
+    if (path.length === 0 && meta.start) path.push(meta.start)
     return classifyExactPath(path, meta.expected) ?? "unfinished"
   }
 

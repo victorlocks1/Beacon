@@ -267,132 +267,89 @@ export async function uploadScreensAction(studyId: string, formData: FormData) {
   revalidatePath(`/studies/${studyId}`)
 }
 
-export async function deleteScreenAction(studyId: string, screenId: string) {
-  const { study } = await getStudyOrThrow(studyId)
-  blockIfLive(study, studyId)
+// O que acontece com as tarefas (e perguntas) se estas telas forem excluídas.
+// Usado no aviso antes de excluir: a exclusão é livre, mas o criador vê o efeito.
+export type ScreenDeletionImpact = { task: string; effect: string }
 
-  const screen = await prisma.screen.findUnique({
-    where: { id: screenId, prototype: { studyId: study.id } },
+export async function screenDeletionImpactAction(
+  studyId: string,
+  screenIds: string[]
+): Promise<ScreenDeletionImpact[]> {
+  const { study } = await getStudyOrThrow(studyId)
+  const ids = new Set(screenIds)
+  const missions = await prisma.mission.findMany({
+    where: { block: { studyId: study.id } },
+    orderBy: { block: { order: "asc" } },
     include: {
-      missionStarts: { select: { id: true } },
-      missionGoals: { select: { id: true } },
-      pathSteps: { select: { id: true } },
-      // hotspot da tela marcado como critério de sucesso de uma missão
-      hotspots: { select: { goalFor: { select: { id: true } } } },
+      goals: { select: { goalScreenId: true } },
+      paths: { include: { steps: { select: { screenId: true } } } },
+      goalHotspots: { include: { hotspot: { select: { screenId: true } } } },
+      questions: { select: { title: true, screenId: true } },
     },
   })
-  if (!screen) return
-
-  if (
-    screen.missionStarts.length > 0 ||
-    screen.missionGoals.length > 0 ||
-    screen.pathSteps.length > 0 ||
-    screen.hotspots.some((h) => h.goalFor.length > 0)
-  ) {
-    redirect(
-      `/studies/${studyId}?error=${encodeURIComponent("Esta tela está sendo usada em uma missão. Remova a missão antes de excluir.")}`
-    )
-  }
-
-  // Remove hotspots that apontam PARA esta tela antes de deletar
-  await prisma.hotspot.deleteMany({ where: { targetScreenId: screenId } })
-
-  // Limpa o storage: imagem da tela + tiras de scroll (evita órfãos no bucket).
-  const regions = await prisma.scrollRegion.findMany({
-    where: { screenId },
-    select: { imageUrl: true },
+  const freeQuestions = await prisma.question.findMany({
+    where: { block: { studyId: study.id }, screenId: { in: screenIds } },
+    select: { title: true },
   })
-  await removeStorageByUrls([screen.imageUrl, ...regions.map((r) => r.imageUrl)])
-
-  await prisma.screen.delete({ where: { id: screenId } })
-  revalidatePath(`/studies/${studyId}`)
+  const out: ScreenDeletionImpact[] = []
+  for (const m of missions) {
+    const task = m.task
+    if (m.startScreenId && ids.has(m.startScreenId)) {
+      out.push({ task, effect: "fica sem tela inicial — a tarefa continua, mas será preciso escolher outra antes de publicar" })
+    }
+    const goalsHit = m.goals.filter((g) => ids.has(g.goalScreenId)).length
+    if (goalsHit && goalsHit === m.goals.length) out.push({ task, effect: "fica sem tela de sucesso — será preciso escolher outra antes de publicar" })
+    const stepsHit = m.paths.reduce((n, p) => n + p.steps.filter((st) => ids.has(st.screenId)).length, 0)
+    if (stepsHit) out.push({ task, effect: `o caminho esperado perde ${stepsHit} passo(s)` })
+    const hsHit = m.goalHotspots.filter((g) => ids.has(g.hotspot.screenId)).length
+    if (hsHit) {
+      out.push({
+        task,
+        effect:
+          hsHit === m.goalHotspots.length
+            ? "fica sem hotspot de sucesso — será preciso marcar outro antes de publicar"
+            : `perde ${hsHit} hotspot(s) de sucesso`,
+      })
+    }
+    for (const q of m.questions) {
+      if (q.screenId && ids.has(q.screenId)) out.push({ task, effect: `a pergunta “${q.title}” deixa de mostrar a tela` })
+    }
+  }
+  for (const q of freeQuestions) out.push({ task: "Pergunta", effect: `“${q.title}” deixa de mostrar a tela` })
+  return out
 }
 
-// Exclui TODAS as telas do protótipo de uma vez (e limpa o storage). Bloqueia se
-// alguma tela estiver em uso por missão — o usuário remove as missões antes.
-// Exclui várias telas de uma vez (seleção na aba Protótipo). Mesmas regras da
-// exclusão unitária: telas usadas em missões NÃO são excluídas (voltam em
-// `blocked`, pelo nome); hotspots de outras telas que levavam até elas saem
-// junto; imagens e tiras saem do storage.
+// Exclui uma ou várias telas. A exclusão é LIVRE (o aviso de impacto vem antes,
+// via screenDeletionImpactAction) e NUNCA exclui tarefas: a tarefa que usava a
+// tela fica sem ela, é marcada como incompleta e bloqueia a publicação (ver
+// missionIssues). Hotspots que levavam até as telas saem; imagens e tiras saem
+// do storage.
 export async function deleteScreensAction(
   studyId: string,
   screenIds: string[]
-): Promise<{ deleted: number; blocked: string[] }> {
+): Promise<{ deleted: number }> {
   const { study } = await getStudyOrThrow(studyId)
   blockIfLive(study, studyId)
   const prototypeId = study.prototype?.id
-  if (!prototypeId || !screenIds.length) return { deleted: 0, blocked: [] }
+  if (!prototypeId || !screenIds.length) return { deleted: 0 }
 
   const screens = await prisma.screen.findMany({
     where: { id: { in: screenIds }, prototypeId },
-    select: {
-      id: true,
-      name: true,
-      imageUrl: true,
-      scrollRegions: { select: { imageUrl: true } },
-      missionStarts: { select: { id: true } },
-      missionGoals: { select: { id: true } },
-      pathSteps: { select: { id: true } },
-      hotspots: { select: { goalFor: { select: { id: true } } } },
-    },
+    select: { id: true, imageUrl: true, scrollRegions: { select: { imageUrl: true } } },
   })
-  const inMission = (s: (typeof screens)[number]) =>
-    s.missionStarts.length > 0 ||
-    s.missionGoals.length > 0 ||
-    s.pathSteps.length > 0 ||
-    s.hotspots.some((h) => h.goalFor.length > 0)
-  const blocked = screens.filter(inMission).map((s) => s.name)
-  const toDelete = screens.filter((s) => !inMission(s))
-  if (!toDelete.length) return { deleted: 0, blocked }
+  if (!screens.length) return { deleted: 0 }
+  const ids = screens.map((s) => s.id)
 
-  const ids = toDelete.map((s) => s.id)
   await prisma.$transaction([
     prisma.hotspot.deleteMany({ where: { targetScreenId: { in: ids } } }),
     prisma.screen.deleteMany({ where: { id: { in: ids } } }),
   ])
   await removeStorageByUrls([
-    ...toDelete.map((s) => s.imageUrl),
-    ...toDelete.flatMap((s) => s.scrollRegions.map((r) => r.imageUrl)),
-  ])
-  revalidatePath(`/studies/${studyId}`)
-  return { deleted: ids.length, blocked }
-}
-
-export async function deleteAllScreensAction(studyId: string) {
-  const { study } = await getStudyOrThrow(studyId)
-  blockIfLive(study, studyId)
-
-  const prototypeId = study.prototype?.id
-  if (!prototypeId) return
-
-  const screens = await prisma.screen.findMany({
-    where: { prototypeId },
-    select: {
-      imageUrl: true,
-      scrollRegions: { select: { imageUrl: true } },
-      missionStarts: { select: { id: true } },
-      missionGoals: { select: { id: true } },
-      pathSteps: { select: { id: true } },
-    },
-  })
-  if (!screens.length) return
-
-  const usedInMission = screens.some(
-    (s) => s.missionStarts.length > 0 || s.missionGoals.length > 0 || s.pathSteps.length > 0
-  )
-  if (usedInMission) {
-    redirect(
-      `/studies/${studyId}?error=${encodeURIComponent("Há telas usadas em missões. Exclua as missões antes de limpar todas as telas.")}`
-    )
-  }
-
-  await removeStorageByUrls([
     ...screens.map((s) => s.imageUrl),
     ...screens.flatMap((s) => s.scrollRegions.map((r) => r.imageUrl)),
   ])
-
-  await prisma.screen.deleteMany({ where: { prototypeId } })
   revalidatePath(`/studies/${studyId}`)
+  return { deleted: ids.length }
 }
 
 export async function moveScreenAction(

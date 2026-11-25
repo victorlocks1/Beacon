@@ -20,17 +20,18 @@ import { SubmitButton } from "@/components/submit-button"
 import { MissionSavedToast } from "@/components/study/mission-saved-toast"
 import { EditableScreenName } from "@/components/prototype/editable-screen-name"
 import { EditableStudyTitle } from "@/components/study/editable-study-title"
-import { deleteScreenAction, moveScreenAction } from "./actions"
+import { moveScreenAction } from "./actions"
+import { DeleteScreenButton } from "@/components/prototype/screen-delete-dialog"
 import { StudyBuilder, type BuilderBlock } from "@/components/study/builder/study-builder"
 import { StudyHeaderActions } from "@/components/study/study-header-actions"
 import { tt, type Lang } from "@/lib/i18n"
 import { runsLiveFigma } from "@/lib/figma-access"
+import { missionIssues } from "@/lib/mission-issues"
 import { FigmaImagesSyncBanner } from "@/components/prototype/figma-images-sync"
 import { susStatementsFor, SUS_STATEMENTS, SUS_OPTIONS } from "@/lib/sus"
 import { asqStatementsFor, ASQ_STATEMENTS, ASQ_ANCHORS, ASQ_LABELS } from "@/lib/sum"
 import {
   ArrowLeft,
-  Trash2,
   MousePointerClick,
   ChevronUp,
   ChevronDown,
@@ -92,6 +93,11 @@ export default async function StudyPage({
   const missions = study.blocks
     .filter((b) => b.type === "mission" && b.mission)
     .map((b) => b.mission!)
+  // tarefas que não podem ir a teste (ex.: tela inicial excluída) — bloqueiam publicar
+  const incompleteTasks = missions
+    .map((m) => ({ task: m.task, issues: missionIssues(m) }))
+    .filter((x) => x.issues.length > 0)
+    .map((x) => `“${x.task}” (${x.issues.join(", ")})`)
 
   const builderBlocks: BuilderBlock[] = blocks
     .map((b): BuilderBlock | null => {
@@ -102,12 +108,13 @@ export default async function StudyPage({
           kind: "mission",
           missionId: m.id,
           task: m.task,
-          startScreenId: m.startScreenId,
+          startScreenId: m.startScreenId ?? "",
+          issues: missionIssues(m),
           initial: {
             task: m.task,
             description: m.description,
             successType: m.successType,
-            startScreenId: m.startScreenId,
+            startScreenId: m.startScreenId ?? "",
             goalScreenId: m.goals[0]?.goalScreenId ?? null,
             goalHotspotIds: m.goalHotspots.map((g) => g.hotspotId),
             paths: m.paths.map((p) =>
@@ -216,11 +223,18 @@ export default async function StudyPage({
         <StudyHeaderActions
           studyId={study.id}
           status={study.status as "draft" | "live" | "closed"}
-          canPublish={screens.length > 0 && missions.length > 0 && missingFigmaImages === 0}
+          canPublish={
+            screens.length > 0 &&
+            missions.length > 0 &&
+            missingFigmaImages === 0 &&
+            incompleteTasks.length === 0
+          }
           publishHint={
-            missingFigmaImages > 0
-              ? "Aguarde as imagens das telas do Figma terminarem de carregar"
-              : undefined
+            incompleteTasks.length > 0
+              ? `Há tarefa(s) incompleta(s): ${incompleteTasks.join("; ")}`
+              : missingFigmaImages > 0
+                ? "Aguarde as imagens das telas do Figma terminarem de carregar"
+                : undefined
           }
           shareCode={study.shareCode}
           members={study.members.map((m) => ({
@@ -264,7 +278,7 @@ export default async function StudyPage({
                 {study.prototype?.source === "figma" && (
                   <RefreshFigmaButton studyId={study.id} />
                 )}
-                <DeleteAllScreensButton studyId={study.id} screenCount={screens.length} />
+                <DeleteAllScreensButton studyId={study.id} screenIds={screens.map((s) => s.id)} />
               </div>
             )}
           </div>
@@ -347,11 +361,7 @@ export default async function StudyPage({
                         Hotspots
                       </Link>
 
-                      <form action={deleteScreenAction.bind(null, study.id, screen.id)}>
-                        <SubmitButton variant="ghost" size="icon" fullWidth={false} className="h-8 w-8 text-red-500 hover:text-red-700">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </SubmitButton>
-                      </form>
+                      <DeleteScreenButton studyId={study.id} screenId={screen.id} name={screen.name} />
                     </div>
                     )}
                   </div>

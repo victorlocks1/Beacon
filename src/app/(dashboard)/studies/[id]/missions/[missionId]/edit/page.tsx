@@ -45,7 +45,7 @@ export default async function EditMissionPage({
     task: mission.task,
     description: mission.description,
     successType: mission.successType,
-    startScreenId: mission.startScreenId,
+    startScreenId: mission.startScreenId ?? "",
     goalScreenId: mission.goals[0]?.goalScreenId ?? null,
     goalHotspotIds: mission.goalHotspots.map((g) => g.hotspotId),
     paths: mission.paths.map((p) =>

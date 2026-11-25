@@ -38,7 +38,8 @@ export default async function ReviewPage({
               .map((p) => p.steps[p.steps.length - 1]?.screenId)
               .filter((sid): sid is string => !!sid)
           : m.goals.map((g) => g.goalScreenId)
-      const screenIds = [...new Set([m.startScreenId, ...goalIds])].filter((id) =>
+      const screenIds = [...new Set([m.startScreenId, ...goalIds])].filter((id): id is string =>
+        !!id &&
         screens.some((s) => s.id === id)
       )
       return {

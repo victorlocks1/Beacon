@@ -81,9 +81,10 @@ interface Props {
   initial?: MissionInitial
   stickyFooter?: boolean // no builder: botão salvar fixo no rodapé
   sumEnabled?: boolean // SUM ativa → mostra o campo de tempo ideal (override do KLM)
+  issues?: string[] // o que falta (tarefa incompleta)
 }
 
-export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missionId, initial, stickyFooter = false, sumEnabled = false }: Props) {
+export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missionId, initial, issues = [], stickyFooter = false, sumEnabled = false }: Props) {
   // Estudos do Figma gravam o caminho no protótipo vivo (embed); manuais usam o player de imagem.
   const canEmbed = !!figmaFileKey && !!FIGMA_EMBED_CLIENT_ID
   const isEdit = !!missionId
@@ -173,6 +174,14 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
 
   return (
     <div className="space-y-10">
+      {/* Tarefa incompleta (ex.: a tela inicial foi excluída do protótipo) */}
+      {issues.length > 0 && (
+        <div className="rounded-2xl border border-error/30 bg-error-container px-5 py-4 text-body-medium text-on-error-container">
+          <strong className="font-medium">Esta tarefa está incompleta:</strong> {issues.join(", ")}.
+          Provavelmente a tela foi excluída do protótipo. Escolha outra abaixo e salve — enquanto
+          isso, o estudo não pode ser publicado.
+        </div>
+      )}
       {/* ── Sobre a tarefa ── */}
       <section className="space-y-5">
         <div>
