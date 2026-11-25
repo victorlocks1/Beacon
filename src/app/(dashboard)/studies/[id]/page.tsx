@@ -10,6 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScreenUploadForm } from "@/components/prototype/screen-upload-form"
 import { FigmaImportDialog } from "@/components/prototype/figma-import-dialog"
 import { DeleteAllScreensButton } from "@/components/prototype/delete-all-screens-button"
+import {
+  ScreenSelectionProvider,
+  ScreenCheckbox,
+  BulkScreenActions,
+} from "@/components/prototype/screen-selection"
 import { RefreshFigmaButton } from "@/components/prototype/refresh-figma-button"
 import { SubmitButton } from "@/components/submit-button"
 import { MissionSavedToast } from "@/components/study/mission-saved-toast"
@@ -248,12 +253,14 @@ export default async function StudyPage({
 
         {/* ── Protótipo ── */}
         <TabsContent value="prototype" className="lg:min-h-0 lg:overflow-y-auto no-scrollbar">
+          <ScreenSelectionProvider allIds={screens.map((s) => s.id)}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-title-medium text-on-surface">
               {screens.length} {screens.length === 1 ? "tela" : "telas"}
             </h2>
             {editable && screens.length > 0 && (
               <div className="flex items-center gap-2">
+                <BulkScreenActions studyId={study.id} />
                 {study.prototype?.source === "figma" && (
                   <RefreshFigmaButton studyId={study.id} />
                 )}
@@ -287,6 +294,7 @@ export default async function StudyPage({
                     key={screen.id}
                     className="flex items-center gap-4 border border-outline-variant rounded-2xl p-4 bg-surface-container-low"
                   >
+                    {editable && <ScreenCheckbox id={screen.id} name={screen.name} />}
                     {/* Thumbnail — no import ao vivo a tela não tem imagem (o
                         embed renderiza); mostra um placeholder em vez de quebrar. */}
                     <div className="relative w-20 h-14 rounded overflow-hidden bg-surface-container-high shrink-0 flex items-center justify-center">
@@ -362,6 +370,7 @@ export default async function StudyPage({
               )}
             </div>
           )}
+          </ScreenSelectionProvider>
         </TabsContent>
 
         {/* ── Sequência (builder em 3 colunas: blocos · editor · preview) ── */}
