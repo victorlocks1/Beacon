@@ -58,6 +58,8 @@ export default async function NewMissionPage({
           height: s.height,
           scroll: s.scroll as "none" | "vertical" | "horizontal" | "both",
           figmaNodeId: s.figmaNodeId,
+          scrollFrames: s.scrollFrames,
+          fixedBoxes: s.fixedBoxes,
           hotspots: s.hotspots.map((h) => ({
             id: h.id,
             coords: h.coords as { x: number; y: number; w: number; h: number },

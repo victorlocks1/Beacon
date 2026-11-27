@@ -209,7 +209,7 @@ export function FigmaFlowRunner({
       fallback?: ReturnType<typeof setTimeout>
     } | null
   >(null)
-  // última reação do Figma (troca de tela ou de estado/variante), em now()
+  // última troca de tela feita pelo próprio Figma, em now()
   const figmaReactionAtRef = useRef(0)
   // instante da última contagem de clique na navegação — usado para ignorar o
   // evento de "release" que chega logo depois (senão viraria um press fantasma).
@@ -456,7 +456,9 @@ export function FigmaFlowRunner({
         setEmbedBlocked(false)
       }
 
-      if (d.type === "PRESENTED_NODE_CHANGED" || d.type === "NEW_STATE") figmaReactionAtRef.current = now()
+      // Só TROCA DE TELA conta como reação: o Figma às vezes só muda o estado do
+      // botão (efeito de pressionado) e não navega — aí o Beacon navega.
+      if (d.type === "PRESENTED_NODE_CHANGED") figmaReactionAtRef.current = now()
 
       if (d.type === "PRESENTED_NODE_CHANGED") {
         const shown = (d.data?.presentedNodeId as string | undefined) ?? null

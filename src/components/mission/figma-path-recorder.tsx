@@ -115,7 +115,7 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
     }
     let pending: Press | null = null
     let navTimer: ReturnType<typeof setTimeout> | null = null
-    // última reação do Figma (troca de tela ou de estado/variante)
+    // última troca de tela feita pelo próprio Figma
     let lastReactionAt = 0
     let presentedNow: string | undefined
     function runHotspot(hit: Parameters<typeof runEmbedHotspotAction>[1]) {
@@ -195,10 +195,6 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
           if (actsOnPress()) act(press)
           else press.timer = setTimeout(() => act(press), CLICK_PAIR_MS)
         }
-        return
-      }
-      if (d.type === "NEW_STATE") {
-        lastReactionAt = performance.now()
         return
       }
       if (d.type !== "PRESENTED_NODE_CHANGED") return
