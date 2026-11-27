@@ -13,6 +13,9 @@
 // a menos que outro chegue dentro de CLICK_PAIR_MS em outra posição (arraste).
 export const CLICK_PAIR_MS = 350
 export const DRAG_PX = 14
+// Clique num hotspot que o Figma diz ter tratado mas sem nenhuma reação (troca
+// de tela/estado) dentro deste prazo: o Beacon executa a ação do hotspot.
+export const HANDLED_FALLBACK_MS = 600
 
 // ── Vigência das regras ──
 // Números de testes já realizados NÃO são recalculados: cada sessão é lida com
@@ -198,6 +201,36 @@ export function clickContentPoint(
     x: (frameOrigin?.x ?? 0) + (click.vx + click.ox) / (screen.w || 1),
     y: (frameOrigin?.y ?? 0) + (click.vy + click.oy) / (screen.h || 1),
   }
+}
+
+// A partir desta data, clique em elemento FIXO (barra de abas, cabeçalho) é
+// localizado na posição de design do elemento (onde o hotspot foi desenhado),
+// e não na posição de conteúdo. Sessões anteriores seguem a regra antiga.
+export const FIXED_RULE_FROM = new Date("2026-11-27T20:30:00Z")
+
+/** Mapa nó → origem normalizada [x,y] dos elementos fixos de uma tela. */
+export type FixedBoxes = Record<string, [number, number]>
+
+/**
+ * Posição do clique na tela (0..1) para teste de hotspot. Se o elemento clicado
+ * é FIXO no protótipo (fica preso ao viewport enquanto a tela rola), usa a origem
+ * de design do elemento + a posição do clique dentro dele — é onde o hotspot foi
+ * desenhado. Caso contrário, coordenada de conteúdo (clickContentPoint).
+ */
+export function clickScreenPoint(
+  click: { vx: number; vy: number; ox: number; oy: number; targetNode?: string; tx?: number; ty?: number },
+  screen: { w: number; h: number },
+  frameOrigin?: { x: number; y: number } | null,
+  fixedBoxes?: FixedBoxes | null
+): { x: number; y: number } {
+  const fb = click.targetNode ? fixedBoxes?.[click.targetNode] : undefined
+  if (fb) {
+    return {
+      x: fb[0] + (click.tx ?? 0) / (screen.w || 1),
+      y: fb[1] + (click.ty ?? 0) / (screen.h || 1),
+    }
+  }
+  return clickContentPoint(click, screen, frameOrigin)
 }
 
 /** Hotspot que contém o ponto (o desenhado por último vence, como no player). */

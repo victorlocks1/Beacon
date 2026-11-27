@@ -169,6 +169,7 @@ export default async function StudyPage({
     scroll: sc.scroll as "none" | "vertical" | "horizontal" | "both",
     figmaNodeId: sc.figmaNodeId,
     scrollFrames: sc.scrollFrames,
+    fixedBoxes: sc.fixedBoxes,
     hotspots: sc.hotspots.map((h) => ({
       id: h.id,
       coords: h.coords as { x: number; y: number; w: number; h: number },

@@ -50,6 +50,7 @@ export interface Screen {
   scroll: "none" | "vertical" | "horizontal" | "both"
   figmaNodeId?: string | null
   scrollFrames?: unknown // geometria dos frames roláveis (Figma ao vivo)
+  fixedBoxes?: unknown // elementos fixos (barras) na posição de design
   hotspots: Hotspot[]
   scrollRegions?: {
     id: string
@@ -321,6 +322,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
                   width: s.width,
                   height: s.height,
                   scrollFrames: s.scrollFrames,
+                  fixedBoxes: s.fixedBoxes,
                   hotspots: s.hotspots,
                 }))}
                 startScreenId={startScreenId || null}

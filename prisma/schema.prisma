@@ -186,6 +186,11 @@ model Screen {
   // relativa ao elemento e não à tela. Permite plotar o clique em
   // origem_do_elemento + posição_dentro_dele (heatmap fiel da overlay).
   nodeBoxes        Json?
+  // Elementos FIXOS do protótipo (barra de abas, cabeçalho) e tudo dentro deles:
+  // nó → origem normalizada [x,y] na posição do DESIGN. No embed vivo eles ficam
+  // presos ao viewport; o clique neles é localizado em origem + posição dentro do
+  // elemento, que é onde o hotspot foi desenhado.
+  fixedBoxes       Json?
   hotspots         Hotspot[]      @relation("ScreenHotspots")
   incomingHotspots Hotspot[]     @relation("HotspotTarget")
   questions        Question[]    @relation("QuestionScreen")

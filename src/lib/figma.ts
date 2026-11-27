@@ -70,6 +70,11 @@ export interface ImportScreen {
   // Só para telas OVERLAY (bottomsheet/modal): nó → origem normalizada [x,y] na
   // tela. Permite o heatmap fiel (origem do elemento + posição dentro dele).
   nodeBoxes?: Record<string, [number, number]>
+  // Elementos FIXOS (barra de abas, cabeçalho) e tudo dentro deles: nó → origem
+  // normalizada [x,y] na tela, na posição do design. No protótipo eles ficam
+  // presos ao viewport; com isto o clique neles é localizado onde o hotspot foi
+  // desenhado (origem do elemento + posição dentro dele).
+  fixedBoxes?: Record<string, [number, number]>
   thumbUrl?: string
 }
 
@@ -315,6 +320,17 @@ const CLICK_TRIGGERS = new Set(["ON_CLICK", "ON_PRESS", "ON_TAP", "MOUSE_DOWN", 
 const SCREEN_TYPES = new Set(["FRAME", "COMPONENT", "INSTANCE"])
 
 // edges de protótipo de UM nó (1 hotspot por nó: pega a 1ª ação mapeável)
+// Qualquer interação de CLIQUE no nó vira hotspot. As que navegam/abrem/fecham/
+// voltam viram a ação correspondente; as demais (trocar variante, rolar até,
+// abrir link, variável, condicional…) viram hotspot SEM destino: a área clicável
+// existe no Beacon, conta como clique válido e pode ser critério de sucesso.
+function hotspotEdgeOf(n: FigNode): { action: ImportAction; dest: string | null } | null {
+  const edge = edgeForNode(n)
+  if (edge) return edge
+  const hasClick = (n.interactions ?? []).some((it) => it && CLICK_TRIGGERS.has(it.trigger?.type ?? ""))
+  return hasClick ? { action: "navigate", dest: null } : null
+}
+
 function edgeForNode(n: FigNode): { action: ImportAction; dest: string | null } | null {
   if (Array.isArray(n.interactions) && n.interactions.length) {
     for (const it of n.interactions) {
@@ -485,13 +501,15 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
   const regions: ImportRegion[] = []
   const scrollFrames: ScrollFrameGeom[] = []
 
+  const fixedBoxes: Record<string, [number, number]> = {}
+  const sb = screen.absoluteBoundingBox
   function walk(n: FigNode, depthFixed: boolean) {
     if (n !== screen) {
       // hotspot?
-      const edge = edgeForNode(n)
+      const edge = hotspotEdgeOf(n)
       if (!edge) {
-        const why = ignoredReasonOf(n)
-        if (why) ignore(why)
+        // só o que NÃO é clique fica de fora (hover, arrastar, tempo, tecla)
+        if (ignoredReasonOf(n) === "notClick") ignore("notClick")
       }
       if (edge) {
         // Sem clamp: hotspots DENTRO de áreas roláveis podem começar além do
@@ -582,6 +600,14 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
       }
     }
     const nowFixed = depthFixed || n.scrollBehavior === "FIXED"
+    // posição de design de tudo que está preso ao viewport (fixo)
+    if (n !== screen && nowFixed && n.absoluteBoundingBox && sb && sb.width && sb.height) {
+      const nb = n.absoluteBoundingBox
+      fixedBoxes[n.id] = [
+        Math.round(((nb.x - sb.x) / sb.width) * 10000) / 10000,
+        Math.round(((nb.y - sb.y) / sb.height) * 10000) / 10000,
+      ]
+    }
     for (const c of n.children || []) walk(c, nowFixed)
   }
   walk(screen, false)
@@ -627,6 +653,7 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
     ignored,
     regions,
     scrollFrames,
+    fixedBoxes: Object.keys(fixedBoxes).length ? fixedBoxes : undefined,
   }
 }
 
@@ -795,11 +822,10 @@ export async function collectImportPlan(
     // OVERLAY (bottomsheet/modal): guarda a geometria dos elementos p/ heatmap fiel
     if (overlayDests.has(id)) base.nodeBoxes = collectNodeBoxes(node, idx)
     // descarta hotspots navigate/overlay cujo destino ficou fora do conjunto final
-    base.hotspots = base.hotspots.filter((h) => {
-      if (h.action === "back" || h.action === "close_overlay") return true
-      const ok = !!h.destFigmaId && screenIds.has(h.destFigmaId)
-      if (!ok) base.ignored = { ...base.ignored, outOfScope: (base.ignored?.outOfScope ?? 0) + 1 }
-      return ok
+    base.hotspots = base.hotspots.map((h) => {
+      if (h.action === "back" || h.action === "close_overlay") return h
+      if (h.destFigmaId && screenIds.has(h.destFigmaId)) return h
+      return { ...h, action: "navigate" as const, overlayPosition: null, destFigmaId: null }
     })
     screens.push({ ...base, isStart: id === startId })
   }

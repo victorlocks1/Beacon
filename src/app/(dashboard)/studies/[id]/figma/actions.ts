@@ -1,6 +1,7 @@
 "use server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { Prisma } from "@/generated/prisma/client"
 import { supabase, removeStorageByUrls } from "@/lib/supabase"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -251,14 +252,16 @@ async function importFigmaHotspots(
       taken.push(h.coords)
       const needsTarget = h.action === "navigate" || h.action === "open_overlay"
       const targetScreenId = h.destFigmaId ? nodeToScreen.get(h.destFigmaId) ?? null : null
-      if (needsTarget && !targetScreenId) return [] // destino fora das telas importadas
+      // sem destino conhecido → hotspot "sem destino" (área clicável do Figma
+      // que não leva a uma tela importada): mantém, nunca descarta
+      const action = needsTarget && !targetScreenId ? ("navigate" as const) : h.action
       return [
         {
           screenId,
           shape: "rect" as const,
           coords: h.coords,
-          action: h.action,
-          overlayPosition: h.action === "open_overlay" ? h.overlayPosition ?? "bottom" : null,
+          action,
+          overlayPosition: action === "open_overlay" ? h.overlayPosition ?? "bottom" : null,
           targetScreenId: needsTarget ? targetScreenId : null,
         },
       ]
@@ -347,6 +350,7 @@ export async function figmaLiveImportAction(
           scroll: s.scroll,
           scrollFrames: s.scrollFrames,
           nodeBoxes: s.nodeBoxes,
+          fixedBoxes: s.fixedBoxes ?? Prisma.DbNull,
         },
       })
       nodeToScreen.set(s.figmaId, created.id)
@@ -535,6 +539,7 @@ export async function figmaRefreshAction(
             scroll: s.scroll,
             scrollFrames: s.scrollFrames,
           nodeBoxes: s.nodeBoxes, // preenche a geometria dos frames roláveis
+          fixedBoxes: s.fixedBoxes ?? Prisma.DbNull,
           },
         })
         updated++
@@ -551,6 +556,7 @@ export async function figmaRefreshAction(
             scroll: s.scroll,
             scrollFrames: s.scrollFrames,
           nodeBoxes: s.nodeBoxes,
+          fixedBoxes: s.fixedBoxes ?? Prisma.DbNull,
           },
         })
         nodeToScreen.set(s.figmaId, created.id)
@@ -659,6 +665,7 @@ async function figmaImportImpl(
         scroll: s.scroll,
         scrollFrames: s.scrollFrames,
           nodeBoxes: s.nodeBoxes,
+          fixedBoxes: s.fixedBoxes ?? Prisma.DbNull,
       },
     })
     idMap[s.figmaId] = created.id
@@ -699,14 +706,15 @@ async function figmaImportImpl(
     for (const h of s.hotspots) {
       const needsTarget = h.action === "navigate" || h.action === "open_overlay"
       const targetScreenId = h.destFigmaId ? idMap[h.destFigmaId] ?? null : null
-      if (needsTarget && !targetScreenId) continue // destino fora da seleção
+      // destino fora da seleção → hotspot sem destino (nunca descarta)
+      const action = needsTarget && !targetScreenId ? ("navigate" as const) : h.action
       await prisma.hotspot.create({
         data: {
           screenId,
           shape: "rect",
           coords: h.coords,
-          action: h.action,
-          overlayPosition: h.action === "open_overlay" ? h.overlayPosition ?? "bottom" : null,
+          action,
+          overlayPosition: action === "open_overlay" ? h.overlayPosition ?? "bottom" : null,
           targetScreenId,
         },
       })

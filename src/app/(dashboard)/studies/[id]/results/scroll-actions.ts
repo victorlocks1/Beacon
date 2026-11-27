@@ -4,9 +4,12 @@ import { auth } from "@/lib/auth"
 import {
   extractCountedClicks,
   clickContentPoint,
+  clickScreenPoint,
   hotspotAt,
   CLICK_RULE_V2_FROM,
   HOTSPOT_RULE_FROM,
+  FIXED_RULE_FROM,
+  type FixedBoxes,
   type CountedClick,
   type HotspotRect,
   type RawFigmaEvent,
@@ -32,6 +35,7 @@ function makeIsHandled(screen: {
   width: number
   height: number
   scrollFrames: unknown
+  fixedBoxes?: unknown
   hotspots: { id: string; coords: unknown }[]
 }) {
   const hotspots: HotspotRect[] = screen.hotspots.map((h) => ({
@@ -44,13 +48,18 @@ function makeIsHandled(screen: {
   const size = { w: screen.width, h: screen.height }
   // `hotspotRule` = a sessão é posterior a HOTSPOT_RULE_FROM (antes disso vale só
   // o que o Figma informou — não recalculamos testes já realizados).
-  return (cl: CountedClick, hotspotRule: boolean) =>
-    cl.handled ||
-    (hotspotRule &&
-      !!hotspotAt(
-        clickContentPoint(cl, size, cl.scrollFrameId ? origins.get(cl.scrollFrameId) : null),
-        hotspots
-      ))
+  // `fixedRule` = sessão posterior a FIXED_RULE_FROM: clique em elemento fixo
+  // (barra de abas) é localizado na posição de design do elemento.
+  const fixedBoxes = (screen.fixedBoxes as FixedBoxes | null | undefined) ?? null
+  return (cl: CountedClick, hotspotRule: boolean, fixedRule = false) => {
+    if (cl.handled) return true
+    if (!hotspotRule) return false
+    const origin = cl.scrollFrameId ? origins.get(cl.scrollFrameId) : null
+    const pt = fixedRule
+      ? clickScreenPoint(cl, size, origin, fixedBoxes)
+      : clickContentPoint(cl, size, origin)
+    return !!hotspotAt(pt, hotspots)
+  }
 }
 
 // Heatmap FIEL de uma OVERLAY (bottomsheet/modal): o embed manda a posição do
@@ -74,6 +83,7 @@ export async function getOverlayPoints(
         height: true,
         nodeBoxes: true,
         scrollFrames: true,
+        fixedBoxes: true,
         hotspots: { select: { id: true, coords: true } },
       },
     })
@@ -124,6 +134,7 @@ export async function getOverlayPoints(
       // cada sessão é lida com a regra vigente quando ela aconteceu
       const at = startedAt.get(sid) ?? new Date(0)
       const hotspotRule = at >= HOTSPOT_RULE_FROM
+      const fixedRule = at >= FIXED_RULE_FROM
       for (const cl of extractCountedClicks(events, (id) => screenNodes.has(id), {
         legacyPairing: at < CLICK_RULE_V2_FROM,
       })) {
@@ -136,7 +147,7 @@ export async function getOverlayPoints(
         points.push({
           x: Math.max(0, Math.min(1, x)),
           y: Math.max(0, Math.min(1, y)),
-          type: isHandled(cl, hotspotRule) ? "click" : "misclick",
+          type: isHandled(cl, hotspotRule, fixedRule) ? "click" : "misclick",
         })
       }
     }
@@ -166,6 +177,7 @@ export async function getScrollStrips(
         width: true,
         height: true,
         scrollFrames: true,
+        fixedBoxes: true,
         hotspots: { select: { id: true, coords: true } },
       },
     })
@@ -224,6 +236,7 @@ export async function getScrollStrips(
       // cada sessão é lida com a regra vigente quando ela aconteceu
       const at = startedAt.get(sid) ?? new Date(0)
       const hotspotRule = at >= HOTSPOT_RULE_FROM
+      const fixedRule = at >= FIXED_RULE_FROM
       const clicks = extractCountedClicks(events, (id) => screenNodes.has(id), {
         legacyPairing: at < CLICK_RULE_V2_FROM,
       })
@@ -235,7 +248,7 @@ export async function getScrollStrips(
         const cy = (cl.vy + cl.oy) / strip.contentH
         if (cx < -0.02 || cx > 1.02 || cy < -0.02 || cy > 1.02) continue
         const arr = pointsByFrame.get(strip.figmaId) ?? []
-        arr.push({ x: Math.max(0, Math.min(1, cx)), y: Math.max(0, Math.min(1, cy)), handled: isHandled(cl, hotspotRule) })
+        arr.push({ x: Math.max(0, Math.min(1, cx)), y: Math.max(0, Math.min(1, cy)), handled: isHandled(cl, hotspotRule, fixedRule) })
         pointsByFrame.set(strip.figmaId, arr)
       }
     }

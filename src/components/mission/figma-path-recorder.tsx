@@ -6,7 +6,7 @@ import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
 import { figmaEmbedUrl, figmaEmbedFrameStyle, runEmbedHotspotAction, actsOnPress } from "@/lib/figma-embed"
 import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
-import { clickContentPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX } from "@/lib/figma-clicks"
+import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, HANDLED_FALLBACK_MS } from "@/lib/figma-clicks"
 import { frameLayout, type DeviceType } from "@/lib/device"
 import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
@@ -18,6 +18,7 @@ interface RecorderScreen {
   width: number
   height: number
   scrollFrames?: unknown
+  fixedBoxes?: unknown
   // hotspots desenhados no Beacon: no embed, clicar neles navega como no teste
   hotspots?: {
     id: string
@@ -107,26 +108,47 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
   useEffect(() => {
     if (!recording) return
     // press pendente: um clique = press + release quase sem movimento
-    type Press = { t: number; x: number; y: number; ox: number; oy: number; handled: boolean; acted?: boolean; timer?: ReturnType<typeof setTimeout>; nodeId?: string; sfId?: string }
+    type Press = {
+      t: number; x: number; y: number; ox: number; oy: number; handled: boolean
+      acted?: boolean; timer?: ReturnType<typeof setTimeout>; fallback?: ReturnType<typeof setTimeout>
+      nodeId?: string; sfId?: string; tgt?: string; tx: number; ty: number
+    }
     let pending: Press | null = null
     let navTimer: ReturnType<typeof setTimeout> | null = null
+    // última reação do Figma (troca de tela ou de estado/variante)
+    let lastReactionAt = 0
+    function runHotspot(hit: Parameters<typeof runEmbedHotspotAction>[1]) {
+      if (!runEmbedHotspotAction(iframeRef.current, hit)) return
+      setNavigating(true)
+      if (navTimer) clearTimeout(navTimer)
+      navTimer = setTimeout(() => setNavigating(false), 2500)
+    }
     // executa (uma vez por clique) a ação do hotspot do Beacon sob o press
     function act(p: Press) {
-      if (p.acted || p.handled || !p.nodeId) return
+      if (p.acted || !p.nodeId) return
       const m = mapsRef.current
       const scr = m.screenByNode[p.nodeId]
       if (!scr) return
       const origin = p.sfId ? m.scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
       const hit = hotspotAt(
-        clickContentPoint({ vx: p.x, vy: p.y, ox: p.ox, oy: p.oy }, scr, origin),
+        clickScreenPoint(
+          { vx: p.x, vy: p.y, ox: p.ox, oy: p.oy, targetNode: p.tgt, tx: p.tx, ty: p.ty },
+          scr,
+          origin,
+          m.fixedBoxesByNode[p.nodeId]
+        ),
         m.hotspotsByNode[p.nodeId]
       )
       if (!hit) return
       p.acted = true
-      if (!runEmbedHotspotAction(iframeRef.current, hit)) return
-      setNavigating(true)
-      if (navTimer) clearTimeout(navTimer)
-      navTimer = setTimeout(() => setNavigating(false), 2500)
+      if (!p.handled) return runHotspot(hit)
+      // O Figma disse que tratou o clique, mas às vezes não faz nada (ex.:
+      // interação dentro de componente da barra fixa). Se nenhuma reação chegar
+      // logo, o Beacon executa a ação do hotspot importado do próprio Figma.
+      const wait = Math.max(0, HANDLED_FALLBACK_MS - (performance.now() - p.t))
+      p.fallback = setTimeout(() => {
+        if (lastReactionAt < p.t) runHotspot(hit)
+      }, wait)
     }
     function onMsg(e: MessageEvent) {
       if (!e.origin.includes("figma.com")) return
@@ -145,7 +167,10 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
           const p = pending
           pending = null
           if (p.timer) clearTimeout(p.timer)
-          if (Math.abs(pos.x - p.x) > DRAG_PX || Math.abs(pos.y - p.y) > DRAG_PX) return // arraste
+          if (Math.abs(pos.x - p.x) > DRAG_PX || Math.abs(pos.y - p.y) > DRAG_PX) {
+            if (p.fallback) clearTimeout(p.fallback) // arraste: não era clique
+            return
+          }
           act(p)
         } else {
           if (pending?.timer) clearTimeout(pending.timer)
@@ -158,6 +183,9 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
             handled: d.data?.handled !== false,
             nodeId: d.data?.presentedNodeId,
             sfId: d.data?.nearestScrollingFrameId,
+            tgt: d.data?.targetNodeId,
+            tx: d.data?.targetNodeMousePosition?.x ?? 0,
+            ty: d.data?.targetNodeMousePosition?.y ?? 0,
           }
           // mouse/trackpad: age na hora. Toque: espera o bastante p/ descartar arraste.
           const press = pending
@@ -166,7 +194,12 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
         }
         return
       }
+      if (d.type === "NEW_STATE") {
+        lastReactionAt = performance.now()
+        return
+      }
       if (d.type !== "PRESENTED_NODE_CHANGED") return
+      lastReactionAt = performance.now()
       setNavigating(false) // a nova tela apareceu
       const nodeId = d.data?.presentedNodeId as string | undefined
       // 1ª tela apresentada: confere se é a tela inicial pedida. Se o Figma abriu

@@ -9,6 +9,7 @@ interface RunnerScreen {
   width: number
   height: number
   scrollFrames: unknown
+  fixedBoxes?: unknown // nó → origem [x,y] dos elementos fixos (barras)
   hotspots?: {
     id: string
     coords: unknown
@@ -42,6 +43,8 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
   const scrollFrameGeomByScreen: Record<string, Record<string, Geom>> = {}
   // figmaNodeId da tela → hotspots desenhados no Beacon (coords normalizadas na tela)
   const hotspotsByNode: Record<string, RunnerHotspot[]> = {}
+  // figmaNodeId da tela → elementos fixos (barra de abas etc.) na posição de design
+  const fixedBoxesByNode: Record<string, Record<string, [number, number]>> = {}
   for (const sc of screens) if (sc.figmaNodeId) screenToNode[sc.id] = sc.figmaNodeId
   for (const sc of screens) {
     if (!sc.figmaNodeId) continue
@@ -54,6 +57,8 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
       }))
     }
     screenByNode[sc.figmaNodeId] = { id: sc.id, w: sc.width, h: sc.height }
+    if (sc.fixedBoxes && typeof sc.fixedBoxes === "object")
+      fixedBoxesByNode[sc.figmaNodeId] = sc.fixedBoxes as Record<string, [number, number]>
     screenToNode[sc.id] = sc.figmaNodeId
     const frames = (sc.scrollFrames as ({ figmaId: string } & Geom)[] | null) ?? []
     if (frames.length) {
@@ -90,6 +95,7 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
     successTypeByMission,
     expectedPathsByMission,
     hotspotsByNode,
+    fixedBoxesByNode,
     goalHotspotsByMission,
     frameW: refScreen?.width || 360,
     frameH: refScreen?.height || 800,

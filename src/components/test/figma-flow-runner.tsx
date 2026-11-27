@@ -14,7 +14,7 @@ import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 import { type PathStepDef } from "@/lib/path"
 import { frameLayout } from "@/lib/device"
-import { clickContentPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX } from "@/lib/figma-clicks"
+import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, HANDLED_FALLBACK_MS } from "@/lib/figma-clicks"
 
 interface WelcomeInfo {
   title: string
@@ -70,6 +70,7 @@ export function FigmaFlowRunner({
   screenByNode,
   scrollFrameGeomByScreen,
   hotspotsByNode = {},
+  fixedBoxesByNode = {},
   goalHotspotsByMission = {},
   deviceType = "desktop",
   frameW = 360,
@@ -95,6 +96,8 @@ export function FigmaFlowRunner({
   successTypeByMission: Record<string, "screen" | "path" | "hotspot"> // critério de sucesso da missão
   // figmaNodeId da tela → hotspots desenhados no Beacon (coords normalizadas na tela)
   hotspotsByNode?: Record<string, RunnerHotspot[]>
+  // figmaNodeId da tela → elementos fixos (barra de abas etc.) na posição de design
+  fixedBoxesByNode?: Record<string, Record<string, [number, number]>>
   // missionId → hotspots que concluem a tarefa (critério "clique em hotspot")
   goalHotspotsByMission?: Record<string, string[]>
   expectedPathsByMission: Record<string, PathStepDef[][]> // caminhos esperados (passos c/ opcional/wildcard)
@@ -198,8 +201,16 @@ export function FigmaFlowRunner({
       // clique vem relativa ao viewport DESSE frame; somamos a origem dele na tela
       // (via scrollFrameGeomByNode) para posicionar certo no heatmap.
       sfId: string | undefined
+      // elemento clicado e posição do clique dentro dele (elementos fixos)
+      tgt: string | undefined
+      tx: number
+      ty: number
+      // ação do hotspot agendada para quando o Figma "trata" mas não reage
+      fallback?: ReturnType<typeof setTimeout>
     } | null
   >(null)
+  // última reação do Figma (troca de tela ou de estado/variante), em now()
+  const figmaReactionAtRef = useRef(0)
   // instante da última contagem de clique na navegação — usado para ignorar o
   // evento de "release" que chega logo depois (senão viraria um press fantasma).
   const postNavRef = useRef(0)
@@ -445,6 +456,8 @@ export function FigmaFlowRunner({
         setEmbedBlocked(false)
       }
 
+      if (d.type === "PRESENTED_NODE_CHANGED" || d.type === "NEW_STATE") figmaReactionAtRef.current = now()
+
       if (d.type === "PRESENTED_NODE_CHANGED") {
         const shown = (d.data?.presentedNodeId as string | undefined) ?? null
         presentedNowRef.current = shown
@@ -461,40 +474,47 @@ export function FigmaFlowRunner({
       // Registra um clique (na tela de origem) uma única vez, a partir de um
       // press pendente. Usado tanto no pareamento press/release (toque na mesma
       // tela) quanto na navegação (o press que disparou a troca de tela).
-      type Press = {
-        x: number
-        y: number
-        ox: number
-        oy: number
-        handled: boolean
-        acted?: boolean
-        counted?: boolean
-        timer?: ReturnType<typeof setTimeout>
-        nodeId: string | undefined
-        sfId: string | undefined
-      }
-      // Hotspot do Beacon sob o clique. Os hotspots são desenhados sobre a
-      // imagem INTEIRA da tela, então o teste usa a posição no CONTEÚDO:
-      // origem do frame rolável + posição no viewport + offset de scroll.
-      const hotspotUnder = (p: Press) => {
+      type Press = NonNullable<typeof pendingPressRef.current>
+      // Posição do clique na tela inteira (0..1). Os hotspots são desenhados sobre
+      // a imagem INTEIRA da tela: conteúdo = origem do frame rolável + viewport +
+      // scroll; elemento FIXO (barra de abas) = posição de design do elemento +
+      // posição do clique dentro dele.
+      const screenPointOf = (p: Press) => {
         const scr0 = p.nodeId ? screenByNode[p.nodeId] : undefined
-        const geom0 = p.nodeId && p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
-        return scr0 && p.nodeId
-          ? hotspotAt(
-              clickContentPoint({ vx: p.x, vy: p.y, ox: p.ox, oy: p.oy }, scr0, geom0),
-              hotspotsByNode[p.nodeId]
-            )
-          : undefined
+        if (!scr0 || !p.nodeId) return null
+        const geom0 = p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
+        return clickScreenPoint(
+          { vx: p.x, vy: p.y, ox: p.ox, oy: p.oy, targetNode: p.tgt, tx: p.tx, ty: p.ty },
+          scr0,
+          geom0,
+          fixedBoxesByNode[p.nodeId]
+        )
       }
-      // Manda o protótipo executar a ação do hotspot (uma vez por clique) e liga
-      // o sinal de "navegando" até a nova tela aparecer.
-      const actOnHotspot = (p: Press, hit: NonNullable<ReturnType<typeof hotspotUnder>>) => {
-        if (p.acted || p.handled) return
-        p.acted = true
+      // Hotspot do Beacon sob o clique.
+      const hotspotUnder = (p: Press) => {
+        const pt = screenPointOf(p)
+        return pt && p.nodeId ? hotspotAt(pt, hotspotsByNode[p.nodeId]) : undefined
+      }
+      const runHotspot = (hit: NonNullable<ReturnType<typeof hotspotUnder>>) => {
         if (!runEmbedHotspotAction(iframeRef.current, hit)) return
         setNavigating(true)
         if (navTimerRef.current) clearTimeout(navTimerRef.current)
         navTimerRef.current = setTimeout(() => setNavigating(false), 2500)
+      }
+      // Manda o protótipo executar a ação do hotspot (uma vez por clique) e liga
+      // o sinal de "navegando" até a nova tela aparecer. Se o Figma disse que
+      // tratou o clique, espera a reação dele; se nada mudar (o Figma às vezes
+      // "trata" sem fazer nada — ex.: componente dentro de barra fixa), o Beacon
+      // executa a ação do hotspot, que veio da interação do próprio Figma.
+      const actOnHotspot = (p: Press, hit: NonNullable<ReturnType<typeof hotspotUnder>>) => {
+        if (p.acted) return
+        p.acted = true
+        if (!p.handled) return runHotspot(hit)
+        const wait = Math.max(0, HANDLED_FALLBACK_MS - (now() - p.t))
+        p.fallback = setTimeout(() => {
+          if (missionRef.current !== missionId || completedRef.current) return
+          if (figmaReactionAtRef.current < p.t) runHotspot(hit)
+        }, wait)
       }
       const isGoalHotspot = (id: string) => (goalHotspotsByMission[missionId] ?? []).includes(id)
 
@@ -516,8 +536,11 @@ export function FigmaFlowRunner({
         const scr = p.nodeId ? screenByNode[p.nodeId] : undefined
         if (scr) {
           const geom = p.nodeId && p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
-          const xr = (geom?.x ?? 0) + p.x / (scr.w || 1)
-          const yr = (geom?.y ?? 0) + p.y / (scr.h || 1)
+          // elemento fixo: plota onde ele está no design (onde aparece na imagem)
+          const fixed = p.nodeId && p.tgt ? fixedBoxesByNode[p.nodeId]?.[p.tgt] : undefined
+          const fp = fixed ? screenPointOf(p) : null
+          const xr = fp ? fp.x : (geom?.x ?? 0) + p.x / (scr.w || 1)
+          const yr = fp ? fp.y : (geom?.y ?? 0) + p.y / (scr.h || 1)
           // descarta só o que cai claramente fora da tela (evita pilha nas bordas)
           if (xr >= -0.05 && xr <= 1.05 && yr >= -0.05 && yr <= 1.05) {
             ourBufferRef.current.push({
@@ -577,6 +600,7 @@ export function FigmaFlowRunner({
           if (pending.timer) clearTimeout(pending.timer)
           const moved = Math.abs(px - pending.x) > DRAG_PX || Math.abs(py - pending.y) > DRAG_PX
           if (!moved) countOnce(pending)
+          else if (pending.fallback) clearTimeout(pending.fallback) // arraste, não clique
           return
         }
         if (pending) {
@@ -593,6 +617,9 @@ export function FigmaFlowRunner({
           handled: d.data?.handled !== false,
           nodeId: d.data?.presentedNodeId as string | undefined,
           sfId,
+          tgt: d.data?.targetNodeId as string | undefined,
+          tx: (d.data?.targetNodeMousePosition as { x?: number } | null)?.x ?? 0,
+          ty: (d.data?.targetNodeMousePosition as { y?: number } | null)?.y ?? 0,
         }
         pendingPressRef.current = press
         if (actsOnPress()) {

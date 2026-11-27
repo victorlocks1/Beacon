@@ -1,0 +1,1 @@
+ALTER TABLE "Screen" ADD COLUMN IF NOT EXISTS "fixedBoxes" JSONB;
