@@ -170,6 +170,7 @@ export default async function StudyPage({
     figmaNodeId: sc.figmaNodeId,
     scrollFrames: sc.scrollFrames,
     fixedBoxes: sc.fixedBoxes,
+    nodeBoxes: sc.nodeBoxes != null ? true : null, // só marca: é overlay
     hotspots: sc.hotspots.map((h) => ({
       id: h.id,
       coords: h.coords as { x: number; y: number; w: number; h: number },

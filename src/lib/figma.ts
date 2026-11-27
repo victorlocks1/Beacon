@@ -336,6 +336,15 @@ function hotspotEdgeOf(n: FigNode): { action: ImportAction; dest: string | null 
 
 function edgeForNode(n: FigNode): { action: ImportAction; dest: string | null } | null {
   if (Array.isArray(n.interactions) && n.interactions.length) {
+    // Um clique pode ter VÁRIAS ações (ex.: abrir snackbar + navegar). O destino
+    // do hotspot é a NAVEGAÇÃO, se houver; o overlay o Figma mostra sozinho.
+    for (const it of n.interactions) {
+      if (!it || !CLICK_TRIGGERS.has(it.trigger?.type ?? "")) continue
+      for (const a of it.actions || []) {
+        if (a && a.type === "NODE" && (a.navigation === "NAVIGATE" || a.navigation === "SWAP"))
+          return { action: "navigate", dest: (a.destinationId as string) || null }
+      }
+    }
     for (const it of n.interactions) {
       if (!it || !CLICK_TRIGGERS.has(it.trigger?.type ?? "")) continue
       for (const a of it.actions || []) {

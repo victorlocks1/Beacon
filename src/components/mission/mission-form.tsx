@@ -51,6 +51,7 @@ export interface Screen {
   figmaNodeId?: string | null
   scrollFrames?: unknown // geometria dos frames roláveis (Figma ao vivo)
   fixedBoxes?: unknown // elementos fixos (barras) na posição de design
+  nodeBoxes?: unknown // não-nulo = tela que abre como overlay
   hotspots: Hotspot[]
   scrollRegions?: {
     id: string
@@ -323,6 +324,7 @@ export function MissionForm({ studyId, deviceType, screens, figmaFileKey, missio
                   height: s.height,
                   scrollFrames: s.scrollFrames,
                   fixedBoxes: s.fixedBoxes,
+                  nodeBoxes: s.nodeBoxes,
                   hotspots: s.hotspots,
                 }))}
                 startScreenId={startScreenId || null}

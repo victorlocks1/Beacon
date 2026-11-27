@@ -11,6 +11,7 @@ interface RunnerScreen {
   height: number
   scrollFrames: unknown
   fixedBoxes?: unknown // nó → origem [x,y] dos elementos fixos (barras)
+  nodeBoxes?: unknown // preenchido só em telas OVERLAY (snackbar, bottomsheet, modal)
   hotspots?: {
     id: string
     coords: unknown
@@ -87,6 +88,15 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
   }
 
   // dimensões de referência (1ª tela) — usadas quando a missão não tem frame de partida
+  // Telas que abrem como OVERLAY (snackbar, bottomsheet, modal): marcadas na
+  // importação (nodeBoxes) ou destino de algum hotspot "abrir overlay".
+  const overlayIds = new Set<string>()
+  for (const sc of screens) {
+    if (sc.nodeBoxes != null) overlayIds.add(sc.id)
+    for (const h of sc.hotspots ?? []) if (h.action === "open_overlay" && h.targetScreenId) overlayIds.add(h.targetScreenId)
+  }
+  const overlayNodes = [...overlayIds].map((id) => screenToNode[id]).filter((n): n is string => !!n)
+
   const refScreen = screens[0]
   return {
     screenByNode,
@@ -97,6 +107,7 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
     expectedPathsByMission,
     hotspotsByNode,
     fixedBoxesByNode,
+    overlayNodes,
     goalHotspotsByMission,
     frameW: refScreen?.width || 360,
     frameH: refScreen?.height || 800,

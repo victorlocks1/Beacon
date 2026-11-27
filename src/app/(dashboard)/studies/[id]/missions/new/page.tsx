@@ -60,6 +60,7 @@ export default async function NewMissionPage({
           figmaNodeId: s.figmaNodeId,
           scrollFrames: s.scrollFrames,
           fixedBoxes: s.fixedBoxes,
+          nodeBoxes: s.nodeBoxes != null ? true : null, // só marca: é overlay
           hotspots: s.hotspots.map((h) => ({
             id: h.id,
             coords: h.coords as { x: number; y: number; w: number; h: number },

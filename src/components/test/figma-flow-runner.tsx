@@ -14,7 +14,7 @@ import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 import { type PathStepDef } from "@/lib/path"
 import { frameLayout } from "@/lib/device"
-import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, handledFallbackMs, REACTION_SLACK_MS, type FixedBoxes } from "@/lib/figma-clicks"
+import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, handledFallbackMs, REACTION_SLACK_MS, DEFERRED_NAV_MS, type FixedBoxes } from "@/lib/figma-clicks"
 
 interface WelcomeInfo {
   title: string
@@ -71,6 +71,7 @@ export function FigmaFlowRunner({
   scrollFrameGeomByScreen,
   hotspotsByNode = {},
   fixedBoxesByNode = {},
+  overlayNodes = [],
   goalHotspotsByMission = {},
   deviceType = "desktop",
   frameW = 360,
@@ -98,6 +99,7 @@ export function FigmaFlowRunner({
   hotspotsByNode?: Record<string, RunnerHotspot[]>
   // figmaNodeId da tela → elementos fixos (barra de abas etc.) na posição de design
   fixedBoxesByNode?: Record<string, FixedBoxes>
+  overlayNodes?: string[] // node-ids das telas que abrem como overlay
   // missionId → hotspots que concluem a tarefa (critério "clique em hotspot")
   goalHotspotsByMission?: Record<string, string[]>
   expectedPathsByMission: Record<string, PathStepDef[][]> // caminhos esperados (passos c/ opcional/wildcard)
@@ -211,6 +213,14 @@ export function FigmaFlowRunner({
   >(null)
   // última troca de tela feita pelo próprio Figma, em now()
   const figmaReactionAtRef = useRef(0)
+  // navegação pendente: o hotspot leva a outra tela, mas o Figma só abriu um
+  // overlay (ex.: snackbar). Quando o overlay fechar, o Beacon leva ao destino.
+  const deferredNavRef = useRef<{
+    origin: string
+    until: number
+    hit: RunnerHotspot
+    missionId: string
+  } | null>(null)
   // instante da última contagem de clique na navegação — usado para ignorar o
   // evento de "release" que chega logo depois (senão viraria um press fantasma).
   const postNavRef = useRef(0)
@@ -458,7 +468,26 @@ export function FigmaFlowRunner({
 
       // Só TROCA DE TELA conta como reação: o Figma às vezes só muda o estado do
       // botão (efeito de pressionado) e não navega — aí o Beacon navega.
-      if (d.type === "PRESENTED_NODE_CHANGED") figmaReactionAtRef.current = now()
+      if (d.type === "PRESENTED_NODE_CHANGED") {
+        figmaReactionAtRef.current = now()
+        const dn = deferredNavRef.current
+        const shownNode = d.data?.presentedNodeId as string | undefined
+        if (dn && shownNode && !overlayNodes.includes(shownNode)) {
+          deferredNavRef.current = null
+          // o overlay fechou e voltou para a tela de origem → leva ao destino
+          if (
+            shownNode === dn.origin &&
+            now() < dn.until &&
+            missionRef.current === dn.missionId &&
+            !completedRef.current
+          ) {
+            runEmbedHotspotAction(iframeRef.current, dn.hit)
+            setNavigating(true)
+            if (navTimerRef.current) clearTimeout(navTimerRef.current)
+            navTimerRef.current = setTimeout(() => setNavigating(false), 2500)
+          }
+        }
+      }
 
       if (d.type === "PRESENTED_NODE_CHANGED") {
         const shown = (d.data?.presentedNodeId as string | undefined) ?? null
@@ -515,8 +544,23 @@ export function FigmaFlowRunner({
         const wait = Math.max(0, handledFallbackMs(hit.action) - (now() - p.t))
         p.fallback = setTimeout(() => {
           if (missionRef.current !== missionId || completedRef.current) return
-          if (figmaReactionAtRef.current >= p.t - REACTION_SLACK_MS) return // o Figma reagiu
-          if (hit.targetNodeId && presentedNowRef.current === hit.targetNodeId) return // já está lá
+          const shown = presentedNowRef.current
+          if (hit.targetNodeId && shown === hit.targetNodeId) return // já está lá
+          if (figmaReactionAtRef.current >= p.t - REACTION_SLACK_MS) {
+            // O Figma trocou a tela. Se abriu só um OVERLAY (snackbar) e o hotspot
+            // leva a outra tela, a interação tinha as duas ações (abrir o snackbar
+            // e navegar) e o embed executou só a 1ª: navega quando o overlay fechar.
+            if (
+              hit.action === "navigate" &&
+              hit.targetNodeId &&
+              p.nodeId &&
+              shown &&
+              overlayNodes.includes(shown)
+            ) {
+              deferredNavRef.current = { origin: p.nodeId, until: now() + DEFERRED_NAV_MS, hit, missionId }
+            }
+            return
+          }
           runHotspot(hit)
         }, wait)
       }

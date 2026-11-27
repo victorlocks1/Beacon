@@ -21,6 +21,9 @@ export const DRAG_PX = 14
 export function handledFallbackMs(action: string): number {
   return action === "back" || action === "close_overlay" ? 250 : 80
 }
+// Hotspot que navega, mas o Figma só abriu um overlay (snackbar) no lugar: o
+// Beacon leva à tela de destino quando o overlay fecha, dentro deste prazo.
+export const DEFERRED_NAV_MS = 15000
 // tolerância: troca de tela registrada "um pouco antes" do clique (mesmo ms)
 export const REACTION_SLACK_MS = 30
 

@@ -6,7 +6,7 @@ import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
 import { figmaEmbedUrl, figmaEmbedFrameStyle, runEmbedHotspotAction, actsOnPress } from "@/lib/figma-embed"
 import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
-import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, handledFallbackMs, REACTION_SLACK_MS } from "@/lib/figma-clicks"
+import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, handledFallbackMs, REACTION_SLACK_MS, DEFERRED_NAV_MS } from "@/lib/figma-clicks"
 import { frameLayout, type DeviceType } from "@/lib/device"
 import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
@@ -19,6 +19,7 @@ interface RecorderScreen {
   height: number
   scrollFrames?: unknown
   fixedBoxes?: unknown
+  nodeBoxes?: unknown // não-nulo = overlay
   // hotspots desenhados no Beacon: no embed, clicar neles navega como no teste
   hotspots?: {
     id: string
@@ -118,6 +119,9 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
     // última troca de tela feita pelo próprio Figma
     let lastReactionAt = 0
     let presentedNow: string | undefined
+    // hotspot leva a outra tela mas o Figma só abriu um overlay (snackbar):
+    // quando o overlay fechar, o Beacon leva ao destino
+    let deferred: { origin: string; until: number; hit: Parameters<typeof runEmbedHotspotAction>[1] } | null = null
     function runHotspot(hit: Parameters<typeof runEmbedHotspotAction>[1]) {
       if (!runEmbedHotspotAction(iframeRef.current, hit)) return
       setNavigating(true)
@@ -148,8 +152,14 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
       // logo, o Beacon executa a ação do hotspot importado do próprio Figma.
       const wait = Math.max(0, handledFallbackMs(hit.action) - (performance.now() - p.t))
       p.fallback = setTimeout(() => {
-        if (lastReactionAt >= p.t - REACTION_SLACK_MS) return // o Figma reagiu
         if (hit.targetNodeId && presentedNow === hit.targetNodeId) return // já está lá
+        if (lastReactionAt >= p.t - REACTION_SLACK_MS) {
+          const overlays = mapsRef.current.overlayNodes
+          if (hit.action === "navigate" && hit.targetNodeId && p.nodeId && presentedNow && overlays.includes(presentedNow)) {
+            deferred = { origin: p.nodeId, until: performance.now() + DEFERRED_NAV_MS, hit }
+          }
+          return
+        }
         runHotspot(hit)
       }, wait)
     }
@@ -202,6 +212,12 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
       setNavigating(false) // a nova tela apareceu
       const nodeId = d.data?.presentedNodeId as string | undefined
       presentedNow = nodeId
+      if (deferred && nodeId && !mapsRef.current.overlayNodes.includes(nodeId)) {
+        const dn = deferred
+        deferred = null
+        // o overlay fechou e voltou para a tela de origem → leva ao destino
+        if (nodeId === dn.origin && performance.now() < dn.until) runHotspot(dn.hit)
+      }
       // 1ª tela apresentada: confere se é a tela inicial pedida. Se o Figma abriu
       // outra, o caminho NÃO pode começar pela tela escolhida — avisa e, se a
       // tela aberta for conhecida, começa o caminho por ela.
