@@ -198,6 +198,11 @@ export default async function StudyPage({
         ).length
       : 0
   const susLang = (study.language ?? "pt") === "es" ? "es" : "pt"
+  // Telas do Figma importadas antes da leitura completa das interações (posição
+  // de design dos elementos fixos e das áreas clicáveis): pedem um "Atualizar
+  // protótipo" para os hotspots responderem com fidelidade total.
+  const needsFigmaResync =
+    study.prototype?.source === "figma" && screens.some((s) => s.figmaNodeId && s.fixedBoxes == null)
 
   // Estudo "ao vivo" fica somente-leitura para não distorcer o relatório
   const editable = study.status !== "live"
@@ -251,6 +256,18 @@ export default async function StudyPage({
           Estudo <strong className="text-on-surface font-medium">ao vivo</strong> — a edição está bloqueada para não
           distorcer os resultados. Use <strong className="text-on-surface font-medium">Encerrar</strong> para fazer
           alterações.
+        </div>
+      )}
+
+      {needsFigmaResync && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-outline-variant bg-surface-container px-5 py-4 text-body-medium text-on-surface-variant sm:flex-row sm:items-center lg:shrink-0">
+          <p className="flex-1">
+            <strong className="text-on-surface font-medium">Atualize o protótipo uma vez.</strong> Ele foi
+            importado antes da leitura completa das interações do Figma: sem isso, cliques em barras fixas
+            (ex.: barra de abas) e algumas áreas clicáveis podem não responder.
+            {!editable && " Encerre o estudo para atualizar."}
+          </p>
+          {editable && <RefreshFigmaButton studyId={study.id} />}
         </div>
       )}
 

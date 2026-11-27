@@ -6,7 +6,7 @@ import { Play, Check, X, Flag } from "lucide-react"
 import { dedupeConsecutive } from "@/lib/path"
 import { figmaEmbedUrl, figmaEmbedFrameStyle, runEmbedHotspotAction, actsOnPress } from "@/lib/figma-embed"
 import { buildFigmaRunnerMaps } from "@/lib/figma-runner"
-import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, HANDLED_FALLBACK_MS } from "@/lib/figma-clicks"
+import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, handledFallbackMs, REACTION_SLACK_MS } from "@/lib/figma-clicks"
 import { frameLayout, type DeviceType } from "@/lib/device"
 import { SavedPaths, toSteps, type PathStepInput } from "@/components/mission/path-steps-editor"
 
@@ -117,6 +117,7 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
     let navTimer: ReturnType<typeof setTimeout> | null = null
     // última reação do Figma (troca de tela ou de estado/variante)
     let lastReactionAt = 0
+    let presentedNow: string | undefined
     function runHotspot(hit: Parameters<typeof runEmbedHotspotAction>[1]) {
       if (!runEmbedHotspotAction(iframeRef.current, hit)) return
       setNavigating(true)
@@ -145,9 +146,11 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
       // O Figma disse que tratou o clique, mas às vezes não faz nada (ex.:
       // interação dentro de componente da barra fixa). Se nenhuma reação chegar
       // logo, o Beacon executa a ação do hotspot importado do próprio Figma.
-      const wait = Math.max(0, HANDLED_FALLBACK_MS - (performance.now() - p.t))
+      const wait = Math.max(0, handledFallbackMs(hit.action) - (performance.now() - p.t))
       p.fallback = setTimeout(() => {
-        if (lastReactionAt < p.t) runHotspot(hit)
+        if (lastReactionAt >= p.t - REACTION_SLACK_MS) return // o Figma reagiu
+        if (hit.targetNodeId && presentedNow === hit.targetNodeId) return // já está lá
+        runHotspot(hit)
       }, wait)
     }
     function onMsg(e: MessageEvent) {
@@ -202,6 +205,7 @@ export function FigmaPathRecorder({ fileKey, deviceType, screens, startScreenId,
       lastReactionAt = performance.now()
       setNavigating(false) // a nova tela apareceu
       const nodeId = d.data?.presentedNodeId as string | undefined
+      presentedNow = nodeId
       // 1ª tela apresentada: confere se é a tela inicial pedida. Se o Figma abriu
       // outra, o caminho NÃO pode começar pela tela escolhida — avisa e, se a
       // tela aberta for conhecida, começa o caminho por ela.

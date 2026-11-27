@@ -15,7 +15,14 @@ export const CLICK_PAIR_MS = 350
 export const DRAG_PX = 14
 // Clique num hotspot que o Figma diz ter tratado mas sem nenhuma reação (troca
 // de tela/estado) dentro deste prazo: o Beacon executa a ação do hotspot.
-export const HANDLED_FALLBACK_MS = 600
+// Medido nos testes reais: quando o Figma navega, a troca de tela chega em até
+// 20ms em 86% dos cliques e em até 60ms em 93%. Por isso a espera é mínima
+// (imperceptível). "Voltar" espera um pouco mais: voltar duas vezes seria pior.
+export function handledFallbackMs(action: string): number {
+  return action === "back" || action === "close_overlay" ? 250 : 80
+}
+// tolerância: troca de tela registrada "um pouco antes" do clique (mesmo ms)
+export const REACTION_SLACK_MS = 30
 
 // ── Vigência das regras ──
 // Números de testes já realizados NÃO são recalculados: cada sessão é lida com
@@ -208,8 +215,11 @@ export function clickContentPoint(
 // e não na posição de conteúdo. Sessões anteriores seguem a regra antiga.
 export const FIXED_RULE_FROM = new Date("2026-11-27T20:30:00Z")
 
-/** Mapa nó → origem normalizada [x,y] dos elementos fixos de uma tela. */
-export type FixedBoxes = Record<string, [number, number]>
+/**
+ * Mapa nó → origem normalizada de DESIGN. [x,y] = nó dentro de elemento fixo
+ * (barra de abas); [x,y,0] = nó dentro de uma área com interação do Figma.
+ */
+export type FixedBoxes = Record<string, [number, number] | [number, number, 0]>
 
 /**
  * Posição do clique na tela (0..1) para teste de hotspot. Se o elemento clicado

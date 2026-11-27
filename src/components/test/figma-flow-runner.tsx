@@ -14,7 +14,7 @@ import { type Step } from "@/components/test/test-runner"
 import { tt, type Lang } from "@/lib/i18n"
 import { type PathStepDef } from "@/lib/path"
 import { frameLayout } from "@/lib/device"
-import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, HANDLED_FALLBACK_MS } from "@/lib/figma-clicks"
+import { clickScreenPoint, hotspotAt, CLICK_PAIR_MS, DRAG_PX, handledFallbackMs, REACTION_SLACK_MS, type FixedBoxes } from "@/lib/figma-clicks"
 
 interface WelcomeInfo {
   title: string
@@ -97,7 +97,7 @@ export function FigmaFlowRunner({
   // figmaNodeId da tela → hotspots desenhados no Beacon (coords normalizadas na tela)
   hotspotsByNode?: Record<string, RunnerHotspot[]>
   // figmaNodeId da tela → elementos fixos (barra de abas etc.) na posição de design
-  fixedBoxesByNode?: Record<string, Record<string, [number, number]>>
+  fixedBoxesByNode?: Record<string, FixedBoxes>
   // missionId → hotspots que concluem a tarefa (critério "clique em hotspot")
   goalHotspotsByMission?: Record<string, string[]>
   expectedPathsByMission: Record<string, PathStepDef[][]> // caminhos esperados (passos c/ opcional/wildcard)
@@ -510,10 +510,12 @@ export function FigmaFlowRunner({
         if (p.acted) return
         p.acted = true
         if (!p.handled) return runHotspot(hit)
-        const wait = Math.max(0, HANDLED_FALLBACK_MS - (now() - p.t))
+        const wait = Math.max(0, handledFallbackMs(hit.action) - (now() - p.t))
         p.fallback = setTimeout(() => {
           if (missionRef.current !== missionId || completedRef.current) return
-          if (figmaReactionAtRef.current < p.t) runHotspot(hit)
+          if (figmaReactionAtRef.current >= p.t - REACTION_SLACK_MS) return // o Figma reagiu
+          if (hit.targetNodeId && presentedNowRef.current === hit.targetNodeId) return // já está lá
+          runHotspot(hit)
         }, wait)
       }
       const isGoalHotspot = (id: string) => (goalHotspotsByMission[missionId] ?? []).includes(id)
@@ -537,8 +539,8 @@ export function FigmaFlowRunner({
         if (scr) {
           const geom = p.nodeId && p.sfId ? scrollFrameGeomByScreen[p.nodeId]?.[p.sfId] : undefined
           // elemento fixo: plota onde ele está no design (onde aparece na imagem)
-          const fixed = p.nodeId && p.tgt ? fixedBoxesByNode[p.nodeId]?.[p.tgt] : undefined
-          const fp = fixed ? screenPointOf(p) : null
+          const fb = p.nodeId && p.tgt ? fixedBoxesByNode[p.nodeId]?.[p.tgt] : undefined
+          const fp = fb && fb.length === 2 ? screenPointOf(p) : null
           const xr = fp ? fp.x : (geom?.x ?? 0) + p.x / (scr.w || 1)
           const yr = fp ? fp.y : (geom?.y ?? 0) + p.y / (scr.h || 1)
           // descarta só o que cai claramente fora da tela (evita pilha nas bordas)

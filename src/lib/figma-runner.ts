@@ -2,6 +2,7 @@
 // protótipo VIVO do Figma consome (node-id do Figma ↔ tela do Beacon). Usado
 // pelo link do testador e pela revisão, para os dois rodarem o MESMO fluxo.
 import { type PathStepDef } from "@/lib/path"
+import type { FixedBoxes } from "@/lib/figma-clicks"
 
 interface RunnerScreen {
   id: string
@@ -44,7 +45,7 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
   // figmaNodeId da tela → hotspots desenhados no Beacon (coords normalizadas na tela)
   const hotspotsByNode: Record<string, RunnerHotspot[]> = {}
   // figmaNodeId da tela → elementos fixos (barra de abas etc.) na posição de design
-  const fixedBoxesByNode: Record<string, Record<string, [number, number]>> = {}
+  const fixedBoxesByNode: Record<string, FixedBoxes> = {}
   for (const sc of screens) if (sc.figmaNodeId) screenToNode[sc.id] = sc.figmaNodeId
   for (const sc of screens) {
     if (!sc.figmaNodeId) continue
@@ -58,7 +59,7 @@ export function buildFigmaRunnerMaps(screens: RunnerScreen[], missions: RunnerMi
     }
     screenByNode[sc.figmaNodeId] = { id: sc.id, w: sc.width, h: sc.height }
     if (sc.fixedBoxes && typeof sc.fixedBoxes === "object")
-      fixedBoxesByNode[sc.figmaNodeId] = sc.fixedBoxes as Record<string, [number, number]>
+      fixedBoxesByNode[sc.figmaNodeId] = sc.fixedBoxes as FixedBoxes
     screenToNode[sc.id] = sc.figmaNodeId
     const frames = (sc.scrollFrames as ({ figmaId: string } & Geom)[] | null) ?? []
     if (frames.length) {

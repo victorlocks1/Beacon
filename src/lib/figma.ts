@@ -74,7 +74,7 @@ export interface ImportScreen {
   // normalizada [x,y] na tela, na posição do design. No protótipo eles ficam
   // presos ao viewport; com isto o clique neles é localizado onde o hotspot foi
   // desenhado (origem do elemento + posição dentro dele).
-  fixedBoxes?: Record<string, [number, number]>
+  fixedBoxes?: Record<string, [number, number] | [number, number, 0]>
   thumbUrl?: string
 }
 
@@ -88,6 +88,9 @@ interface FigNode {
   absoluteRenderBounds?: { x: number; y: number; width: number; height: number } | null
   overflowDirection?: string
   scrollBehavior?: string
+  // formato antigo do Figma: os ÚLTIMOS N filhos do frame são fixos
+  numberOfFixedChildren?: number
+  isFixed?: boolean
   overlayPositionType?: string
   clipsContent?: boolean
   transitionNodeID?: string | null
@@ -501,12 +504,14 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
   const regions: ImportRegion[] = []
   const scrollFrames: ScrollFrameGeom[] = []
 
-  const fixedBoxes: Record<string, [number, number]> = {}
+  const fixedBoxes: Record<string, [number, number] | [number, number, 0]> = {}
   const sb = screen.absoluteBoundingBox
-  function walk(n: FigNode, depthFixed: boolean) {
+  const isFixedNode = (n: FigNode, fixedByParent: boolean) =>
+    fixedByParent || n.scrollBehavior === "FIXED" || n.isFixed === true
+  function walk(n: FigNode, depthFixed: boolean, inHotspot: boolean, fixedByParent: boolean) {
+    // hotspot?
+    const edge = n !== screen ? hotspotEdgeOf(n) : null
     if (n !== screen) {
-      // hotspot?
-      const edge = hotspotEdgeOf(n)
       if (!edge) {
         // só o que NÃO é clique fica de fora (hover, arrastar, tempo, tecla)
         if (ignoredReasonOf(n) === "notClick") ignore("notClick")
@@ -541,7 +546,7 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
         }
       }
       // região fixa (barra) — só a mais externa fixa, e larga o suficiente
-      if (!depthFixed && n.scrollBehavior === "FIXED") {
+      if (!depthFixed && isFixedNode(n, fixedByParent)) {
         const coords = relCoords(n, screen)
         if (coords && coords.w >= 0.5) regions.push({ kind: "fixed", coords, axis: "both" })
       }
@@ -599,18 +604,25 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
         }
       }
     }
-    const nowFixed = depthFixed || n.scrollBehavior === "FIXED"
-    // posição de design de tudo que está preso ao viewport (fixo)
-    if (n !== screen && nowFixed && n.absoluteBoundingBox && sb && sb.width && sb.height) {
+    const nowFixed = depthFixed || (n !== screen && isFixedNode(n, fixedByParent))
+    const nowHotspot = inHotspot || !!edge
+    // Posição de DESIGN dos nós (origem normalizada). Com ela, o clique vira
+    // origem_do_nó + posição_dentro_dele = o ponto exato do design, onde o
+    // hotspot foi desenhado — não importa se o elemento está fixo, grudado,
+    // dentro de carrossel rolado etc. Guardamos:
+    //  - tudo dentro de elementos FIXOS → [x,y] (também posiciona o heatmap);
+    //  - tudo dentro de áreas com interação do Figma → [x,y,0] (só p/ acerto).
+    if (n !== screen && (nowFixed || nowHotspot) && n.absoluteBoundingBox && sb && sb.width && sb.height) {
       const nb = n.absoluteBoundingBox
-      fixedBoxes[n.id] = [
-        Math.round(((nb.x - sb.x) / sb.width) * 10000) / 10000,
-        Math.round(((nb.y - sb.y) / sb.height) * 10000) / 10000,
-      ]
+      const x = Math.round(((nb.x - sb.x) / sb.width) * 10000) / 10000
+      const y = Math.round(((nb.y - sb.y) / sb.height) * 10000) / 10000
+      fixedBoxes[n.id] = nowFixed ? [x, y] : [x, y, 0]
     }
-    for (const c of n.children || []) walk(c, nowFixed)
+    const kids = n.children || []
+    const fixedFrom = kids.length - Math.max(0, n.numberOfFixedChildren ?? 0)
+    kids.forEach((c, i) => walk(c, nowFixed, nowHotspot, n !== screen ? false : i >= fixedFrom))
   }
-  walk(screen, false)
+  walk(screen, false, false, false)
 
   const b = screen.absoluteBoundingBox
   // Scroll da PRÓPRIA PÁGINA (a tela é mais alta/larga que o viewport): o `walk`
@@ -653,7 +665,8 @@ function extractScreen(screen: FigNode, idx: Index): Omit<ImportScreen, "isStart
     ignored,
     regions,
     scrollFrames,
-    fixedBoxes: Object.keys(fixedBoxes).length ? fixedBoxes : undefined,
+    // sempre um objeto (mesmo vazio): null no banco = tela importada antes disto
+    fixedBoxes,
   }
 }
 
